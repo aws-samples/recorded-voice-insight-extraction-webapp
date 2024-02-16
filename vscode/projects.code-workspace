@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../projects"
+		}
+	],
+	"settings": {
+		"python.defaultInterpreterPath": "/home/ubuntu/anaconda3/envs/sandbox/bin/python",
+		"files.autoSave": "onFocusChange",
+		"editor.formatOnPaste": true,
+		"editor.formatOnSave": true,
+		"editor.defaultFormatter": "charliermarsh.ruff"
+	}
+}
