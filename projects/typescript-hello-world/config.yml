@@ -3,3 +3,5 @@
 block1:
   var1: "hello"
   var2: ["never", "gonna", "give", "you", "up"]
+
+# Note: var3 is not set here, to demonstrate optional/default values
