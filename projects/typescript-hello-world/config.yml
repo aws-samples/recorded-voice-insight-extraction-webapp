@@ -1,0 +1,5 @@
+# Sample config yml file
+
+block1:
+  var1: "hello"
+  var2: ["never", "gonna", "give", "you", "up"]
