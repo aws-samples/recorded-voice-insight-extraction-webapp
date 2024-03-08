@@ -1,0 +1,15 @@
+{
+  "name": "typescript-hello-world",
+  "version": "1.0.0",
+  "description": "### Installation 1. Install Node.js and npm 2. `cd typescript-hello-world` 3. `npm init -y`",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.4.2"
+  }
+}
