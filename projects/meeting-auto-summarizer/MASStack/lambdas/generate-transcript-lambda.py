@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 
 import boto3
@@ -15,9 +16,12 @@ def lambda_handler(event, context):
     # Transcribe meeting recording to text
     recording_name = event["Records"][0]["s3"]["object"]["key"]
     job_tokens = recording_name.split("/")[1].split(".")
-
-    job_name = "{}_{}".format(job_tokens[0], int(time.time()))
     media_format = job_tokens[1]
+    # Ensure files have reasonable names, otherwise Transcribe will error
+    pattern = r"[^0-9a-zA-Z._-]"
+    cleaned = re.sub(pattern, "", job_tokens[0])
+    job_name = "{}_{}".format(cleaned, int(time.time()))
+
     media_uri = "s3://{}/{}".format(S3_BUCKET, recording_name)
     output_key = "{}/{}.json".format(DESTINATION_PREFIX, job_name)
 
@@ -29,8 +33,8 @@ def lambda_handler(event, context):
             "IdentifyLanguage": True,
             "OutputBucketName": S3_BUCKET,
             "OutputKey": output_key,
-            "ShowSpeakerLabels": True,
         }
+
         response = transcribe_client.start_transcription_job(**job_args)
         _job = response["TranscriptionJob"]
         print("Started transcription job {}.".format(job_name))

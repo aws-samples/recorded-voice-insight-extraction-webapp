@@ -17,7 +17,12 @@ class MASStack(Stack):
 
         # Applying default props
         self.props = {
-            "s3BucketName": kwargs.get("s3BucketName", "meeting-auto-summarizer"),
+            "s3BucketName": kwargs.get(
+                "s3BucketName", "meeting-auto-summarizer-assets"
+            ),
+            "s3LoggingBucketName": kwargs.get(
+                "s3LoggingBucketName", "meeting-auto-summarizer-logs"
+            ),
             "s3RecordingsPrefix": kwargs.get("s3RecordingsPrefix", "recordings"),
             "s3TranscriptsPrefix": kwargs.get("s3TranscriptsPrefix", "transcripts"),
             "s3NotesPrefix": kwargs.get("s3NotesPrefix", "notes"),
@@ -27,43 +32,23 @@ class MASStack(Stack):
         # instantiated in previous
         self.setup_logging()
         self.setup_roles()
-        self.setup_lambdas()
         self.setup_buckets()
+        self.setup_lambdas()
+
+        # Create event notification to the bucket for lambda functions
+        # When an s3:ObjectCreated:* event happens in the bucket, the
+        # generateMeetingTranscript function should be called, with the
+        # logging configuration pointing towards destinationBucketName
+        self.bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(self.generateMeetingTranscript),
+        )
 
     def setup_logging(self):
         self.generateMeetingTranscriptLogGroup = logs.CfnLogGroup(
             self,
             "GenerateMeetingTranscriptLogGroup",
             log_group_name=f"""/aws/lambda/{self.stack_name}-GenerateMeetingTranscript""",
-        )
-
-        self.loggingBucket = s3.CfnBucket(
-            self,
-            "LoggingBucket",
-            access_control="LogDeliveryWrite",
-            ownership_controls={
-                "rules": [
-                    {
-                        "objectOwnership": "ObjectWriter",
-                    },
-                ],
-            },
-            bucket_encryption={
-                "serverSideEncryptionConfiguration": [
-                    {
-                        "serverSideEncryptionByDefault": {
-                            "sseAlgorithm": "aws:kms",
-                            "kmsMasterKeyId": "alias/aws/s3",
-                        },
-                    },
-                ],
-            },
-            public_access_block_configuration={
-                "ignorePublicAcls": True,
-                "restrictPublicBuckets": True,
-                "blockPublicAcls": True,
-                "blockPublicPolicy": True,
-            },
         )
 
     def setup_roles(self):
@@ -116,6 +101,31 @@ class MASStack(Stack):
             },
         )
 
+    def setup_buckets(self):
+        self.loggingBucket = s3.Bucket(
+            self,
+            "MeetingSummarizerLoggingBucket",
+            bucket_name=f"{self.props['s3LoggingBucketName']}",
+            access_control=s3.BucketAccessControl.LOG_DELIVERY_WRITE,
+            public_read_access=False,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.KMS_MANAGED,
+            versioned=True,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        self.bucket = s3.Bucket(
+            self,
+            "MeetingAutoSummarizerBucket",
+            bucket_name=f"{self.props['s3BucketName']}",
+            public_read_access=False,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.KMS_MANAGED,
+            versioned=True,
+            server_access_logs_bucket=self.loggingBucket,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
     def setup_lambdas(self):
         self.generateMeetingTranscript = aws_lambda.Function(
             self,
@@ -135,35 +145,15 @@ class MASStack(Stack):
             role=self.generateMeetingTranscriptLambdaRole,
         )
 
-        self.generateMeetingTranscript.grant_invoke(
-            iam.AnyPrincipal(),
+        self.generateMeetingTranscript.add_permission(
+            "GenerateMeetingTranscriptionInvokePermission",
+            principal=iam.ServicePrincipal("s3.amazonaws.com"),
+            action="lambda:InvokeFunction",
+            source_arn=self.bucket.bucket_arn,
+            source_account=self.account,
         )
 
-    def setup_buckets(self):
-        bucket = s3.Bucket(
-            self,
-            "MeetingAutoSummarizerBucket",
-            bucket_name=f"{self.props['s3BucketName']}",
-            public_read_access=False,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            encryption=s3.BucketEncryption.KMS_MANAGED,
-            versioned=True,
-            server_access_logs_bucket=self.loggingBucket,
-            removal_policy=RemovalPolicy.DESTROY,  # Create snapshot of bucket before removing ig
-        )
-
-        # Create empty subfolders in the s3 bucket
-        # subdir_keys = ["s3RecordingsPrefix", "s3TranscriptsPrefix", "s3NotesPrefix"]
-        # for subdir_key in subdir_keys:
-        #     asset = s3_assets.Asset(self, f"{subdir_key}Asset", path=f"./{subdir_key}")
-        # bucket.addObject(f"{props[subdir_key]}/")
-        # bucket.put_object(f"{props[subdir_key]}/")
-
-        # Create event notification to the bucket for lambda functions
-        # When an s3:ObjectCreated:* event happens in the bucket, the
-        # generateMeetingTranscript function should be called, with the
-        # logging configuration pointing towards destinationBucketName
-        bucket.add_event_notification(
-            s3.EventType.OBJECT_CREATED,
-            s3n.LambdaDestination(self.generateMeetingTranscript),
-        )
+        ## This creates a sev2 ticket, lol
+        # self.generateMeetingTranscript.grant_invoke(
+        #     iam.ServicePrincipal("s3.amazonaws.com")
+        # )
