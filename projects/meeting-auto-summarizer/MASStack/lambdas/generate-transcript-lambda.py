@@ -1,9 +1,13 @@
 import json
+import logging
 import os
 import re
 import time
 
 import boto3
+
+logger = logging.getLogger()
+logger.setLevel("INFO")
 
 S3_BUCKET = os.environ.get("S3_BUCKET")
 SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX")
@@ -13,36 +17,45 @@ transcribe_client = boto3.client("transcribe")
 
 
 def lambda_handler(event, context):
+    logger.debug("generate-transcript-lambda handler called.")
+    logger.debug(f"{event=}")
+    logger.debug(f"{context=}")
     # Transcribe meeting recording to text
-    recording_name = event["Records"][0]["s3"]["object"]["key"]
-    job_tokens = recording_name.split("/")[1].split(".")
-    media_format = job_tokens[1]
+    recording_key = event["Records"][0]["s3"]["object"]["key"]
+    logger.debug(f"{recording_key=}")
+    _path, filename = os.path.split(recording_key)
+    filename_without_extension, extension = os.path.splitext(filename)
+    media_format = extension[1:]  # Drop the leading "." in extension
+
     # Ensure files have reasonable names, otherwise Transcribe will error
     pattern = r"[^0-9a-zA-Z._-]"
-    cleaned = re.sub(pattern, "", job_tokens[0])
+    cleaned = re.sub(pattern, "", filename_without_extension)
     job_name = "{}_{}".format(cleaned, int(time.time()))
+    logger.debug(f"{job_name=}")
 
-    media_uri = "s3://{}/{}".format(S3_BUCKET, recording_name)
+    media_uri = f"s3://{S3_BUCKET}/{recording_key}"
+    logger.debug(f"{media_uri=}")
     output_key = "{}/{}.json".format(DESTINATION_PREFIX, job_name)
-
+    logger.debug(f"{output_key=}")
+    job_args = {
+        "TranscriptionJobName": job_name,
+        "Media": {"MediaFileUri": media_uri},
+        "MediaFormat": media_format,
+        "IdentifyLanguage": True,
+        "OutputBucketName": S3_BUCKET,
+        "OutputKey": output_key,
+    }
+    logger.debug(f"{job_args=}")
     try:
-        job_args = {
-            "TranscriptionJobName": job_name,
-            "Media": {"MediaFileUri": media_uri},
-            "MediaFormat": media_format,
-            "IdentifyLanguage": True,
-            "OutputBucketName": S3_BUCKET,
-            "OutputKey": output_key,
-        }
-
         response = transcribe_client.start_transcription_job(**job_args)
         _job = response["TranscriptionJob"]
-        print("Started transcription job {}.".format(job_name))
-    except Exception:
-        print("Couldn't start transcription job %s.".format())
+        logger.info(f"Started transcription job name {job_name}, id {_job}")
+    except Exception as e:
+        logger.error(f"ERROR Couldn't start transcription job {job_name}.")
+        logger.error(f"Exception: {e}")
         raise
 
     return {
         "statusCode": 200,
-        "body": json.dumps("Started transcription job {}".format(job_name)),
+        "body": json.dumps(f"Started transcription job {job_name}"),
     }
