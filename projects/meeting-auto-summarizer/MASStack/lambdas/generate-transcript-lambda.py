@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import time
+from urllib.parse import unquote_plus
 
 import boto3
 
@@ -20,9 +21,16 @@ def lambda_handler(event, context):
     logger.debug("generate-transcript-lambda handler called.")
     logger.debug(f"{event=}")
     logger.debug(f"{context=}")
+
     # Transcribe meeting recording to text
-    recording_key = event["Records"][0]["s3"]["object"]["key"]
-    logger.debug(f"{recording_key=}")
+    # Sometimes recording_key is url-encoded, and transcription API wants non-url-encoded
+    # https://stackoverflow.com/questions/44779042/aws-how-to-fix-s3-event-replacing-space-with-sign-in-object-key-names-in-js
+    logger.debug(
+        f"recording_key from event: {event["Records"][0]["s3"]["object"]["key"]}"
+    )
+    recording_key = unquote_plus(event["Records"][0]["s3"]["object"]["key"])
+
+    logger.debug(f"decoded recording_key = {recording_key}")
     _path, filename = os.path.split(recording_key)
     filename_without_extension, extension = os.path.splitext(filename)
     media_format = extension[1:]  # Drop the leading "." in extension

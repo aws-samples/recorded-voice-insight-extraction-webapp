@@ -1,2 +1,7 @@
+## generate-transcript-lambda zip command
 zip -j /home/ubuntu/gitlab/kaleko-sandbox/projects/meeting-auto-summarizer/MASStack/lambdas/generate-transcript-lambda.zip \
 /home/ubuntu/gitlab/kaleko-sandbox/projects/meeting-auto-summarizer/MASStack/lambdas/generate-transcript-lambda.py
+
+## convert-json-to-txt-lambda zip command
+zip -j /home/ubuntu/gitlab/kaleko-sandbox/projects/meeting-auto-summarizer/MASStack/lambdas/convert-json-to-txt-lambda.zip \
+/home/ubuntu/gitlab/kaleko-sandbox/projects/meeting-auto-summarizer/MASStack/lambdas/convert-json-to-txt-lambda.py
