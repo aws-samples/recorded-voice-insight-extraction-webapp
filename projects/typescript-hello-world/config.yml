@@ -4,4 +4,7 @@ block1:
   var1: "hello"
   var2: ["never", "gonna", "give", "you", "up"]
 
+block2:
+  var4: "let you down"
+  
 # Note: var3 is not set here, to demonstrate optional/default values

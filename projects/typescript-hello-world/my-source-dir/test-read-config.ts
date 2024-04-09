@@ -16,3 +16,4 @@ const mergedConfig: ConfigData = {
 
 console.log(mergedConfig.block1.var2)
 console.log(mergedConfig.var3)
+console.log(mergedConfig)
