@@ -45,47 +45,20 @@ class MASStack(Stack):
         self.setup_roles()
         self.setup_buckets()
         self.setup_lambdas()
-
-        # Create event notification to the bucket for lambda functions
-        # When an s3:ObjectCreated:* event happens in the bucket, the
-        # generateMeetingTranscript function should be called, with the
-        # logging configuration pointing towards destinationBucketName
-        self.bucket.add_event_notification(
-            s3.EventType.OBJECT_CREATED,
-            s3n.LambdaDestination(self.generateMeetingTranscript),
-            s3.NotificationKeyFilter(prefix=self.props["s3RecordingsPrefix"]),
-        )
-        # Event to convert json transcript to txt file once it lands in s3
-        self.bucket.add_event_notification(
-            s3.EventType.OBJECT_CREATED,
-            s3n.LambdaDestination(self.dumpTextTranscript),
-            s3.NotificationKeyFilter(
-                prefix=self.props["s3TranscriptsPrefix"],
-                suffix=".json",
-            ),
-        )
-        # Event to read in txt file for LLM summary generation
-        self.bucket.add_event_notification(
-            s3.EventType.OBJECT_CREATED,
-            s3n.LambdaDestination(self.generateSummary),
-            s3.NotificationKeyFilter(
-                prefix=self.props["s3TextTranscriptsPrefix"],
-                suffix=".txt",
-            ),
-        )
+        self.setup_events()
 
     def setup_logging(self):
-        self.generateMeetingTranscriptLogGroup = logs.CfnLogGroup(
+        self.generateMeetingTranscriptLogGroup = logs.LogGroup(
             self,
             "GenerateMeetingTranscriptLogGroup",
             log_group_name=f"""/aws/lambda/{self.stack_name}-GenerateMeetingTranscript""",
         )
-        self.dumpTextTranscriptLogGroup = logs.CfnLogGroup(
+        self.dumpTextTranscriptLogGroup = logs.LogGroup(
             self,
             "DumpTextTranscriptLogGroup",
             log_group_name=f"""/aws/lambda/{self.stack_name}-DumpTextTranscript""",
         )
-        self.generateSummaryLogGroup = logs.CfnLogGroup(
+        self.generateSummaryLogGroup = logs.LogGroup(
             self,
             "GenerateSummaryLogGroup",
             log_group_name=f"""/aws/lambda/{self.stack_name}-GenerateSummary""",
@@ -236,3 +209,32 @@ class MASStack(Stack):
         # self.generateMeetingTranscript.grant_invoke(
         #     iam.ServicePrincipal("s3.amazonaws.com")
         # )
+
+    def setup_events(self):
+        # Create event notification to the bucket for lambda functions
+        # When an s3:ObjectCreated:* event happens in the bucket, the
+        # generateMeetingTranscript function should be called, with the
+        # logging configuration pointing towards destinationBucketName
+        self.bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(self.generateMeetingTranscript),
+            s3.NotificationKeyFilter(prefix=self.props["s3RecordingsPrefix"]),
+        )
+        # Event to convert json transcript to txt file once it lands in s3
+        self.bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(self.dumpTextTranscript),
+            s3.NotificationKeyFilter(
+                prefix=self.props["s3TranscriptsPrefix"],
+                suffix=".json",
+            ),
+        )
+        # Event to read in txt file for LLM summary generation
+        self.bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(self.generateSummary),
+            s3.NotificationKeyFilter(
+                prefix=self.props["s3TextTranscriptsPrefix"],
+                suffix=".txt",
+            ),
+        )
