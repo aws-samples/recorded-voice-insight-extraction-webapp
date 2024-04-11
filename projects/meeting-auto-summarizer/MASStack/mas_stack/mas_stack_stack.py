@@ -33,6 +33,10 @@ class MASStack(Stack):
             ),
             # Where LLM summaries get dumped
             "s3SummaryPrefix": kwargs.get("s3SummaryPrefix", "llm-summaries"),
+            # Which Bedrock LLM to use to generate summaries
+            "SummaryLLMID": kwargs.get(
+                "SummaryLLMID", "anthropic.claude-3-sonnet-20240229-v1:0"
+            ),
         }
 
         # The order of these matters, later ones refer to class variables
@@ -101,49 +105,13 @@ class MASStack(Stack):
                     "AmazonS3ReadOnlyAccess"
                 ),
                 iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name(
                     "AmazonBedrockFullAccess"
                 ),
             ],
             inline_policies={
-                "CreateLogGroup": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            actions=["logs:CreateLogGroup"],
-                            resources=["arn:aws:logs:*:*:*"],
-                        )
-                    ]
-                ),
-                "LogsAccess": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            actions=["logs:CreateLogStream", "logs:PutLogEvents"],
-                            resources=[
-                                self.generateMeetingTranscriptLogGroup.attr_arn,
-                                self.dumpTextTranscriptLogGroup.attr_arn,
-                            ],
-                        )
-                    ]
-                ),
-                # "S3RecordingsRead": iam.PolicyDocument(
-                #     statements=[
-                #         iam.PolicyStatement(
-                #             actions=["s3:GetObject"],
-                #             resources=[
-                #                 f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3RecordingsPrefix']}/*"
-                #             ],
-                #         )
-                #     ]
-                # ),
-                # "S3TranscriptsRead": iam.PolicyDocument(
-                #     statements=[
-                #         iam.PolicyStatement(
-                #             actions=["s3:GetObject"],
-                #             resources=[
-                #                 f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3TranscriptsPrefix']}/*"
-                #             ],
-                #         )
-                #     ]
-                # ),
                 "S3Write": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
@@ -247,11 +215,12 @@ class MASStack(Stack):
             memory_size=128,
             code=aws_lambda.Code.from_asset("lambdas/generate-summary-lambda.zip"),
             environment={
-                "DESTINATION_PREFIX": self.props["s3TextTranscriptsPrefix"],
+                "DESTINATION_PREFIX": self.props["s3SummaryPrefix"],
                 "S3_BUCKET": self.props["s3BucketName"],
-                "SOURCE_PREFIX": self.props["s3TranscriptsPrefix"],
+                "SOURCE_PREFIX": self.props["s3TextTranscriptsPrefix"],
+                "LLM_ID": self.props["SummaryLLMID"],
             },
-            timeout=Duration.seconds(15),
+            timeout=Duration.seconds(60),
             role=self.masLambdaExecutionRole,  # Reuse existing lambda role
         )
 
