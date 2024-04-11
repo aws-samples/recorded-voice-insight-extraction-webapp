@@ -31,8 +31,8 @@ class MASStack(Stack):
             "s3TextTranscriptsPrefix": kwargs.get(
                 "s3TextTranscriptsPrefix", "transcripts-txt"
             ),
-            # Where LLM outputs get dumped
-            "s3NotesPrefix": kwargs.get("s3NotesPrefix", "notes"),
+            # Where LLM summaries get dumped
+            "s3SummaryPrefix": kwargs.get("s3SummaryPrefix", "llm-summaries"),
         }
 
         # The order of these matters, later ones refer to class variables
@@ -60,6 +60,15 @@ class MASStack(Stack):
                 suffix=".json",
             ),
         )
+        # Event to read in txt file for LLM summary generation
+        self.bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(self.generateSummary),
+            s3.NotificationKeyFilter(
+                prefix=self.props["s3TextTranscriptsPrefix"],
+                suffix=".txt",
+            ),
+        )
 
     def setup_logging(self):
         self.generateMeetingTranscriptLogGroup = logs.CfnLogGroup(
@@ -72,9 +81,14 @@ class MASStack(Stack):
             "DumpTextTranscriptLogGroup",
             log_group_name=f"""/aws/lambda/{self.stack_name}-DumpTextTranscript""",
         )
+        self.generateSummaryLogGroup = logs.CfnLogGroup(
+            self,
+            "GenerateSummaryLogGroup",
+            log_group_name=f"""/aws/lambda/{self.stack_name}-GenerateSummary""",
+        )
 
     def setup_roles(self):
-        # AWS transcribe access, s3 access, etc
+        # AWS transcribe access, s3 access, bedrock access, etc
         self.masLambdaExecutionRole = iam.Role(
             self,
             "MeetingAutoSummarizerLambdaExecutionRole",
@@ -82,7 +96,13 @@ class MASStack(Stack):
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "AmazonTranscribeFullAccess"
-                )
+                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "AmazonS3ReadOnlyAccess"
+                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "AmazonBedrockFullAccess"
+                ),
             ],
             inline_policies={
                 "CreateLogGroup": iam.PolicyDocument(
@@ -104,33 +124,34 @@ class MASStack(Stack):
                         )
                     ]
                 ),
-                "S3RecordingsRead": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            actions=["s3:GetObject"],
-                            resources=[
-                                f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3RecordingsPrefix']}/*"
-                            ],
-                        )
-                    ]
-                ),
-                "S3TranscriptsRead": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            actions=["s3:GetObject"],
-                            resources=[
-                                f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3TranscriptsPrefix']}/*"
-                            ],
-                        )
-                    ]
-                ),
-                "S3TranscriptsWrite": iam.PolicyDocument(
+                # "S3RecordingsRead": iam.PolicyDocument(
+                #     statements=[
+                #         iam.PolicyStatement(
+                #             actions=["s3:GetObject"],
+                #             resources=[
+                #                 f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3RecordingsPrefix']}/*"
+                #             ],
+                #         )
+                #     ]
+                # ),
+                # "S3TranscriptsRead": iam.PolicyDocument(
+                #     statements=[
+                #         iam.PolicyStatement(
+                #             actions=["s3:GetObject"],
+                #             resources=[
+                #                 f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3TranscriptsPrefix']}/*"
+                #             ],
+                #         )
+                #     ]
+                # ),
+                "S3Write": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
                             actions=["s3:PutObject"],
                             resources=[
                                 f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3TranscriptsPrefix']}/*",
                                 f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3TextTranscriptsPrefix']}/*",
+                                f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3SummaryPrefix']}/*",
                             ],
                         )
                     ]
@@ -215,6 +236,33 @@ class MASStack(Stack):
             source_arn=self.bucket.bucket_arn,
             source_account=self.account,
         )
+
+        self.generateSummary = aws_lambda.Function(
+            self,
+            "GenerateSummary",
+            description=f"Stack {self.stack_name} Function GenerateSummary",
+            function_name=f"{self.stack_name}-GenerateSummary",
+            handler="generate-summary-lambda.lambda_handler",
+            runtime=aws_lambda.Runtime.PYTHON_3_12,
+            memory_size=128,
+            code=aws_lambda.Code.from_asset("lambdas/generate-summary-lambda.zip"),
+            environment={
+                "DESTINATION_PREFIX": self.props["s3TextTranscriptsPrefix"],
+                "S3_BUCKET": self.props["s3BucketName"],
+                "SOURCE_PREFIX": self.props["s3TranscriptsPrefix"],
+            },
+            timeout=Duration.seconds(15),
+            role=self.masLambdaExecutionRole,  # Reuse existing lambda role
+        )
+
+        self.generateSummary.add_permission(
+            "GenerateSummaryionInvokePermission",
+            principal=iam.ServicePrincipal("s3.amazonaws.com"),
+            action="lambda:InvokeFunction",
+            source_arn=self.bucket.bucket_arn,
+            source_account=self.account,
+        )
+
         ## This creates a sev2 ticket, lol
         # self.generateMeetingTranscript.grant_invoke(
         #     iam.ServicePrincipal("s3.amazonaws.com")
