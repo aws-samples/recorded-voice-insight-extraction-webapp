@@ -12,11 +12,28 @@ S3_BUCKET = os.environ.get("S3_BUCKET")
 SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX")
 DESTINATION_PREFIX = os.environ.get("DESTINATION_PREFIX")
 LLM_ID = os.environ.get("LLM_ID")
+DYNAMO_TABLE_NAME = os.environ.get("DYNAMO_TABLE_NAME")
 
 # Initialize the s3 client
 s3 = boto3.client("s3")
+
+# Initialize the dynamo db resource
+dyn_resource = boto3.resource("dynamodb")
+# TODO: make sure it exists or something?
+dyn_table = dyn_resource.Table(name=DYNAMO_TABLE_NAME)
+
 # Initialize the Amazon Bedrock runtime client
 bedrock_client = boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
+
+
+def update_ddb_entry(table, uuid, new_item_name, new_item_value):
+    # Update an existing item in the dynamodb
+    return table.update_item(
+        Key={"UUID": uuid},
+        UpdateExpression="SET #new_attr = :new_value",
+        ExpressionAttributeNames={"#new_attr": new_item_name},
+        ExpressionAttributeValues={":new_value": new_item_value},
+    )
 
 
 def lambda_handler(event, context):
@@ -28,7 +45,7 @@ def lambda_handler(event, context):
     txt_transcript_key = event["Records"][0]["s3"]["object"]["key"]
     logger.info(f"{txt_transcript_key=}")
     filename = os.path.split(txt_transcript_key)[1]
-    filename_without_extension, extension = os.path.splitext(filename)
+    uuid, extension = os.path.splitext(filename)
 
     # This should never fail, if s3 event notifications are set up correctly
     try:
@@ -39,9 +56,7 @@ def lambda_handler(event, context):
         )
         raise err
 
-    output_key = os.path.join(
-        DESTINATION_PREFIX, filename_without_extension + "-summary.txt"
-    )
+    output_key = os.path.join(DESTINATION_PREFIX, uuid + "-summary.txt")
     logger.info(f"{output_key=}")
 
     try:
@@ -67,6 +82,9 @@ def lambda_handler(event, context):
             S3_BUCKET,
             output_key,
         )
+
+        # Save summary to dynamodb
+        update_ddb_entry(dyn_table, uuid, "llm_summary", summary)
 
     except Exception as e:
         logger.error(f"ERROR Exception caught in generate-summary-lambda: {e}.")

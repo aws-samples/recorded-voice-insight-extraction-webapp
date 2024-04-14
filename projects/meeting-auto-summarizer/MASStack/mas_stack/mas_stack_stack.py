@@ -1,3 +1,4 @@
+import aws_cdk.aws_dynamodb as dynamodb
 import aws_cdk.aws_iam as iam
 import aws_cdk.aws_lambda as aws_lambda
 import aws_cdk.aws_logs as logs
@@ -37,6 +38,8 @@ class MASStack(Stack):
             "SummaryLLMID": kwargs.get(
                 "SummaryLLMID", "anthropic.claude-3-sonnet-20240229-v1:0"
             ),
+            # Name of dynamo DB app table (PK = "UUID" hardcoded)
+            "DDBTableName": kwargs.get("DDBTableName", "MAS-App-Table"),
         }
 
         # The order of these matters, later ones refer to class variables
@@ -44,6 +47,7 @@ class MASStack(Stack):
         self.setup_logging()
         self.setup_roles()
         self.setup_buckets()
+        self.setup_dynamodb()
         self.setup_lambdas()
         self.setup_events()
 
@@ -82,6 +86,9 @@ class MASStack(Stack):
                 ),
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "AmazonBedrockFullAccess"
+                ),
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "AmazonDynamoDBFullAccess"
                 ),
             ],
             inline_policies={
@@ -139,6 +146,7 @@ class MASStack(Stack):
                 "DESTINATION_PREFIX": self.props["s3TranscriptsPrefix"],
                 "S3_BUCKET": f"{self.props['s3BucketName']}",
                 "SOURCE_PREFIX": self.props["s3RecordingsPrefix"],
+                "DYNAMO_TABLE_NAME": self.props["DDBTableName"],
             },
             timeout=Duration.seconds(15),
             role=self.masLambdaExecutionRole,
@@ -165,6 +173,7 @@ class MASStack(Stack):
                 "DESTINATION_PREFIX": self.props["s3TextTranscriptsPrefix"],
                 "S3_BUCKET": self.props["s3BucketName"],
                 "SOURCE_PREFIX": self.props["s3TranscriptsPrefix"],
+                "DYNAMO_TABLE_NAME": self.props["DDBTableName"],
             },
             timeout=Duration.seconds(15),
             role=self.masLambdaExecutionRole,  # Reuse existing lambda role
@@ -192,6 +201,7 @@ class MASStack(Stack):
                 "S3_BUCKET": self.props["s3BucketName"],
                 "SOURCE_PREFIX": self.props["s3TextTranscriptsPrefix"],
                 "LLM_ID": self.props["SummaryLLMID"],
+                "DYNAMO_TABLE_NAME": self.props["DDBTableName"],
             },
             timeout=Duration.seconds(60),
             role=self.masLambdaExecutionRole,  # Reuse existing lambda role
@@ -237,4 +247,20 @@ class MASStack(Stack):
                 prefix=self.props["s3TextTranscriptsPrefix"],
                 suffix=".txt",
             ),
+        )
+
+    def setup_dynamodb(self):
+        # Create a table to store application metadata
+        # The partition key will be a uuid (string) named "UUID"
+
+        self.dynamodb_table = dynamodb.Table(
+            self,
+            "MAS-App-DDBTable-ID",
+            table_name=self.props["DDBTableName"],
+            partition_key=dynamodb.Attribute(
+                name="UUID", type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+            removal_policy=RemovalPolicy.DESTROY,
         )

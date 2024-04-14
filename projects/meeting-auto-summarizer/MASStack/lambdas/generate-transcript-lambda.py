@@ -1,8 +1,8 @@
+import datetime
 import json
 import logging
 import os
-import re
-import time
+import uuid
 from urllib.parse import unquote_plus
 
 import boto3
@@ -13,8 +13,22 @@ logger.setLevel("INFO")
 S3_BUCKET = os.environ.get("S3_BUCKET")
 SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX")
 DESTINATION_PREFIX = os.environ.get("DESTINATION_PREFIX")
+DYNAMO_TABLE_NAME = os.environ.get("DYNAMO_TABLE_NAME")
 
 transcribe_client = boto3.client("transcribe")
+dyn_resource = boto3.resource("dynamodb")
+# TODO: make sure it exists or something?
+dyn_table = dyn_resource.Table(name=DYNAMO_TABLE_NAME)
+
+
+def update_ddb_entry(table, uuid, new_item_name, new_item_value):
+    # Update an existing item in the dynamodb
+    return table.update_item(
+        Key={"UUID": uuid},
+        UpdateExpression="SET #new_attr = :new_value",
+        ExpressionAttributeNames={"#new_attr": new_item_name},
+        ExpressionAttributeValues={":new_value": new_item_value},
+    )
 
 
 def lambda_handler(event, context):
@@ -44,12 +58,13 @@ def lambda_handler(event, context):
         "webm",
     ], f"Unacceptable media format for transcription: {media_format}"
 
-    # Ensure files have reasonable names, otherwise Transcribe will error
-    # This is the required pattern for job name. There is a similar pattern
-    # for output key (e.g. no spaces allowed).
-    pattern = r"[^0-9a-zA-Z._-]"
-    cleaned = re.sub(pattern, "", filename_without_extension)
-    job_name = "{}_{}".format(cleaned, int(time.time()))
+    # Generate a random uuid for the job, which will be used
+    # to track this transcript through downstream tasks
+    # (as the partition key in dynamodb)
+    # pattern = r"[^0-9a-zA-Z._-]"
+    # cleaned = re.sub(pattern, "", filename_without_extension)
+    # job_name = "{}_{}".format(cleaned, int(time.time()))
+    job_name = str(uuid.uuid4())
     logger.debug(f"{job_name=}")
 
     media_uri = f"s3://{S3_BUCKET}/{recording_key}"
@@ -76,6 +91,16 @@ def lambda_handler(event, context):
         logger.error(f"ERROR Couldn't start transcription job {job_name}.")
         logger.error(f"Exception: {e}")
         raise
+
+    # Create item in dynamodb to track media_uri
+    response = dyn_table.put_item(
+        Item={
+            "UUID": job_name,
+            "media_uri": media_uri,
+            "job_creation_time": str(datetime.datetime.now()),
+        }
+    )
+    logger.debug(f"Response to creating dynamodb item {uuid}: {response}")
 
     return {
         "statusCode": 200,
