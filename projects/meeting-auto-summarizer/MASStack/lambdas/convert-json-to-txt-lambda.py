@@ -3,6 +3,7 @@ import logging
 import os
 
 import boto3
+from lambda_utils import update_ddb_entry
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -13,19 +14,6 @@ DESTINATION_PREFIX = os.environ.get("DESTINATION_PREFIX")
 DYNAMO_TABLE_NAME = os.environ.get("DYNAMO_TABLE_NAME")
 
 s3 = boto3.client("s3")
-dyn_resource = boto3.resource("dynamodb")
-# TODO: make sure it exists or something?
-dyn_table = dyn_resource.Table(name=DYNAMO_TABLE_NAME)
-
-
-def update_ddb_entry(table, uuid, new_item_name, new_item_value):
-    # Update an existing item in the dynamodb
-    return table.update_item(
-        Key={"UUID": uuid},
-        UpdateExpression="SET #new_attr = :new_value",
-        ExpressionAttributeNames={"#new_attr": new_item_name},
-        ExpressionAttributeValues={":new_value": new_item_value},
-    )
 
 
 def lambda_handler(event, context):
@@ -60,14 +48,22 @@ def lambda_handler(event, context):
 
         # Save json to dynamodb
         response = update_ddb_entry(
-            dyn_table, uuid, "json_transcript", json.dumps(full_json)
+            table_name=DYNAMO_TABLE_NAME,
+            uuid=uuid,
+            new_item_name="json_transcript",
+            new_item_value=json.dumps(full_json),
         )
         logger.debug(f"Response to putting json into {uuid}: {response}")
 
         transcript = transcripts[0]["transcript"]
 
         # Save txt to dynamodb
-        response = update_ddb_entry(dyn_table, uuid, "txt_transcript", transcript)
+        response = update_ddb_entry(
+            table_name=DYNAMO_TABLE_NAME,
+            uuid=uuid,
+            new_item_name="txt_transcript",
+            new_item_value=transcript,
+        )
         logger.debug(f"Response to putting text into {uuid}: {response}")
 
         # Dump text to tmp dir

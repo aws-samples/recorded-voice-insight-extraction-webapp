@@ -4,6 +4,7 @@ import os
 
 import boto3
 from botocore.exceptions import ClientError
+from lambda_utils import update_ddb_entry
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -17,23 +18,8 @@ DYNAMO_TABLE_NAME = os.environ.get("DYNAMO_TABLE_NAME")
 # Initialize the s3 client
 s3 = boto3.client("s3")
 
-# Initialize the dynamo db resource
-dyn_resource = boto3.resource("dynamodb")
-# TODO: make sure it exists or something?
-dyn_table = dyn_resource.Table(name=DYNAMO_TABLE_NAME)
-
 # Initialize the Amazon Bedrock runtime client
 bedrock_client = boto3.client(service_name="bedrock-runtime", region_name="us-east-1")
-
-
-def update_ddb_entry(table, uuid, new_item_name, new_item_value):
-    # Update an existing item in the dynamodb
-    return table.update_item(
-        Key={"UUID": uuid},
-        UpdateExpression="SET #new_attr = :new_value",
-        ExpressionAttributeNames={"#new_attr": new_item_name},
-        ExpressionAttributeValues={":new_value": new_item_value},
-    )
 
 
 def lambda_handler(event, context):
@@ -84,7 +70,12 @@ def lambda_handler(event, context):
         )
 
         # Save summary to dynamodb
-        update_ddb_entry(dyn_table, uuid, "llm_summary", summary)
+        update_ddb_entry(
+            table_name=DYNAMO_TABLE_NAME,
+            uuid=uuid,
+            new_item_name="llm_summary",
+            new_item_value=summary,
+        )
 
     except Exception as e:
         logger.error(f"ERROR Exception caught in generate-summary-lambda: {e}.")

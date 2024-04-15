@@ -1,4 +1,3 @@
-import datetime
 import json
 import logging
 import os
@@ -6,6 +5,7 @@ import uuid
 from urllib.parse import unquote_plus
 
 import boto3
+from lambda_utils import create_ddb_entry
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -16,19 +16,6 @@ DESTINATION_PREFIX = os.environ.get("DESTINATION_PREFIX")
 DYNAMO_TABLE_NAME = os.environ.get("DYNAMO_TABLE_NAME")
 
 transcribe_client = boto3.client("transcribe")
-dyn_resource = boto3.resource("dynamodb")
-# TODO: make sure it exists or something?
-dyn_table = dyn_resource.Table(name=DYNAMO_TABLE_NAME)
-
-
-def update_ddb_entry(table, uuid, new_item_name, new_item_value):
-    # Update an existing item in the dynamodb
-    return table.update_item(
-        Key={"UUID": uuid},
-        UpdateExpression="SET #new_attr = :new_value",
-        ExpressionAttributeNames={"#new_attr": new_item_name},
-        ExpressionAttributeValues={":new_value": new_item_value},
-    )
 
 
 def lambda_handler(event, context):
@@ -93,12 +80,8 @@ def lambda_handler(event, context):
         raise
 
     # Create item in dynamodb to track media_uri
-    response = dyn_table.put_item(
-        Item={
-            "UUID": job_name,
-            "media_uri": media_uri,
-            "job_creation_time": str(datetime.datetime.now()),
-        }
+    response = create_ddb_entry(
+        table_name=DYNAMO_TABLE_NAME, uuid=job_name, media_uri=media_uri
     )
     logger.debug(f"Response to creating dynamodb item {uuid}: {response}")
 
