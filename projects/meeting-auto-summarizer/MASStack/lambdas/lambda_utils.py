@@ -1,4 +1,5 @@
 import datetime
+import os
 from typing import Any
 
 import boto3
@@ -21,17 +22,31 @@ def update_ddb_entry(
     )
 
 
+def update_job_status(table_name: str, uuid: str, new_status: str):
+    """Update transcription job status"""
+    assert new_status in ["In Progress", "Completed", "Failed"]
+
+    return update_ddb_entry(
+        table_name=table_name,
+        uuid=uuid,
+        new_item_name="transcription_status",
+        new_item_value=new_status,
+    )
+
+
 def create_ddb_entry(table_name: str, uuid: str, media_uri: str):
-    """Create a new entry in dynamodb, witih timestamp"""
+    """Create a new entry in dynamodb, with timestamp"""
 
     dyn_resource = boto3.resource("dynamodb")
     # TODO: make sure it exists or something?
     table = dyn_resource.Table(name=table_name)
 
+    # Why isn't this working?
     return table.put_item(
         Item={
             "UUID": uuid,
             "media_uri": media_uri,
             "job_creation_time": str(datetime.datetime.now()),
+            "media_name": os.path.split(media_uri)[-1],
         }
     )

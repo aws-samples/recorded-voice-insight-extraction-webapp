@@ -5,7 +5,7 @@ import uuid
 from urllib.parse import unquote_plus
 
 import boto3
-from lambda_utils import create_ddb_entry
+from lambda_utils import create_ddb_entry, update_job_status
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -85,6 +85,10 @@ def lambda_handler(event, context):
     )
     logger.debug(f"Response to creating dynamodb item {uuid}: {response}")
 
+    # Update job status in dynamodb
+    update_job_status(
+        table_name=DYNAMO_TABLE_NAME, uuid=job_name, new_status="In Progress"
+    )
     return {
         "statusCode": 200,
         "body": json.dumps(f"Started transcription job {job_name}"),

@@ -3,7 +3,7 @@ import logging
 import os
 
 import boto3
-from lambda_utils import update_ddb_entry
+from lambda_utils import update_ddb_entry, update_job_status
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -80,9 +80,16 @@ def lambda_handler(event, context):
 
     except AssertionError:
         logger.error(f"{len(transcripts)} transcripts found in results. Expected 1.")
+        # Update job status in dynamodb
+        update_job_status(table_name=DYNAMO_TABLE_NAME, uuid=uuid, new_status="Failed")
     except Exception as e:
         logger.error(f"ERROR Exception caught in convert-json-to-txt-lambda: {e}.")
+        # Update job status in dynamodb
+        update_job_status(table_name=DYNAMO_TABLE_NAME, uuid=uuid, new_status="Failed")
         raise
+
+    # Update job status in dynamodb
+    update_job_status(table_name=DYNAMO_TABLE_NAME, uuid=uuid, new_status="Completed")
 
     return {
         "statusCode": 200,
