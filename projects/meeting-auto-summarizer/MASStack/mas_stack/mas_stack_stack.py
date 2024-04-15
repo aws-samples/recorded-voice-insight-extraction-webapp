@@ -141,7 +141,7 @@ class MASStack(Stack):
             handler="generate-transcript-lambda.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
-            code=aws_lambda.Code.from_asset("lambdas/generate-transcript-lambda.zip"),
+            code=aws_lambda.Code.from_asset("lambdas/lambdas.zip"),
             environment={
                 "DESTINATION_PREFIX": self.props["s3TranscriptsPrefix"],
                 "S3_BUCKET": f"{self.props['s3BucketName']}",
@@ -168,7 +168,7 @@ class MASStack(Stack):
             handler="convert-json-to-txt-lambda.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
-            code=aws_lambda.Code.from_asset("lambdas/convert-json-to-txt-lambda.zip"),
+            code=aws_lambda.Code.from_asset("lambdas/lambdas.zip"),
             environment={
                 "DESTINATION_PREFIX": self.props["s3TextTranscriptsPrefix"],
                 "S3_BUCKET": self.props["s3BucketName"],
@@ -195,7 +195,7 @@ class MASStack(Stack):
             handler="generate-summary-lambda.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
-            code=aws_lambda.Code.from_asset("lambdas/generate-summary-lambda.zip"),
+            code=aws_lambda.Code.from_asset("lambdas/lambdas.zip"),
             environment={
                 "DESTINATION_PREFIX": self.props["s3SummaryPrefix"],
                 "S3_BUCKET": self.props["s3BucketName"],
