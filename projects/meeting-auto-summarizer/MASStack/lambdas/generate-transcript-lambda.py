@@ -34,7 +34,7 @@ def lambda_handler(event, context):
     logger.debug(f"decoded recording_key = {recording_key}")
     _path, filename = os.path.split(recording_key)
     filename_without_extension, extension = os.path.splitext(filename)
-    media_format = extension[1:]  # Drop the leading "." in extension
+    media_format = extension[1:].lower()  # Drop the leading "." in extension
     assert media_format in [
         "mp3",
         "mp4",
@@ -43,6 +43,7 @@ def lambda_handler(event, context):
         "ogg",
         "amr",
         "webm",
+        "m4a",
     ], f"Unacceptable media format for transcription: {media_format}"
 
     # Generate a random uuid for the job, which will be used
