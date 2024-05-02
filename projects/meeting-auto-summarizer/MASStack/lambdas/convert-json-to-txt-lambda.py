@@ -3,7 +3,7 @@ import logging
 import os
 
 import boto3
-from lambda_utils import update_ddb_entry
+from lambda_utils import update_ddb_entry, update_job_status
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -46,12 +46,12 @@ def lambda_handler(event, context):
         transcripts = full_json["results"]["transcripts"]
         assert len(transcripts) == 1
 
-        # Save json to dynamodb
+        # Save json to dynamodb #TODO:
         response = update_ddb_entry(
             table_name=DYNAMO_TABLE_NAME,
             uuid=uuid,
-            new_item_name="json_transcript",
-            new_item_value=json.dumps(full_json),
+            new_item_name="json_transcript_uri",
+            new_item_value=os.path.join("s3://", S3_BUCKET, json_transcript_key),
         )
         logger.debug(f"Response to putting json into {uuid}: {response}")
 
@@ -61,8 +61,8 @@ def lambda_handler(event, context):
         response = update_ddb_entry(
             table_name=DYNAMO_TABLE_NAME,
             uuid=uuid,
-            new_item_name="txt_transcript",
-            new_item_value=transcript,
+            new_item_name="txt_transcript_uri",
+            new_item_value=os.path.join("s3://", S3_BUCKET, output_key),
         )
         logger.debug(f"Response to putting text into {uuid}: {response}")
 
@@ -80,9 +80,16 @@ def lambda_handler(event, context):
 
     except AssertionError:
         logger.error(f"{len(transcripts)} transcripts found in results. Expected 1.")
+        # Update job status in dynamodb
+        update_job_status(table_name=DYNAMO_TABLE_NAME, uuid=uuid, new_status="Failed")
     except Exception as e:
         logger.error(f"ERROR Exception caught in convert-json-to-txt-lambda: {e}.")
+        # Update job status in dynamodb
+        update_job_status(table_name=DYNAMO_TABLE_NAME, uuid=uuid, new_status="Failed")
         raise
+
+    # Update job status in dynamodb
+    update_job_status(table_name=DYNAMO_TABLE_NAME, uuid=uuid, new_status="Completed")
 
     return {
         "statusCode": 200,

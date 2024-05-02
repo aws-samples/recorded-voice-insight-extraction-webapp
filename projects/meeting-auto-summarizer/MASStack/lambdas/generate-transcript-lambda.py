@@ -5,7 +5,7 @@ import uuid
 from urllib.parse import unquote_plus
 
 import boto3
-from lambda_utils import create_ddb_entry
+from lambda_utils import create_ddb_entry, update_job_status
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -34,7 +34,7 @@ def lambda_handler(event, context):
     logger.debug(f"decoded recording_key = {recording_key}")
     _path, filename = os.path.split(recording_key)
     filename_without_extension, extension = os.path.splitext(filename)
-    media_format = extension[1:]  # Drop the leading "." in extension
+    media_format = extension[1:].lower()  # Drop the leading "." in extension
     assert media_format in [
         "mp3",
         "mp4",
@@ -43,6 +43,7 @@ def lambda_handler(event, context):
         "ogg",
         "amr",
         "webm",
+        "m4a",
     ], f"Unacceptable media format for transcription: {media_format}"
 
     # Generate a random uuid for the job, which will be used
@@ -85,6 +86,10 @@ def lambda_handler(event, context):
     )
     logger.debug(f"Response to creating dynamodb item {uuid}: {response}")
 
+    # Update job status in dynamodb
+    update_job_status(
+        table_name=DYNAMO_TABLE_NAME, uuid=job_name, new_status="In Progress"
+    )
     return {
         "statusCode": 200,
         "body": json.dumps(f"Started transcription job {job_name}"),

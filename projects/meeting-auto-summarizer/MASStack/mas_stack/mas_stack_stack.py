@@ -56,16 +56,19 @@ class MASStack(Stack):
             self,
             "GenerateMeetingTranscriptLogGroup",
             log_group_name=f"""/aws/lambda/{self.stack_name}-GenerateMeetingTranscript""",
+            removal_policy=RemovalPolicy.DESTROY,
         )
         self.dumpTextTranscriptLogGroup = logs.LogGroup(
             self,
             "DumpTextTranscriptLogGroup",
             log_group_name=f"""/aws/lambda/{self.stack_name}-DumpTextTranscript""",
+            removal_policy=RemovalPolicy.DESTROY,
         )
         self.generateSummaryLogGroup = logs.LogGroup(
             self,
             "GenerateSummaryLogGroup",
             log_group_name=f"""/aws/lambda/{self.stack_name}-GenerateSummary""",
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
     def setup_roles(self):
