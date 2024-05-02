@@ -7,9 +7,8 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded",
 )
-st.sidebar.title("Meeting Auto Summarizer")
 
-st.subheader("Transcription Jobs")
+st.title("Your Transcription Jobs")
 st.dataframe(
     retrieve_all_items(),
     hide_index=True,

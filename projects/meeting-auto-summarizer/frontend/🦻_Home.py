@@ -1,6 +1,5 @@
 import streamlit as st
 
-
 logger = st.logger.get_logger(__name__)
 
 st.set_page_config(
@@ -32,54 +31,9 @@ def main():
         You can also "chat with your meeting"
         to ask arbitrary questions like _what follow-up action items were mentioned in the meeting?_
         
-        Click on "File Upload" on the left to get started.
         """
     )
-    with st.sidebar:
-        display_sidebar()
-
-    # with input_col:
-    #     display_inputs(input_selection)
-
-
-def display_sidebar():
-    """
-    Display sidebar where inputs can be selected
-    """
-    # This styling was copied from ADOSEA, not sure what it does
-    # st.sidebar.markdown(
-    #     """
-    #     <style>
-    #         [data-testid="stSidebarNav"]::before {
-    #             content: "Tabs";
-    #             margin-left: 20px;
-    #             margin-top: 20px;
-    #             margin-bottom: 20px;
-    #             font-size: 22px;
-    #             font-weight: bold;
-    #             position: relative;
-    #             top: 100px;
-    #         }
-    #     </style>
-    #     """,
-    #     unsafe_allow_html=True,
-    # )
-
-    # st.sidebar.success("Sidebar success")
-
-    # input_index = st.sidebar.selectbox(
-    #     "Select input",
-    #     range(5),
-    # )
-
-    # # This returns true the moment the button is clicked, then will return false after that
-    # button_pressed = st.button("Generate output", key="generate_output")
-
-    # input_selection = {"input_index": input_index}
-    # return input_selection, button_pressed
-
-    st.sidebar.title("Meeting Auto Summarizer")
-    return
+    st.subheader("Click on [ 💾 File Upload ] on the left to get started.")
 
 
 def display_inputs(input_selection):

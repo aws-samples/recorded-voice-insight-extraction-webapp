@@ -1,7 +1,11 @@
 import streamlit as st
 import streamlit_scrollable_textbox as stx
 from components.bedrock_utils import LLM, get_analysis_templates, run_analysis
-from components.db_utils import retrieve_all_items
+from components.db_utils import (
+    retrieve_all_items,
+    retrieve_analysis_by_jobid,
+    store_analysis_result,
+)
 from components.s3_utils import retrieve_transcript_by_jobid
 
 st.set_page_config(
@@ -10,7 +14,7 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded",
 )
-st.sidebar.title("Meeting Auto Summarizer")
+
 st.title("Analyze a Meeting")
 st.subheader("Pick a meeting to analyze:")
 
@@ -59,12 +63,27 @@ if button_clicked:
         template_df.template_short_name == selected_analysis_name
     ].template_id.values[0]
 
-    transcript = retrieve_transcript_by_jobid(job_id=selected_job_id)
-    st.write("Analysis results will be displayed here when complete:")
-    analysis_results = run_analysis(
-        analysis_id=selected_analysis_id, transcript=transcript, llm=llm
+    # If this analysis has already been run and the result is in dynamo, display it
+    cached_results = retrieve_analysis_by_jobid(
+        job_id=selected_job_id, template_id=selected_analysis_id
     )
+    if cached_results:
+        st.write("Displaying cached analysis result:")
+        analysis_result = cached_results
+    # Otherwise run the analysis and store the results in dynamo
+    else:
+        st.write("Analysis results will be displayed here when complete:")
+        transcript = retrieve_transcript_by_jobid(job_id=selected_job_id)
+        analysis_result = run_analysis(
+            analysis_id=selected_analysis_id, transcript=transcript, llm=llm
+        )
+        store_analysis_result(
+            job_id=selected_job_id,
+            template_id=selected_analysis_id,
+            analysis_result=analysis_result,
+        )
+
     stx.scrollableTextbox(
-        analysis_results,
+        analysis_result,
         height=300,
     )

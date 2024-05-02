@@ -28,11 +28,15 @@ def retrieve_all_items(max_rows=None) -> pd.DataFrame:
     return result_df if not max_rows else result_df.head(n=max_rows)
 
 
+def template_id_to_dynamo_field_name(template_id: int) -> str:
+    return f"llm_analysis_template_{template_id}"
+
+
 def retrieve_analysis_by_jobid(job_id: str, template_id: int) -> str | None:
     """Retrieve analysis from dynamodb table by job_id
     (if analysis is cached, else none)"""
 
-    llm_ana_key = f"llm_analysis_template={template_id}"
+    llm_ana_key = template_id_to_dynamo_field_name(template_id)
     response = table.get_item(Key={"UUID": job_id}, ProjectionExpression=llm_ana_key)[
         "Item"
     ]
@@ -40,3 +44,20 @@ def retrieve_analysis_by_jobid(job_id: str, template_id: int) -> str | None:
         return response[llm_ana_key]
     except KeyError:
         return None
+
+
+def store_analysis_result(
+    job_id: str, template_id: int, analysis_result: str
+) -> str | None:
+    """Store completed analysis in dynamodb table"""
+
+    llm_ana_key = template_id_to_dynamo_field_name(template_id)
+
+    table.update_item(
+        Key={"UUID": job_id},
+        UpdateExpression="SET #new_attr = :new_value",
+        ExpressionAttributeNames={"#new_attr": llm_ana_key},
+        ExpressionAttributeValues={":new_value": analysis_result},
+    )
+
+    return
