@@ -2,16 +2,13 @@ import streamlit as st
 from components.db_utils import retrieve_all_items
 
 st.set_page_config(
-    page_title="Meeting Analyzer",
-    page_icon=":brain:",
+    page_title="Job Status",
+    page_icon=":stopwatch:",
     layout="centered",
     initial_sidebar_state="expanded",
 )
-st.sidebar.title("Meeting Auto Summarizer")
-st.title("Analyze a Meeting")
-st.subheader("Select a meeting to analyze")
-st.subheader(" ** Not yet implemented ** ")
 
+st.title("Your Transcription Jobs")
 st.dataframe(
     retrieve_all_items(),
     hide_index=True,

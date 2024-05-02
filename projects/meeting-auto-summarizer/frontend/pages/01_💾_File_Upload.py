@@ -12,7 +12,6 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded",
 )
-st.sidebar.title("Meeting Auto Summarizer")
 
 
 def uploadToS3(fileobj):

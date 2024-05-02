@@ -8,7 +8,8 @@ import boto3
 def update_ddb_entry(
     table_name: str, uuid: str, new_item_name: str, new_item_value: Any
 ):
-    """Update an existing item in the dynamodb"""
+    """Update an existing item in the dynamodb
+    (also works to add a new field to an existing item)"""
 
     dyn_resource = boto3.resource("dynamodb")
     # TODO: make sure it exists or something?
