@@ -155,3 +155,35 @@ def run_analysis(analysis_id: int, transcript: str, llm: LLM):
         prompt=ana_prompt,
         kwargs=ana_kwargs,
     )
+
+
+def chat_transcript_query(
+    segmented_transcript: str, user_query: str, llm: LLM
+) -> tuple[str, int]:
+    """Run a chat query on a segmented transcript string (see transcript_utils.py)
+    and return (answer_string, media_timestamp_in_seconds)"""
+
+    SYSTEM_PROMPT = """You are an intelligent AI which attempts to answer questions based on an automatically generated transcript of a meeting."""
+
+    CHAT_PROMPT_TEMPLATE = """<transcript>{transcript}</transcript>
+    
+    Each line in the transcript above includes an integer timestamp (in seconds) within square brackets, followed by a statement.
+    
+    Using only information in the above transcript, attempt to answer the question below.
+    
+    <question>{question}</question>
+    
+    Your response must contain two parts, an integer timestamp representing the start of the portion of the transcript which contains the answer to the question, and an answer to the question itself. The timestamp should be included within <timestamp></timestamp> tags, and the answer within <answer></answer> tags. If you are unable to answer the question, return a timestamp of -1 and an answer of "I am unable to find the answer to your question within the provided transcript."
+    """
+
+    chat_prompt = CHAT_PROMPT_TEMPLATE.format(
+        transcript=segmented_transcript, question=user_query
+    )
+
+    # Inference LLM & return result
+    return llm.generate(
+        model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+        system_prompt=SYSTEM_PROMPT,
+        prompt=chat_prompt,
+        kwargs={"temperature": 0.1, "max_tokens": 200},
+    )
