@@ -23,3 +23,10 @@ def retrieve_transcript_json_by_jobid(job_id: str) -> dict:
     return json.load(
         s3.get_object(Bucket=BUCKET_NAME, Key=f"transcripts/{job_id}.json")["Body"]
     )
+
+
+def retrieve_media_bytes(media_name: str) -> bytes:
+    """Read media from s3 and return"""
+    return s3.get_object(Bucket=BUCKET_NAME, Key=f"recordings/{media_name}")[
+        "Body"
+    ].read()
