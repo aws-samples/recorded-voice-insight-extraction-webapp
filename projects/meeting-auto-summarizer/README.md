@@ -27,7 +27,7 @@ This application also includes a chat functionality with an AI assistant who can
 # Architecture
 Here is an overview of the architecture for the solution.
 <p align="center">
-    <img src=diagram/MAS-architecture-20240521.png alt="architecture" width="100%">
+    <img src=diagram/MAS-architecture-20240521.png alt="architecture" width="75%">
 </p>
 
 Note that the frontend stack as shown isn't fully implemented as of 20240521.
