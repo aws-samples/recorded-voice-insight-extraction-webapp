@@ -157,11 +157,9 @@ def run_analysis(analysis_id: int, transcript: str, llm: LLM):
     )
 
 
-def chat_transcript_query(
-    segmented_transcript: str, user_query: str, llm: LLM
-) -> tuple[str, int]:
+def chat_transcript_query(segmented_transcript: str, user_query: str, llm: LLM) -> str:
     """Run a chat query on a segmented transcript string (see transcript_utils.py)
-    and return (answer_string, media_timestamp_in_seconds)"""
+    and return the raw string"""
 
     SYSTEM_PROMPT = """You are an intelligent AI which attempts to answer questions based on an automatically generated transcript of a meeting."""
 

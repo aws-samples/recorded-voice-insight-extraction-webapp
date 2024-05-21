@@ -1,6 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
-"""Helper utilities for working with Amazon Bedrock"""
+"""Helper utilities for parsing transcript jsons from Amazon Transcribe"""
 
 
 def build_timestamped_segmented_transcript(full_transcript_json: dict) -> str:

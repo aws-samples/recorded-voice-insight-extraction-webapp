@@ -3,7 +3,8 @@ from components.bedrock_utils import LLM, chat_transcript_query
 from components.db_utils import (
     retrieve_all_items,
 )
-from components.s3_utils import retrieve_transcript_json_by_jobid
+from components.parsing_utils import extract_timestamp_and_answer
+from components.s3_utils import retrieve_media_bytes, retrieve_transcript_json_by_jobid
 from components.transcripts_utils import build_timestamped_segmented_transcript
 
 st.set_page_config(
@@ -36,6 +37,8 @@ selected_media_name = st.selectbox(
 )
 
 if selected_media_name:
+    media_bytes = retrieve_media_bytes(selected_media_name)
+
     if user_message := st.chat_input(placeholder="Enter your question here"):
         with st.chat_message("user"):
             st.write(user_message)
@@ -54,4 +57,11 @@ if selected_media_name:
                     user_query=user_message,
                     llm=llm,
                 )
-            st.write(llm_response)
+
+                answer, timestamp_int = extract_timestamp_and_answer(llm_response)
+            if timestamp_int >= 0:
+                video = st.video(
+                    data=media_bytes,
+                    start_time=timestamp_int,
+                )
+            st.write(answer)
