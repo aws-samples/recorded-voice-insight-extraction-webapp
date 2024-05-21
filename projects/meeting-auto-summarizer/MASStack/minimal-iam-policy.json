@@ -1,0 +1,86 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "cloudformation:CreateChangeSet",
+                "cloudformation:DeleteStack",
+                "cloudformation:DescribeChangeSet",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStacks",
+                "cloudformation:ExecuteChangeSet",
+                "cloudformation:GetTemplate"
+            ],
+            "Resource": "arn:aws:cloudformation:*:*:stack/CDKToolkit/*",
+            "Effect": "Allow",
+            "Sid": "CloudFormationPermissions"
+        },
+        {
+            "Action": [
+                "ecr:CreateRepository",
+                "ecr:DeleteRepository",
+                "ecr:DescribeRepositories",
+                "ecr:SetRepositoryPolicy",
+                "ecr:PutLifecyclePolicy"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:ecr:*:*:repository/cdk-*"
+            ]
+        },
+        {
+            "Action": [
+                "ssm:DeleteParameter",
+                "ssm:GetParameter",
+                "ssm:GetParameters",
+                "ssm:PutParameter"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:ssm:*:*:parameter/cdk-bootstrap/*"
+            ]
+        },
+        {
+            "Action": [
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetRole",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:TagRole"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:iam::*:policy/*",
+                "arn:aws:iam::*:role/cdk-*"
+            ]
+        },
+        {
+            "Action": [
+                "s3:CreateBucket",
+                "s3:DeleteBucket",
+                "s3:PutBucketPolicy",
+                "s3:DeleteBucketPolicy",
+                "s3:PutBucketPublicAccessBlock",
+                "s3:PutBucketVersioning",
+                "s3:PutEncryptionConfiguration",
+                "s3:PutLifecycleConfiguration"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::cdk-*"
+            ]
+        },
+        {
+            "Action": [
+                "sts:AssumeRole"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:iam::*:role/cdk-*"
+            ]
+        }
+    ]
+}
