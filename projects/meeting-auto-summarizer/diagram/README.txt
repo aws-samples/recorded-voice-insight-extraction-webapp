@@ -1,0 +1,1 @@
+Diagram is in xml format can can be loaded and modified with design-inspector.a2z.com.
