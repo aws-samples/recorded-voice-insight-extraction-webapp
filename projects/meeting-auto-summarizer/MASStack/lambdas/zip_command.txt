@@ -1,2 +1,0 @@
-zip -j -r /home/ubuntu/gitlab/kaleko-sandbox/projects/meeting-auto-summarizer/MASStack/lambdas/lambdas.zip \
-/home/ubuntu/gitlab/kaleko-sandbox/projects/meeting-auto-summarizer/MASStack/lambdas/ -i '*.py'
