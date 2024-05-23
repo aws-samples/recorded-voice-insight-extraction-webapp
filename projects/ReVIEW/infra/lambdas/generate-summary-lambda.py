@@ -1,3 +1,7 @@
+"""
+This lambda is deprecated -- summaries are no longer automatically generated in the backend.
+"""
+
 import json
 import logging
 import os
@@ -151,9 +155,9 @@ def gen_summary_from_transcript(transcript: str) -> str:
         "determine the scope of the POC, responsibilities, success metrics, "
         "and next steps. I transcribed a recording of the workshop and will "
         "provide the transcript to you below. Please write me a one page summary "
-        "of the meeting, emphasizing things like use case description, next steps, "
+        "of the transcript, emphasizing things like use case description, next steps, "
         "potential obstacles identified, success criteria, and timelines. Here is "
-        "the meeting transcript:\n"
+        "the transcript:\n"
         "<transcript>\n"
         f"{transcript}\n"
         "</transcript>"

@@ -23,7 +23,7 @@ def lambda_handler(event, context):
     logger.debug(f"{event=}")
     logger.debug(f"{context=}")
 
-    # Transcribe meeting recording to text
+    # Transcribe media to text
     # Sometimes recording_key is url-encoded, and transcription API wants non-url-encoded
     # https://stackoverflow.com/questions/44779042/aws-how-to-fix-s3-event-replacing-space-with-sign-in-object-key-names-in-js
     logger.debug(

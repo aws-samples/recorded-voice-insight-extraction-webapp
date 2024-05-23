@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import aws_cdk as cdk
-from mas_stack.mas_stack_stack import MASStack
+from review_stack.review_stack import ReVIEWStack
 
 app = cdk.App()
-MASStack(
+ReVIEWStack(
     app,
-    "MASStack",
+    "ReVIEWStack",
     # If you don't specify 'env', this stack will be environment-agnostic.
     # Account/Region-dependent features and context lookups will not work,
     # but a single synthesized template can be deployed anywhere.

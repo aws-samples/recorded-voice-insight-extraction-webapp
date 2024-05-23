@@ -1,0 +1,2 @@
+zip -j -r /home/ubuntu/gitlab/kaleko-sandbox/projects/ReVIEW/infra/lambdas/lambdas.zip \
+/home/ubuntu/gitlab/kaleko-sandbox/projects/ReVIEW/infra/lambdas/ -i '*.py'
