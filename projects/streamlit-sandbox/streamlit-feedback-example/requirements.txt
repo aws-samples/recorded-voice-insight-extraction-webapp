@@ -1,4 +1,0 @@
-streamlit
-boto3
-botocore
-streamlit-feedback==0.1.3
