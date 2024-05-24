@@ -7,7 +7,7 @@ from components.parsing_utils import extract_timestamp_and_answer
 from components.s3_utils import retrieve_media_bytes, retrieve_transcript_json_by_jobid
 from components.transcripts_utils import build_timestamped_segmented_transcript
 from components.cognito_utils import login
-
+from components.streamlit_utils import display_sidebar
 
 st.set_page_config(
     page_title="Chat With Your Media",
@@ -22,6 +22,7 @@ if not st.session_state.get("auth_username", None):
     login()
     st.stop()
 st.subheader("Pick a media file to chat with:")
+display_sidebar()
 
 
 @st.cache_resource

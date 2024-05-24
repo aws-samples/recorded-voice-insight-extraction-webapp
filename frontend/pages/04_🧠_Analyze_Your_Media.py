@@ -8,7 +8,7 @@ from components.db_utils import (
 )
 from components.s3_utils import retrieve_transcript_by_jobid
 from components.cognito_utils import login
-
+from components.streamlit_utils import display_sidebar
 
 st.set_page_config(
     page_title="Media Analyzer",
@@ -23,6 +23,7 @@ if not st.session_state.get("auth_username", None):
     st.error("Please login to continue.")
     login()
     st.stop()
+display_sidebar()
 
 
 @st.cache_resource
