@@ -41,7 +41,6 @@ def get_cognito_secrets():
         get_secret_value_response = client.get_secret_value(SecretId=secret_name)
         secret_string = get_secret_value_response["SecretString"]
         secret_json = json.loads(secret_string)
-        print(f"{secret_string=}")
     except ClientError as e:
         # For a list of exceptions thrown, see
         # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html

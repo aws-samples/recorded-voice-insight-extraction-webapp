@@ -32,9 +32,9 @@ def retrieve_all_items(username, max_rows=None) -> pd.DataFrame:
     result_df = (
         pd.DataFrame.from_records(scan_results)
         .sort_values("job_creation_time", ascending=False)
-        .reset_index(
-            drop=True
-        )  # [["job_creation_time", "media_name", "transcription_status"]]
+        .reset_index(drop=True)[
+            ["job_creation_time", "media_name", "transcription_status"]
+        ]
     )
 
     return result_df if not max_rows else result_df.head(n=max_rows)

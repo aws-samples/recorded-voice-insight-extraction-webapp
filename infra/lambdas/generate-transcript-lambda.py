@@ -73,10 +73,6 @@ def lambda_handler(event, context):
         media_uri=media_uri,
         username=username,
     )
-    # Update job status in dynamodb
-    update_job_status(
-        table_name=DYNAMO_TABLE_NAME, uuid=job_name, new_status="In Queue"
-    )
 
     job_args = {
         "TranscriptionJobName": job_name,

@@ -50,6 +50,7 @@ def create_ddb_entry(table_name: str, uuid: str, media_uri: str, username: str):
             "media_uri": media_uri,
             "job_creation_time": str(datetime.datetime.now()),
             "media_name": os.path.split(media_uri)[-1],
+            "transcription_status": "In Queue",
         }
     )
 
