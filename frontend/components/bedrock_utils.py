@@ -11,7 +11,7 @@ import boto3
 import pandas as pd
 from botocore.config import Config
 
-logger = logging.getLogger("MASstack")
+logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     console_handler = logging.StreamHandler()

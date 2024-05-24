@@ -1,4 +1,5 @@
 import streamlit as st
+from components.cognito_utils import login
 
 logger = st.logger.get_logger(__name__)
 
@@ -9,28 +10,18 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-#########################
-# SESSION STATE VARIABLES
-#########################
-
-st.session_state.setdefault("username", "")
-
-
-def login():
-    """Login with Cognito, set session state username variable"""
-    st.session_state["username"] = "kazu"
-
 
 def main():
     """
     Main app function
     """
 
-    login()
-
     # input_col, output_col = st.columns([0.5, 0.5], gap="medium")
-    st.title("Recorded Voice Insight Extraction Webapp")
-    st.subheader("ReVIEW")
+    st.title("ReVIEW: Recorded Voice Insight Extraction Webapp")
+    if not st.session_state.get("auth_username", None):
+        st.info("Please login to continue.")
+        login()
+        st.stop()
     st.markdown(
         """
         This application allows you to upload audio or video recordings containing speech 
@@ -46,7 +37,7 @@ def main():
         
         """
     )
-    st.subheader("Click on [ 💾 File Upload ] on the left to get started.")
+    st.subheader("Click  💾 File Upload  on the left to get started.")
 
 
 def display_inputs(input_selection):
