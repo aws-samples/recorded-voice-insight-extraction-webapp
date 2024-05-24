@@ -23,45 +23,50 @@ def get_LLM():
     return LLM()
 
 
-llm = get_LLM()
+if not st.session_state.get("username", None):
+    st.error("You must be logged in to access this page.")
+else:
+    llm = get_LLM()
 
-job_df = retrieve_all_items()
-completed_jobs = job_df[job_df.transcription_status == "Completed"]
+    job_df = retrieve_all_items(username=st.session_state["username"])
+    completed_jobs = job_df[job_df.transcription_status == "Completed"]
 
-selected_media_name = st.selectbox(
-    "dummy_label",
-    options=completed_jobs.media_name,
-    index=None,
-    placeholder="Select a media file to chat with",
-    label_visibility="collapsed",
-)
+    selected_media_name = st.selectbox(
+        "dummy_label",
+        options=completed_jobs.media_name,
+        index=None,
+        placeholder="Select a media file to chat with",
+        label_visibility="collapsed",
+    )
 
-if selected_media_name:
-    media_bytes = retrieve_media_bytes(selected_media_name)
-
-    if user_message := st.chat_input(placeholder="Enter your question here"):
-        with st.chat_message("user"):
-            st.write(user_message)
-        selected_job_id = job_df[job_df.media_name == selected_media_name][
-            "UUID"
-        ].values[0]
-        transcript_json = retrieve_transcript_json_by_jobid(job_id=selected_job_id)
-        segmented_transcript_str = build_timestamped_segmented_transcript(
-            transcript_json
+    if selected_media_name:
+        media_bytes = retrieve_media_bytes(
+            selected_media_name, username=st.session_state["username"]
         )
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                llm_response = chat_transcript_query(
-                    segmented_transcript=segmented_transcript_str,
-                    user_query=user_message,
-                    llm=llm,
-                )
+        if user_message := st.chat_input(placeholder="Enter your question here"):
+            with st.chat_message("user"):
+                st.write(user_message)
+            selected_job_id = job_df[job_df.media_name == selected_media_name][
+                "UUID"
+            ].values[0]
+            transcript_json = retrieve_transcript_json_by_jobid(job_id=selected_job_id)
+            segmented_transcript_str = build_timestamped_segmented_transcript(
+                transcript_json
+            )
 
-                answer, timestamp_int = extract_timestamp_and_answer(llm_response)
-            if timestamp_int >= 0:
-                video = st.video(
-                    data=media_bytes,
-                    start_time=timestamp_int,
-                )
-            st.write(answer)
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    llm_response = chat_transcript_query(
+                        segmented_transcript=segmented_transcript_str,
+                        user_query=user_message,
+                        llm=llm,
+                    )
+
+                    answer, timestamp_int = extract_timestamp_and_answer(llm_response)
+                if timestamp_int >= 0:
+                    video = st.video(
+                        data=media_bytes,
+                        start_time=timestamp_int,
+                    )
+                st.write(answer)

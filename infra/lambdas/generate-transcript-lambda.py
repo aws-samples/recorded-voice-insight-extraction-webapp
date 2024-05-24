@@ -5,7 +5,11 @@ import uuid
 from urllib.parse import unquote_plus
 
 import boto3
-from lambda_utils import create_ddb_entry, update_job_status
+from lambda_utils import (
+    create_ddb_entry,
+    update_job_status,
+    extract_username_from_s3_URI,
+)
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -81,8 +85,12 @@ def lambda_handler(event, context):
         raise
 
     # Create item in dynamodb to track media_uri
+    username = extract_username_from_s3_URI(media_uri)
     response = create_ddb_entry(
-        table_name=DYNAMO_TABLE_NAME, uuid=job_name, media_uri=media_uri
+        table_name=DYNAMO_TABLE_NAME,
+        uuid=job_name,
+        media_uri=media_uri,
+        username=username,
     )
     logger.debug(f"Response to creating dynamodb item {uuid}: {response}")
 

@@ -35,7 +35,7 @@ def update_job_status(table_name: str, uuid: str, new_status: str):
     )
 
 
-def create_ddb_entry(table_name: str, uuid: str, media_uri: str):
+def create_ddb_entry(table_name: str, uuid: str, media_uri: str, username: str):
     """Create a new entry in dynamodb, with timestamp"""
 
     dyn_resource = boto3.resource("dynamodb")
@@ -46,8 +46,16 @@ def create_ddb_entry(table_name: str, uuid: str, media_uri: str):
     return table.put_item(
         Item={
             "UUID": uuid,
+            "username": username,
             "media_uri": media_uri,
             "job_creation_time": str(datetime.datetime.now()),
             "media_name": os.path.split(media_uri)[-1],
         }
     )
+
+
+def extract_username_from_s3_URI(uri: str) -> str:
+    """URIs are like s3://bucket/blah/username/file_they_uploaded.mp4
+    Return username
+    TODO: test for security flaws, if filenames can contain / character"""
+    return os.path.split(uri)[0].split("/")[-1]

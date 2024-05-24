@@ -2,31 +2,35 @@
 
 import boto3
 import pandas as pd
+from boto3.dynamodb.conditions import Key
 
-TABLE_NAME = "MAS-App-Table"
+TABLE_NAME = "ReVIEW-App-Table"
 dyn_resource = boto3.resource("dynamodb")
 table = dyn_resource.Table(name=TABLE_NAME)
 
 
-def retrieve_all_items(max_rows=None) -> pd.DataFrame:
-    """Scan entire dynamodb table and return some columns w/ optional max # of rows"""
+def retrieve_all_items(username, max_rows=None) -> pd.DataFrame:
+    """Scan entire dynamodb table for rows from this username and return
+    specific columns w/ optional max # of rows"""
+    # TODO: replace this with query function instead of scan, query by username
+    # Maybe set username as primary key or partition index something?
     scan_kwargs = {
-        # "FilterExpression": Key("year").between(year_range["first"], year_range["second"]),
+        "FilterExpression": Key("username").eq(username),
         "ProjectionExpression": "media_name, job_creation_time, transcription_status, #foo",
         "ExpressionAttributeNames": {"#foo": "UUID"},
     }
 
-    scan_results = table.scan(**scan_kwargs)
-    # If no results at all in the DB (user hasn't uploaded anything yet),
-    # return an empty dataframe with the right columns so user at least sees
-    # what they should expect
+    scan_results = table.scan(**scan_kwargs)["Items"]
     if not scan_results:
+        # If no results at all in the DB (user hasn't uploaded anything yet),
+        # return an empty dataframe with the right columns so user at least sees
+        # what they should expect
         return pd.DataFrame(
             {"media_name": [], "job_creation_time": [], "transcription_status": []}
         )
 
     result_df = (
-        pd.DataFrame.from_records(scan_results["Items"])
+        pd.DataFrame.from_records(scan_results)
         .sort_values("job_creation_time", ascending=False)
         .reset_index(
             drop=True
