@@ -14,15 +14,15 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-def uploadToS3(fileobj):
+def uploadToS3(fileobj, username):
     s3 = boto3.client("s3")
-
+    
+    
     try:
         s3.upload_fileobj(
             fileobj,
             BUCKET_NAME,
-            os.path.join("recordings", os.path.split(fileobj.name)[-1]),
+            os.path.join("recordings",username,os.path.split(fileobj.name)[-1]),
         )
         st.success(
             f"{fileobj.name} successfully uploaded and submitted for transcription."
@@ -33,9 +33,13 @@ def uploadToS3(fileobj):
         return False
 
 
+
 st.title("File Uploader")
 
-uploaded_file = st.file_uploader("Upload a video or audio recording.")
-if uploaded_file is not None:
-    st.info(f"Uploading file {uploaded_file.name}...")
-    uploadToS3(uploaded_file)
+if not st.session_state.get('username',None):
+    st.error("You must be logged in to upload files.")
+else:
+    uploaded_file = st.file_uploader("Upload a video or audio recording.")
+    if uploaded_file is not None:
+        st.info(f"Uploading file {uploaded_file.name}...")
+        uploadToS3(uploaded_file, username=st.session_state['username'])

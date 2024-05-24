@@ -9,11 +9,24 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+#########################
+# SESSION STATE VARIABLES
+#########################
+
+st.session_state.setdefault("username", "")
+
+
+def login():
+    """Login with Cognito, set session state username variable"""
+    st.session_state["username"] = "kazu"
+
 
 def main():
     """
     Main app function
     """
+
+    login()
 
     # input_col, output_col = st.columns([0.5, 0.5], gap="medium")
     st.title("Recorded Voice Insight Extraction Webapp")

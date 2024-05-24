@@ -8,10 +8,14 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+
 st.title("Your Transcription Jobs")
 st.write("Note: this page does not auto-refresh the transcription status.")
-st.dataframe(
-    retrieve_all_items(),
-    hide_index=True,
-    column_order=("media_name", "job_creation_time", "transcription_status"),
-)
+if not st.session_state.get("username", None):
+    st.error("You must be logged in to view jobs.")
+else:
+    st.dataframe(
+        retrieve_all_items(username=st.session_state["username"]),
+        hide_index=True,
+        column_order=("media_name", "job_creation_time", "transcription_status"),
+    )

@@ -35,7 +35,7 @@ class ReVIEWStack(Stack):
             #     "SummaryLLMID", "anthropic.claude-3-sonnet-20240229-v1:0"
             # ),
             # Name of dynamo DB app table (PK = "UUID" hardcoded)
-            "DDBTableName": kwargs.get("DDBTableName", "MAS-App-Table"),
+            "DDBTableName": kwargs.get("DDBTableName", "ReVIEW-App-Table"),
         }
 
         # The order of these matters, later ones refer to class variables
@@ -68,7 +68,7 @@ class ReVIEWStack(Stack):
         # )
 
     def setup_roles(self):
-        # AWS transcribe access, s3 access, bedrock access, etc
+        # AWS transcribe access, s3 access, etc
         self.masLambdaExecutionRole = iam.Role(
             self,
             "ReVIEWLambdaExecutionRole",
@@ -82,9 +82,6 @@ class ReVIEWStack(Stack):
                 ),
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "CloudWatchLogsFullAccess"
-                ),
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "AmazonBedrockFullAccess"
                 ),
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "AmazonDynamoDBFullAccess"
@@ -254,7 +251,7 @@ class ReVIEWStack(Stack):
 
         self.dynamodb_table = dynamodb.Table(
             self,
-            "MAS-App-DDBTable-ID",
+            "ReVIEW-App-DDBTable-ID",
             table_name=self.props["DDBTableName"],
             partition_key=dynamodb.Attribute(
                 name="UUID", type=dynamodb.AttributeType.STRING
