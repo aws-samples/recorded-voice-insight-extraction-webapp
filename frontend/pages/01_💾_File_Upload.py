@@ -3,6 +3,7 @@ import os
 import boto3
 import streamlit as st
 from components.cognito_utils import login
+from components.streamlit_utils import display_sidebar
 
 # Must match what's in the backend stack definition
 BUCKET_NAME = "review-app-assets"
@@ -41,8 +42,9 @@ if not st.session_state.get("auth_username", None):
     login()
     st.stop()
 
-else:
-    uploaded_file = st.file_uploader("Upload a video or audio recording.")
-    if uploaded_file is not None:
-        st.info(f"Uploading file {uploaded_file.name}...")
-        uploadToS3(uploaded_file, username=st.session_state["auth_username"])
+display_sidebar()
+
+uploaded_file = st.file_uploader("Upload a video or audio recording.")
+if uploaded_file is not None:
+    st.info(f"Uploading file {uploaded_file.name}...")
+    uploadToS3(uploaded_file, username=st.session_state["auth_username"])

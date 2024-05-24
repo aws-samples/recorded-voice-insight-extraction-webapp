@@ -1,5 +1,6 @@
 import streamlit as st
 from components.cognito_utils import login
+from components.streamlit_utils import display_sidebar
 
 logger = st.logger.get_logger(__name__)
 
@@ -38,6 +39,7 @@ def main():
         """
     )
     st.subheader("Click  💾 File Upload  on the left to get started.")
+    display_sidebar()
 
 
 def display_inputs(input_selection):
