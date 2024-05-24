@@ -17,9 +17,13 @@ if not st.session_state.get("auth_username", None):
     login()
     st.stop()
 
-st.write("Note: this page does not auto-refresh the transcription status.")
 st.dataframe(
     retrieve_all_items(username=st.session_state["auth_username"]),
     hide_index=True,
     column_order=("media_name", "job_creation_time", "transcription_status"),
 )
+
+button_clicked = st.button("Refresh Table")
+if button_clicked:
+    # Refresh entire page on button click, just to reload the table
+    st.experimental_rerun()
