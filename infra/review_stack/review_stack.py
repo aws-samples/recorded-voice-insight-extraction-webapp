@@ -4,7 +4,9 @@ import aws_cdk.aws_lambda as aws_lambda
 import aws_cdk.aws_logs as logs
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_s3_notifications as s3n
-from aws_cdk import Duration, RemovalPolicy, Stack
+import aws_cdk.aws_secretsmanager as secretsmanager
+from aws_cdk import aws_cognito as cognito
+from aws_cdk import Duration, RemovalPolicy, Stack, SecretValue
 from constructs import Construct
 
 """
@@ -46,6 +48,7 @@ class ReVIEWStack(Stack):
         self.setup_dynamodb()
         self.setup_lambdas()
         self.setup_events()
+        self.setup_cognito()
 
     def setup_logging(self):
         self.generateMediaTranscriptLogGroup = logs.LogGroup(
@@ -259,4 +262,49 @@ class ReVIEWStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
             removal_policy=RemovalPolicy.DESTROY,
+        )
+
+    def setup_cognito(self):
+        # Cognito User Pool
+        user_pool_common_config = {
+            "id": f"review-app-cognito-user-pool",
+            "user_pool_name": f"review-app-cognito-user-pool",
+            "auto_verify": cognito.AutoVerifiedAttrs(email=True),
+            "removal_policy": RemovalPolicy.DESTROY,
+            "password_policy": cognito.PasswordPolicy(
+                min_length=8,
+                require_digits=False,
+                require_lowercase=False,
+                require_uppercase=False,
+                require_symbols=False,
+            ),
+            "account_recovery": cognito.AccountRecovery.EMAIL_ONLY,
+            "advanced_security_mode": cognito.AdvancedSecurityMode.ENFORCED,
+        }
+
+        self.cognito_user_pool = cognito.UserPool(self, **user_pool_common_config)
+        self.cognito_user_pool_id = self.cognito_user_pool.user_pool_id
+        self.cognito_user_pool_client = self.cognito_user_pool.add_client(
+            "review-app-cognito-client",
+            user_pool_client_name="review-app-cognito-client",
+            generate_secret=False,
+            access_token_validity=Duration.minutes(30),
+            auth_flows=cognito.AuthFlow(user_srp=True),
+        )
+
+        self.cognito_client_id = self.cognito_user_pool_client.user_pool_client_id
+
+        # Store created pool info as a secret, to be read by downstream streamlit application
+        secretsmanager.Secret(
+            self,
+            "review-app-cognito-secrets-id",
+            secret_name="review-app-cognito-secrets",
+            secret_object_value={
+                "cognito-pool-id": SecretValue.unsafe_plain_text(
+                    self.cognito_user_pool_id
+                ),
+                "cognito-client-id": SecretValue.unsafe_plain_text(
+                    self.cognito_client_id
+                ),
+            },
         )

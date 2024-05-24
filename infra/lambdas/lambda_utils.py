@@ -25,7 +25,7 @@ def update_ddb_entry(
 
 def update_job_status(table_name: str, uuid: str, new_status: str):
     """Update transcription job status"""
-    assert new_status in ["In Progress", "Completed", "Failed"]
+    assert new_status in ["In Progress", "Completed", "Failed", "In Queue"]
 
     return update_ddb_entry(
         table_name=table_name,
