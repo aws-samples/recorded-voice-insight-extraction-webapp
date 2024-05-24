@@ -45,4 +45,4 @@ else:
     uploaded_file = st.file_uploader("Upload a video or audio recording.")
     if uploaded_file is not None:
         st.info(f"Uploading file {uploaded_file.name}...")
-        uploadToS3(uploaded_file, username=st.session_state["username"])
+        uploadToS3(uploaded_file, username=st.session_state["auth_username"])

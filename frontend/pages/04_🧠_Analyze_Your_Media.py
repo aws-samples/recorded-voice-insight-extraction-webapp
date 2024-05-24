@@ -72,11 +72,11 @@ if button_clicked:
         job_id=selected_job_id, template_id=selected_analysis_id
     )
     if cached_results:
-        st.write("Displaying cached analysis result:")
+        st.info("Displaying cached analysis result:")
         analysis_result = cached_results
     # Otherwise run the analysis and store the results in dynamo
     else:
-        st.write("Analysis results will be displayed here when complete:")
+        st.info("Analysis results will be displayed here when complete:")
         transcript = retrieve_transcript_by_jobid(job_id=selected_job_id)
         analysis_result = run_analysis(
             analysis_id=selected_analysis_id, transcript=transcript, llm=llm

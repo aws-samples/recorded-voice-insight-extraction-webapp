@@ -44,7 +44,7 @@ selected_media_name = st.selectbox(
 
 if selected_media_name:
     media_bytes = retrieve_media_bytes(
-        selected_media_name, username=st.session_state["username"]
+        selected_media_name, username=st.session_state["auth_username"]
     )
 
     if user_message := st.chat_input(placeholder="Enter your question here"):

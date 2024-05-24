@@ -65,6 +65,19 @@ def lambda_handler(event, context):
     # has similar regex requirements
     output_key = "{}/{}.json".format(DESTINATION_PREFIX, job_name)
     logger.debug(f"{output_key=}")
+    # Create item in dynamodb to track media_uri
+    username = extract_username_from_s3_URI(media_uri)
+    response = create_ddb_entry(
+        table_name=DYNAMO_TABLE_NAME,
+        uuid=job_name,
+        media_uri=media_uri,
+        username=username,
+    )
+    # Update job status in dynamodb
+    update_job_status(
+        table_name=DYNAMO_TABLE_NAME, uuid=job_name, new_status="In Queue"
+    )
+
     job_args = {
         "TranscriptionJobName": job_name,
         "Media": {"MediaFileUri": media_uri},
@@ -84,14 +97,6 @@ def lambda_handler(event, context):
         logger.error(f"Exception: {e}")
         raise
 
-    # Create item in dynamodb to track media_uri
-    username = extract_username_from_s3_URI(media_uri)
-    response = create_ddb_entry(
-        table_name=DYNAMO_TABLE_NAME,
-        uuid=job_name,
-        media_uri=media_uri,
-        username=username,
-    )
     logger.debug(f"Response to creating dynamodb item {uuid}: {response}")
 
     # Update job status in dynamodb
