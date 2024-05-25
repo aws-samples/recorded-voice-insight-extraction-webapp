@@ -9,12 +9,20 @@ from aws_cdk import aws_cognito as cognito
 from aws_cdk import Duration, RemovalPolicy, Stack, SecretValue
 from constructs import Construct
 
+import boto3
+
 """
 ReVIEW CFN Stack Definition
 """
 
 
 class ReVIEWStack(Stack):
+    """Backend of ReVIEW Application
+    Note: `cdk destroy` will wipe everything (s3, dynamo, etc), but will
+    NOT delete the Cognito user pool. Delete it in console if you wish.
+    `cdk deploy` checks if a user pool with that name exists before
+    creating a new one."""
+
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
@@ -30,13 +38,7 @@ class ReVIEWStack(Stack):
             "s3TextTranscriptsPrefix": kwargs.get(
                 "s3TextTranscriptsPrefix", "transcripts-txt"
             ),
-            # # Where LLM summaries get dumped
-            # "s3SummaryPrefix": kwargs.get("s3SummaryPrefix", "llm-summaries"),
-            # # Which Bedrock LLM to use to generate summaries
-            # "SummaryLLMID": kwargs.get(
-            #     "SummaryLLMID", "anthropic.claude-3-sonnet-20240229-v1:0"
-            # ),
-            # Name of dynamo DB app table (PK = "UUID" hardcoded)
+            # Name of dynamo DB app table
             "DDBTableName": kwargs.get("DDBTableName", "ReVIEW-App-Table"),
         }
 
@@ -63,12 +65,6 @@ class ReVIEWStack(Stack):
             log_group_name=f"""/aws/lambda/{self.stack_name}-DumpTextTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
         )
-        # self.generateSummaryLogGroup = logs.LogGroup(
-        #     self,
-        #     "GenerateSummaryLogGroup",
-        #     log_group_name=f"""/aws/lambda/{self.stack_name}-GenerateSummary""",
-        #     removal_policy=RemovalPolicy.DESTROY,
-        # )
 
     def setup_roles(self):
         # AWS transcribe access, s3 access, etc
@@ -98,7 +94,6 @@ class ReVIEWStack(Stack):
                             resources=[
                                 f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3TranscriptsPrefix']}/*",
                                 f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3TextTranscriptsPrefix']}/*",
-                                # f"arn:aws:s3:::{self.props['s3BucketName']}/{self.props['s3SummaryPrefix']}/*",
                             ],
                         )
                     ]
@@ -117,6 +112,7 @@ class ReVIEWStack(Stack):
             encryption=s3.BucketEncryption.KMS_MANAGED,
             versioned=True,
             removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
         )
 
         self.bucket = s3.Bucket(
@@ -129,6 +125,7 @@ class ReVIEWStack(Stack):
             versioned=True,
             server_access_logs_bucket=self.loggingBucket,
             removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
         )
 
     def setup_lambdas(self):
@@ -186,34 +183,6 @@ class ReVIEWStack(Stack):
             source_account=self.account,
         )
 
-        # self.generateSummary = aws_lambda.Function(
-        #     self,
-        #     "GenerateSummary",
-        #     description=f"Stack {self.stack_name} Function GenerateSummary",
-        #     function_name=f"{self.stack_name}-GenerateSummary",
-        #     handler="generate-summary-lambda.lambda_handler",
-        #     runtime=aws_lambda.Runtime.PYTHON_3_12,
-        #     memory_size=128,
-        #     code=aws_lambda.Code.from_asset("lambdas/lambdas.zip"),
-        #     environment={
-        #         "DESTINATION_PREFIX": self.props["s3SummaryPrefix"],
-        #         "S3_BUCKET": self.props["s3BucketName"],
-        #         "SOURCE_PREFIX": self.props["s3TextTranscriptsPrefix"],
-        #         "LLM_ID": self.props["SummaryLLMID"],
-        #         "DYNAMO_TABLE_NAME": self.props["DDBTableName"],
-        #     },
-        #     timeout=Duration.seconds(60),
-        #     role=self.masLambdaExecutionRole,  # Reuse existing lambda role
-        # )
-
-        # self.generateSummary.add_permission(
-        #     "GenerateSummaryionInvokePermission",
-        #     principal=iam.ServicePrincipal("s3.amazonaws.com"),
-        #     action="lambda:InvokeFunction",
-        #     source_arn=self.bucket.bucket_arn,
-        #     source_account=self.account,
-        # )
-
         ## This creates a sev2 ticket
         # self.generateMediaTranscript.grant_invoke(
         #     iam.ServicePrincipal("s3.amazonaws.com")
@@ -238,25 +207,21 @@ class ReVIEWStack(Stack):
                 suffix=".json",
             ),
         )
-        # Event to read in txt file for LLM summary generation
-        # self.bucket.add_event_notification(
-        #     s3.EventType.OBJECT_CREATED,
-        #     s3n.LambdaDestination(self.generateSummary),
-        #     s3.NotificationKeyFilter(
-        #         prefix=self.props["s3TextTranscriptsPrefix"],
-        #         suffix=".txt",
-        #     ),
-        # )
 
     def setup_dynamodb(self):
         # Create a table to store application metadata
-        # The partition key will be a uuid (string) named "UUID"
+        # The partition key will be the username, with a sort key UUID
+        # Maybe this is suboptimal? Perhaps global or secondary index is better?
+        # https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_dynamodb/Table.html
 
         self.dynamodb_table = dynamodb.Table(
             self,
             "ReVIEW-App-DDBTable-ID",
             table_name=self.props["DDBTableName"],
             partition_key=dynamodb.Attribute(
+                name="username", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
                 name="UUID", type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -267,10 +232,10 @@ class ReVIEWStack(Stack):
     def setup_cognito(self):
         # Cognito User Pool
         user_pool_common_config = {
-            "id": f"review-app-cognito-user-pool",
-            "user_pool_name": f"review-app-cognito-user-pool",
+            "id": "review-app-cognito-user-pool-id",
+            "user_pool_name": "review-app-cognito-user-pool",
             "auto_verify": cognito.AutoVerifiedAttrs(email=True),
-            "removal_policy": RemovalPolicy.DESTROY,
+            "removal_policy": RemovalPolicy.RETAIN,
             "password_policy": cognito.PasswordPolicy(
                 min_length=8,
                 require_digits=False,
@@ -280,10 +245,28 @@ class ReVIEWStack(Stack):
             ),
             "account_recovery": cognito.AccountRecovery.EMAIL_ONLY,
             "advanced_security_mode": cognito.AdvancedSecurityMode.ENFORCED,
+            "deletion_protection": True,
         }
 
-        self.cognito_user_pool = cognito.UserPool(self, **user_pool_common_config)
+        # Check if a user pool with this name already exists
+        # Unfortunately there is no way to do this w/ constructs
+        # (only search by ID, which I don't have a priori)
+        cognito_client = boto3.client("cognito-idp", "us-east-1")
+        existing_pools = cognito_client.list_user_pools(MaxResults=10)["UserPools"]
+        found_existing_pool = False
+        for pool in existing_pools:
+            if pool["Name"] == "review-app-cognito-user-pool":
+                self.cognito_user_pool = cognito.UserPool.from_user_pool_id(
+                    self, "review-app-cognito-user-pool-id", user_pool_id=pool["Id"]
+                )
+                found_existing_pool = True
+                break
+        if not found_existing_pool:
+            # Create a new user pool
+            self.cognito_user_pool = cognito.UserPool(self, **user_pool_common_config)
+
         self.cognito_user_pool_id = self.cognito_user_pool.user_pool_id
+
         self.cognito_user_pool_client = self.cognito_user_pool.add_client(
             "review-app-cognito-client",
             user_pool_client_name="review-app-cognito-client",
