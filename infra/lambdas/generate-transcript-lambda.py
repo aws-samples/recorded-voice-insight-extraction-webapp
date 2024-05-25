@@ -60,13 +60,14 @@ def lambda_handler(event, context):
     logger.debug(f"{job_name=}")
 
     media_uri = f"s3://{S3_BUCKET}/{recording_key}"
+    username = extract_username_from_s3_URI(media_uri)
     logger.debug(f"{media_uri=}")
     # Use job name (no spaces, etc) as the output file name, because output
     # has similar regex requirements
-    output_key = "{}/{}.json".format(DESTINATION_PREFIX, job_name)
+    output_key = "{}/{}/{}.json".format(DESTINATION_PREFIX, username, job_name)
     logger.debug(f"{output_key=}")
     # Create item in dynamodb to track media_uri
-    username = extract_username_from_s3_URI(media_uri)
+
     response = create_ddb_entry(
         table_name=DYNAMO_TABLE_NAME,
         uuid=job_name,
@@ -97,7 +98,10 @@ def lambda_handler(event, context):
 
     # Update job status in dynamodb
     update_job_status(
-        table_name=DYNAMO_TABLE_NAME, uuid=job_name, new_status="In Progress"
+        table_name=DYNAMO_TABLE_NAME,
+        uuid=job_name,
+        username=username,
+        new_status="In Progress",
     )
     return {
         "statusCode": 200,

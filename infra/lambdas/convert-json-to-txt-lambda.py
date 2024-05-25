@@ -3,10 +3,14 @@ import logging
 import os
 
 import boto3
-from lambda_utils import update_ddb_entry, update_job_status
+from lambda_utils import (
+    update_ddb_entry,
+    update_job_status,
+    extract_username_from_s3_URI,
+)
 
 logger = logging.getLogger()
-logger.setLevel("INFO")
+logger.setLevel("DEBUG")
 
 S3_BUCKET = os.environ.get("S3_BUCKET")
 SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX")
@@ -25,6 +29,8 @@ def lambda_handler(event, context):
     # Read in json file, dump to txt
     json_transcript_key = event["Records"][0]["s3"]["object"]["key"]
     logger.debug(f"{json_transcript_key=}")
+    username = extract_username_from_s3_URI(json_transcript_key)
+    logger.debug(f"{username=}")
     filename = os.path.split(json_transcript_key)[1]
     uuid, extension = os.path.splitext(filename)
     try:
@@ -35,7 +41,7 @@ def lambda_handler(event, context):
         )
         raise err
 
-    output_key = os.path.join(DESTINATION_PREFIX, uuid + ".txt")
+    output_key = os.path.join(DESTINATION_PREFIX, username, uuid + ".txt")
     logger.debug(f"{output_key=}")
 
     try:
@@ -50,6 +56,7 @@ def lambda_handler(event, context):
         response = update_ddb_entry(
             table_name=DYNAMO_TABLE_NAME,
             uuid=uuid,
+            username=username,
             new_item_name="json_transcript_uri",
             new_item_value=os.path.join("s3://", S3_BUCKET, json_transcript_key),
         )
@@ -61,6 +68,7 @@ def lambda_handler(event, context):
         response = update_ddb_entry(
             table_name=DYNAMO_TABLE_NAME,
             uuid=uuid,
+            username=username,
             new_item_name="txt_transcript_uri",
             new_item_value=os.path.join("s3://", S3_BUCKET, output_key),
         )
@@ -81,15 +89,30 @@ def lambda_handler(event, context):
     except AssertionError:
         logger.error(f"{len(transcripts)} transcripts found in results. Expected 1.")
         # Update job status in dynamodb
-        update_job_status(table_name=DYNAMO_TABLE_NAME, uuid=uuid, new_status="Failed")
+        update_job_status(
+            table_name=DYNAMO_TABLE_NAME,
+            uuid=uuid,
+            username=username,
+            new_status="Failed",
+        )
     except Exception as e:
         logger.error(f"ERROR Exception caught in convert-json-to-txt-lambda: {e}.")
         # Update job status in dynamodb
-        update_job_status(table_name=DYNAMO_TABLE_NAME, uuid=uuid, new_status="Failed")
+        update_job_status(
+            table_name=DYNAMO_TABLE_NAME,
+            uuid=uuid,
+            username=username,
+            new_status="Failed",
+        )
         raise
 
     # Update job status in dynamodb
-    update_job_status(table_name=DYNAMO_TABLE_NAME, uuid=uuid, new_status="Completed")
+    update_job_status(
+        table_name=DYNAMO_TABLE_NAME,
+        uuid=uuid,
+        username=username,
+        new_status="Completed",
+    )
 
     return {
         "statusCode": 200,

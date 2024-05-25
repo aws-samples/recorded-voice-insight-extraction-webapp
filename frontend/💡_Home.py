@@ -6,7 +6,7 @@ logger = st.logger.get_logger(__name__)
 
 st.set_page_config(
     page_title="ReVIEW",
-    page_icon=":light-bulb:",
+    page_icon=":bulb:",
     layout="centered",
     initial_sidebar_state="expanded",
 )

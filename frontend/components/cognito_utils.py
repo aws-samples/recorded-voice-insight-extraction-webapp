@@ -8,6 +8,30 @@ from botocore.exceptions import ClientError
 import json
 
 
+def login():
+    """Display cognito login screen, on success set "auth_username" session state variable
+    (and a bunch of other session variables not explicitly used elsewhere)
+    """
+
+    # This sets "auth_username" session state variable if successful, otherwise it's ""
+    authenticator = CognitoAuthenticator(
+        **get_cognito_secrets(),
+        use_cookies=False,  # TODO: figure out how to get True working properly
+    )
+
+    authenticator.login()
+
+
+def logout():
+    """Log out"""
+    authenticator = CognitoAuthenticator(
+        **get_cognito_secrets(),
+        use_cookies=False,  # TODO: figure out how to get True working properly
+    )
+
+    authenticator.logout()
+
+
 def get_cognito_secrets():
     """Get cognito secrets from AWS Secrets Manager and return kwargs for authenticator"""
 
@@ -33,23 +57,3 @@ def get_cognito_secrets():
         "pool_id": secret_json["cognito-pool-id"],
         "app_client_id": secret_json["cognito-client-id"],
     }
-
-
-authenticator = CognitoAuthenticator(
-    **get_cognito_secrets(),
-    use_cookies=False,  # TODO: figure out how to get True working properly
-)
-
-
-def login():
-    """Display cognito login screen, on success set "auth_username" session state variable
-    (and a bunch of other session variables not explicitly used elsewhere)
-    """
-
-    # This sets "auth_username" session state variable if successful, otherwise it's ""
-    authenticator.login()
-
-
-def logout():
-    """Log out"""
-    authenticator.logout()

@@ -70,7 +70,9 @@ if button_clicked:
 
     # If this analysis has already been run and the result is in dynamo, display it
     cached_results = retrieve_analysis_by_jobid(
-        job_id=selected_job_id, template_id=selected_analysis_id
+        job_id=selected_job_id,
+        username=st.session_state["auth_username"],
+        template_id=selected_analysis_id,
     )
     if cached_results:
         st.info("Displaying cached analysis result:")
@@ -78,12 +80,17 @@ if button_clicked:
     # Otherwise run the analysis and store the results in dynamo
     else:
         st.info("Analysis results will be displayed here when complete:")
-        transcript = retrieve_transcript_by_jobid(job_id=selected_job_id)
+        username = st.session_state["auth_username"]
+        print(f"retrieving {selected_job_id=} {username=}")
+        transcript = retrieve_transcript_by_jobid(
+            job_id=selected_job_id, username=st.session_state["auth_username"]
+        )
         analysis_result = run_analysis(
             analysis_id=selected_analysis_id, transcript=transcript, llm=llm
         )
         store_analysis_result(
             job_id=selected_job_id,
+            username=st.session_state["auth_username"],
             template_id=selected_analysis_id,
             analysis_result=analysis_result,
         )

@@ -54,7 +54,9 @@ if selected_media_name:
         selected_job_id = job_df[job_df.media_name == selected_media_name][
             "UUID"
         ].values[0]
-        transcript_json = retrieve_transcript_json_by_jobid(job_id=selected_job_id)
+        transcript_json = retrieve_transcript_json_by_jobid(
+            job_id=selected_job_id, username=st.session_state["auth_username"]
+        )
         segmented_transcript_str = build_timestamped_segmented_transcript(
             transcript_json
         )
