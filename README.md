@@ -60,7 +60,7 @@ The minimal IAM permissions needed to bootstrap and deploy the stacks from this 
 ```{bash}
 $ cd infra
 $ cdk bootstrap
-$ cdk deploy
+$ cdk deploy --all
 ```
 
 This will deploy the ReVIEW backend stack into your AWS account.

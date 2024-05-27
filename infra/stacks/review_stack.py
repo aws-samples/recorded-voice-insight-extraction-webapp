@@ -4,12 +4,10 @@ import aws_cdk.aws_lambda as aws_lambda
 import aws_cdk.aws_logs as logs
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_s3_notifications as s3n
-import aws_cdk.aws_secretsmanager as secretsmanager
-from aws_cdk import aws_cognito as cognito
-from aws_cdk import Duration, RemovalPolicy, Stack, SecretValue
+from aws_cdk import Duration, RemovalPolicy, Stack
 from constructs import Construct
+from .frontend_stack import ReVIEWFrontendStack
 
-import boto3
 
 """
 ReVIEW CFN Stack Definition
@@ -50,7 +48,9 @@ class ReVIEWStack(Stack):
         self.setup_dynamodb()
         self.setup_lambdas()
         self.setup_events()
-        self.setup_cognito()
+
+        # Deploy frontend nested stack
+        self.deploy_frontend()
 
     def setup_logging(self):
         self.generateMediaTranscriptLogGroup = logs.LogGroup(
@@ -229,65 +229,5 @@ class ReVIEWStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
-    def setup_cognito(self):
-        # Cognito User Pool
-        user_pool_common_config = {
-            "id": "review-app-cognito-user-pool-id",
-            "user_pool_name": "review-app-cognito-user-pool",
-            "auto_verify": cognito.AutoVerifiedAttrs(email=True),
-            "removal_policy": RemovalPolicy.RETAIN,
-            "password_policy": cognito.PasswordPolicy(
-                min_length=8,
-                require_digits=False,
-                require_lowercase=False,
-                require_uppercase=False,
-                require_symbols=False,
-            ),
-            "account_recovery": cognito.AccountRecovery.EMAIL_ONLY,
-            "advanced_security_mode": cognito.AdvancedSecurityMode.ENFORCED,
-            "deletion_protection": True,
-        }
-
-        # Check if a user pool with this name already exists
-        # Unfortunately there is no way to do this w/ constructs
-        # (only search by ID, which I don't have a priori)
-        cognito_client = boto3.client("cognito-idp", "us-east-1")
-        existing_pools = cognito_client.list_user_pools(MaxResults=10)["UserPools"]
-        found_existing_pool = False
-        for pool in existing_pools:
-            if pool["Name"] == "review-app-cognito-user-pool":
-                self.cognito_user_pool = cognito.UserPool.from_user_pool_id(
-                    self, "review-app-cognito-user-pool-id", user_pool_id=pool["Id"]
-                )
-                found_existing_pool = True
-                break
-        if not found_existing_pool:
-            # Create a new user pool
-            self.cognito_user_pool = cognito.UserPool(self, **user_pool_common_config)
-
-        self.cognito_user_pool_id = self.cognito_user_pool.user_pool_id
-
-        self.cognito_user_pool_client = self.cognito_user_pool.add_client(
-            "review-app-cognito-client",
-            user_pool_client_name="review-app-cognito-client",
-            generate_secret=False,
-            access_token_validity=Duration.minutes(30),
-            auth_flows=cognito.AuthFlow(user_srp=True),
-        )
-
-        self.cognito_client_id = self.cognito_user_pool_client.user_pool_client_id
-
-        # Store created pool info as a secret, to be read by downstream streamlit application
-        secretsmanager.Secret(
-            self,
-            "review-app-cognito-secrets-id",
-            secret_name="review-app-cognito-secrets",
-            secret_object_value={
-                "cognito-pool-id": SecretValue.unsafe_plain_text(
-                    self.cognito_user_pool_id
-                ),
-                "cognito-client-id": SecretValue.unsafe_plain_text(
-                    self.cognito_client_id
-                ),
-            },
-        )
+    def deploy_frontend(self):
+        self.frontend_stack = ReVIEWFrontendStack(self, "STREAMLIT")

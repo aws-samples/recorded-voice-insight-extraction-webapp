@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import aws_cdk as cdk
-from review_stack.review_stack import ReVIEWStack
+from stacks.review_stack import ReVIEWStack
 
 app = cdk.App()
 ReVIEWStack(
