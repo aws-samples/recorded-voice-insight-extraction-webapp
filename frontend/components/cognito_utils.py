@@ -6,6 +6,7 @@ from streamlit_cognito_auth import CognitoAuthenticator
 import boto3
 from botocore.exceptions import ClientError
 import json
+import os
 
 
 def login():
@@ -33,27 +34,9 @@ def logout():
 
 
 def get_cognito_secrets():
-    """Get cognito secrets from AWS Secrets Manager and return kwargs for authenticator"""
-
-    # TODO: set these as environment variables on app startup in streamlit container, so as not
-    # to be constantly re-retrieving them from secrets
-    secret_name = "review-app-cognito-secrets"
-    region_name = "us-east-1"
-
-    # Create a Secrets Manager client
-    session = boto3.session.Session()
-    client = session.client(service_name="secretsmanager", region_name=region_name)
-
-    try:
-        get_secret_value_response = client.get_secret_value(SecretId=secret_name)
-        secret_string = get_secret_value_response["SecretString"]
-        secret_json = json.loads(secret_string)
-    except ClientError as e:
-        # For a list of exceptions thrown, see
-        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
-        raise e
+    """Get cognito secrets from environment and return kwargs for authenticator"""
 
     return {
-        "pool_id": secret_json["cognito-pool-id"],
-        "app_client_id": secret_json["cognito-client-id"],
+        "pool_id": os.environ["COGNITO_POOL_ID"],
+        "app_client_id": os.environ["COGNITO_CLIENT_ID"],
     }
