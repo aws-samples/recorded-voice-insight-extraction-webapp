@@ -18,11 +18,11 @@ st.set_page_config(
 )
 
 st.title("Analyze Your Media")
-st.subheader("Pick a media file to analyze:")
 if not st.session_state.get("auth_username", None):
     st.error("Please login to continue.")
     login()
     st.stop()
+st.subheader("Pick a media file to analyze:")
 display_sidebar()
 
 
