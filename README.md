@@ -23,7 +23,7 @@ The Recorded Voice Insight Extraction Webapp (ReVIEW) is a cdk-deployed applicat
 
 This application also includes a chat functionality with an AI assistant who can answer specific questions and queue up the parent recording to specific timestamps for users to validate the answers themselves.
 
-A 5 minute video demonstrating the features as of May 28, 2024 [can be viewed here](https://amazon.awsapps.com/workdocs-preview/index.html#/document/4e6f1bcfcd420cd4e650e7008a946a6d1214d735336d2b3c40784ba2af1b0ed2).
+A 4 minute video demonstrating the features as of May 28, 2024 [can be viewed here](https://amazon.awsapps.com/workdocs-preview/index.html#/document/4e6f1bcfcd420cd4e650e7008a946a6d1214d735336d2b3c40784ba2af1b0ed2).
 
 ### Key Features
 
