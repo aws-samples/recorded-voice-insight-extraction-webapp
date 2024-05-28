@@ -3,9 +3,6 @@
 """Helper utilities for working with Amazon Cognito"""
 
 from streamlit_cognito_auth import CognitoAuthenticator
-import boto3
-from botocore.exceptions import ClientError
-import json
 import os
 
 

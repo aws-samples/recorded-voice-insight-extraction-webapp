@@ -1,3 +1,4 @@
+import aws_cdk as cdk
 import aws_cdk.aws_dynamodb as dynamodb
 import aws_cdk.aws_iam as iam
 import aws_cdk.aws_lambda as aws_lambda
@@ -230,4 +231,10 @@ class ReVIEWStack(Stack):
         )
 
     def deploy_frontend(self):
-        self.frontend_stack = ReVIEWFrontendStack(self, "STREAMLIT")
+        self.frontend_stack = ReVIEWFrontendStack(
+            self,
+            "STREAMLIT",
+            env=cdk.Environment(
+                region="us-east-1",
+            ),
+        )

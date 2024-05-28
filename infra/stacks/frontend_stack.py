@@ -3,14 +3,21 @@ from aws_cdk import aws_cognito as cognito
 
 # import aws_cdk.aws_secretsmanager as secretsmanager
 import boto3
-from aws_cdk import Duration, RemovalPolicy  # SecretValue
+from aws_cdk import Duration, RemovalPolicy, CfnOutput  # SecretValue
 from aws_cdk import aws_ec2 as ec2
-from aws_cdk.aws_ecr_assets import DockerImageAsset
+
+# from aws_cdk.aws_ecr_assets import DockerImageAsset
 import os
 from pathlib import Path
 from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_cloudfront as cloudfront
+from aws_cdk import aws_cloudfront_origins as cfo
+
+# from aws_cdk import aws_logs as logs
+# from constructs import Construct
+from aws_cdk import aws_ecs_patterns as ecs_patterns
 
 
 class ReVIEWFrontendStack(Stack):
@@ -18,11 +25,101 @@ class ReVIEWFrontendStack(Stack):
         super().__init__(scope, id, **kwargs)
 
         self.setup_cognito()
-        self.docker_asset = self.build_docker_push_ecr()
-        self.vpc = self.create_webapp_vpc()
-        self.cluster, self.alb = self.create_ecs_and_alb(
-            open_to_public_internet=True,
+        app_execution_role = self.create_frontend_app_execution_role()
+        self.deploy_fargate_service(app_execution_role)
+        custom_header_name, custom_header_val = self.configure_custom_headers()
+        self.create_cloudfront_distribution(custom_header_name, custom_header_val)
+        # Save cfn distribution domain name as output, for convenience
+        CfnOutput(self, "FrontendUrl", value=self.cfn_distribution.domain_name)
+
+    def deploy_fargate_service(self, execution_role):
+        """Deploy VPC, cluster, app image into fargate"""
+        # Create a VPC
+        self.vpc = ec2.Vpc(self, "WebappVpc", max_azs=2)
+        # Create an ECS cluster in the VPC
+        self.cluster = ecs.Cluster(self, "WebappCluster", vpc=self.vpc)
+        # Docker build the frontend UI image
+        self.app_image = ecs.ContainerImage.from_asset(
+            os.path.join(Path(__file__).parent.parent.parent, "frontend")
         )
+        # Deploy the frontend UI image into a load balanced fargate service in the cluster
+        self.service = ecs_patterns.ApplicationLoadBalancedFargateService(
+            self,
+            "AppService",
+            cluster=self.cluster,
+            cpu=256,
+            desired_count=1,
+            task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
+                image=self.app_image,
+                container_port=8501,
+                task_role=execution_role,
+                environment={
+                    "COGNITO_CLIENT_ID": self.cognito_user_pool_client.user_pool_client_id,
+                    "COGNITO_POOL_ID": self.cognito_user_pool_id,
+                },
+            ),
+            memory_limit_mib=512,
+            public_load_balancer=True,
+            load_balancer_name="kaleko-application-lb-name",
+        )
+
+    def configure_custom_headers(self):
+        # To increase security, fargate service only responds when http requests
+        # include this specific header name and value.
+        # This prevents people from connecting to the open-to-the-internet
+        # load balancer directly.
+        # Ultimately, the cloudfront distribution will construct requests
+        # with this header.
+        custom_header_name = "ReVIEW-custom-header"
+        custom_header_value = "ReVIEW-StreamlitCfnHeaderVal"
+
+        self.service.listener.add_action(
+            "forward-custom-header",
+            priority=1,
+            conditions=[
+                elbv2.ListenerCondition.http_header(
+                    custom_header_name, [custom_header_value]
+                )
+            ],
+            action=elbv2.ListenerAction.forward([self.service.target_group]),
+        )
+
+        self.service.listener.add_action(
+            "new-default-action", action=elbv2.ListenerAction.fixed_response(403)
+        )
+
+        return custom_header_name, custom_header_value
+
+    def create_frontend_app_execution_role(self):
+        role = iam.Role(
+            self,
+            "ReVIEWfrontendAppExecutionRole",
+            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+        )
+        # TODO: is this necessary?
+        role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "AmazonAPIGatewayInvokeFullAccess"
+            )
+        )
+        # Frontend UI needs read/write access to s3
+        role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
+        )
+        # Frontend UI needs read/write access dynamodb
+        role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonDynamoDBFullAccess")
+        )
+        # Frontend UI needs to access cognito to check logins
+        role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonCognitoReadOnly")
+        )
+        # Frontend UI needs to call bedrock
+        role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess")
+        )
+
+        return role
 
     def setup_cognito(self):
         # Cognito User Pool
@@ -89,8 +186,53 @@ class ReVIEWFrontendStack(Stack):
         #     removal_policy=RemovalPolicy.DESTROY,
         # )
 
+    def create_cloudfront_distribution(self, custom_header_name, custom_header_val):
+        self.cfn_distribution = cloudfront.Distribution(
+            self,
+            "review-app-cloudfront-id",
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=cfo.LoadBalancerV2Origin(
+                    self.service.load_balancer,
+                    protocol_policy=cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+                    http_port=80,
+                    origin_path="/",
+                    custom_headers={custom_header_name: custom_header_val},
+                ),
+                allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
+                cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                origin_request_policy=cloudfront.OriginRequestPolicy.ALL_VIEWER_AND_CLOUDFRONT_2022,
+                response_headers_policy=cloudfront.ResponseHeadersPolicy.CORS_ALLOW_ALL_ORIGINS,
+                compress=False,
+            ),
+        )
+
+    """ BELOW CODE ATTEMPTED TO ADOPT FROM ADOSEA, UNSUCCESSFULLY.
+        LEFT HERE FOR NOW, IN CASE IT IS USEFUL IN THE FUTURE.
+    self.vpc = self.create_webapp_vpc()
+    self.cluster = ecs.Cluster(
+        self,
+        "Cluster",
+        enable_fargate_capacity_providers=True,
+        vpc=self.vpc,
+        container_insights=True,
+    )
+    self.cluster, self.alb = self.create_ecs_and_alb(
+        open_to_public_internet=True,
+    )
+
+    self.task_execution_role = iam.Role(
+        self,
+        "WebContainerTaskExecutionRole",
+        role_name="ReVIEW-task-execution-role",
+        assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+    )
+
+    # log_group.grant_write(role=task_execution_role)
+    self.grant_ecr_read_access(role=self.task_execution_role)
+
     def create_webapp_vpc(self):
-        """Create self.vpc with self.ecs_security_group, self.alb_security_group"""
+        #Create self.vpc with self.ecs_security_group, self.alb_security_group
         # VPC for ALB and ECS cluster
         vpc = ec2.Vpc(
             self,
@@ -174,8 +316,34 @@ class ReVIEWFrontendStack(Stack):
             self,
             "StreamlitImg",
             # asset_name = f"{prefix}-streamlit-img",
-            directory=os.path.join(Path(__file__).parent.parent, "frontend"),
+            directory=os.path.join(Path(__file__).parent.parent.parent, "frontend"),
         )
+
+    def grant_ecr_read_access(self, role: iam.IRole) -> None:
+        policy = iam.Policy(
+            scope=self,
+            id="CloudWatchEcrReadPolicy",
+            policy_name="ReVIEW-ecr-r-policy",
+            statements=[
+                iam.PolicyStatement(
+                    actions=[
+                        "ecr:GetAuthorizationToken",
+                    ],
+                    effect=iam.Effect.ALLOW,
+                    resources=["*"],
+                ),
+                iam.PolicyStatement(
+                    actions=[
+                        "ecr:BatchCheckLayerAvailability",
+                        "ecr:BatchGetImage",
+                        "ecr:GetDownloadUrlForLayer",
+                    ],
+                    effect=iam.Effect.ALLOW,
+                    resources=["*"],
+                ),
+            ],
+        )
+        role.attach_inline_policy(policy=policy)
 
     def create_ecs_and_alb(self, open_to_public_internet=False):
         # ECS cluster and service definition
@@ -208,12 +376,12 @@ class ReVIEWFrontendStack(Stack):
 
         self.resource_prefix = "ReVIEW-frontend-container"
 
-        # log_group = CloudWatchLogGroup(
-        #     scope=self,
-        #     id="StreamlitContainerLogGroup",
-        #     resource_prefix=self.resource_prefix,
-        #     log_group_name="/ReVIEW/streamlit",
-        # )
+        log_group = CloudWatchLogGroup(
+            scope=self,
+            id="StreamlitContainerLogGroup",
+            resource_prefix=self.resource_prefix,
+            log_group_name="/ReVIEW/streamlit",
+        )
 
         task_execution_role = iam.Role(
             self,
@@ -222,12 +390,12 @@ class ReVIEWFrontendStack(Stack):
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
         )
 
-        # log_group.grant_write(role=task_execution_role)
+        log_group.grant_write(role=task_execution_role)
         self.grant_ecr_read_access(role=task_execution_role)
 
-        # ecs_log_driver = ecs.LogDrivers.aws_logs(
-        #     stream_prefix="AwsLogsLogDriver", log_group=log_group.log_group
-        # )  # Full log stream name: [PREFIX]/[CONTAINER-NAME]/[ECS-TASK-ID]
+        ecs_log_driver = ecs.LogDrivers.aws_logs(
+            stream_prefix="AwsLogsLogDriver", log_group=log_group.log_group
+        )  # Full log stream name: [PREFIX]/[CONTAINER-NAME]/[ECS-TASK-ID]
 
         fargate_task_definition = ecs.FargateTaskDefinition(
             self,
@@ -239,23 +407,15 @@ class ReVIEWFrontendStack(Stack):
 
         fargate_task_definition.add_container(
             "StreamlitAppContainer",
-            # Use an image from DockerHub
             image=ecs.ContainerImage.from_docker_image_asset(self.docker_asset),
             port_mappings=[
                 ecs.PortMapping(container_port=8501, protocol=ecs.Protocol.TCP)
             ],
-            secrets={
+            environment={
                 "COGNITO_CLIENT_ID": self.cognito_user_pool_client.user_pool_client_id,
                 "COGNITO_POOL_ID": self.cognito_user_pool_id,
             },
-            # "CLIENT_ID": ecs.Secret.from_ssm_parameter(self.ssm_client_id),
-            # "API_URI": ecs.Secret.from_ssm_parameter(self.ssm_api_uri),
-            # "WS_API_URI": ecs.Secret.from_ssm_parameter(self.ssm_ws_api_uri),
-            # "BUCKET_NAME": ecs.Secret.from_ssm_parameter(
-            #     self.ssm_s3_data_bucket_name
-            # ),
-            # },
-            # logging=ecs_log_driver,
+            logging=ecs_log_driver,
         )
 
         service = ecs.FargateService(
@@ -272,11 +432,11 @@ class ReVIEWFrontendStack(Stack):
         )
 
         # ********* ALB Listener *********
-
+        # TODO: support https, perhaps get a TLS cert https://w.amazon.com/bin/view/SuperNova
         # alb.add_redirect()  # Redirect HTTP traffic to HTTPS
 
         http_listener = alb.add_listener(
-            "ReVIEW-https-listener",
+            "ReVIEW-http-listener",
             # certificates=[elbv2.ListenerCertificate.from_arn(certificate_arn)],
             port=443,
             protocol=elbv2.ApplicationProtocol.HTTP,
@@ -284,11 +444,55 @@ class ReVIEWFrontendStack(Stack):
         )
 
         http_listener.add_targets(
-            "ReVIEW-https-tg",
-            target_group_name="ReVIEW-https-tg",
+            "ReVIEW-http-tg",
+            target_group_name="ReVIEW-http-tg",
             port=8501,
             protocol=elbv2.ApplicationProtocol.HTTP,
             targets=[service],
         )
 
         return cluster, alb
+
+
+class CloudWatchLogGroup(Construct):
+    ALLOWED_WRITE_ACTIONS = [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+    ]
+
+    def __init__(
+        self, scope, id: str, resource_prefix: str, log_group_name: str
+    ) -> None:
+        super().__init__(scope, id)
+        self.log_group = logs.LogGroup(
+            self,
+            "FrontEndLogGroup",
+            log_group_name=log_group_name,
+            removal_policy=RemovalPolicy.DESTROY,
+            retention=logs.RetentionDays.TWO_WEEKS,
+        )
+
+        self._write_policies = []
+        self._write_policies.append(
+            iam.Policy(
+                scope=self,
+                id="CloudWatchLogsWritePolicy",
+                policy_name=f"{resource_prefix}-logs-w-policy",
+                statements=[
+                    iam.PolicyStatement(
+                        actions=self.ALLOWED_WRITE_ACTIONS,
+                        effect=iam.Effect.ALLOW,
+                        resources=[f"{self.arn}/*"],
+                    ),
+                ],
+            )
+        )
+
+    def grant_write(self, role: iam.IRole) -> None:
+        for policy in self._write_policies:
+            role.attach_inline_policy(policy=policy)
+
+    @property
+    def arn(self) -> str:
+        return self.log_group.log_group_arn
+"""

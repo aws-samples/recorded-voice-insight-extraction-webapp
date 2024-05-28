@@ -5,5 +5,5 @@ Run command:
 
 Or to run with docker:
 >> cd frontend
->> docker build . --tag "sometag"
+>> docker build . --tag "sometag" --no-cache
 >> docker run -e COGNITO_POOL_ID=$COGNITO_POOL_ID -e COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID -p 8501:8501 sometag

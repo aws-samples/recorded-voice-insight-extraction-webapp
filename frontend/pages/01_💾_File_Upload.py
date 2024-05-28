@@ -27,7 +27,7 @@ def uploadToS3(fileobj, username):
             os.path.join("recordings", username, os.path.split(fileobj.name)[-1]),
         )
         st.success(
-            f"{fileobj.name} successfully uploaded and submitted for transcription."
+            f"{fileobj.name} successfully uploaded and submitted for transcription. Check its progress on the Job Status page."
         )
         return True
     except FileNotFoundError:
