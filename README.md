@@ -3,12 +3,19 @@
 **_A generative AI tool to boost productivity by transcribing and analyzing audio or video recordings containing speech_**
 
 # Contents
+- [Recorded Voice Insight Extraction Webapp (ReVIEW)](#recorded-voice-insight-extraction-webapp-review)
+- [Contents](#contents)
 - [Overview](#overview)
+    - [Key Features](#key-features)
 - [Architecture](#architecture)
 - [Deployment](#deployment)
+    - [*Clone the Repository*](#clone-the-repository)
+    - [*CDK Prerequisites*](#cdk-prerequisites)
+    - [AWS Permission Prerequisites](#aws-permission-prerequisites)
+    - [*Deploy the CDK stacks*](#deploy-the-cdk-stacks)
 - [Repo Structure](#repo-structure)
-- [Pending Updates](#pending-updates)
-- [Contributors](#contributors)
+  - [Pending Updates](#pending-updates)
+  - [Contributors](#contributors)
 
 # Overview
 
@@ -27,16 +34,16 @@ This application also includes a chat functionality with an AI assistant who can
 # Architecture
 Here is an overview of the architecture for the solution.
 <p align="center">
-    <img src=diagram/ReVIEW-architecture-20240524.png alt="architecture" width="60%">
+    <img src=diagram/ReVIEW-architecture-20240528.png alt="architecture" width="60%">
 </p>
 
-Note that the frontend stack as shown isn't fully implemented as of 20240521.
+The solution consists of two stacks, a backend which handles transcribing uploaded media and tracking job statuses, and a frontend which consists of a containerized streamlit application running as a load balanced service in an ECS cluster in a VPC, a cloudfront distribution connected to the load balancer, and a cognito user pool for user authentication.
 
 # Deployment
 ### *Clone the Repository*
 Fork the repository, and clone it to the location of your choice. For example:
 ```{bash}
-$ git clone git@ssh.gitlab.aws.dev:<your-username>/ReVIEW.git
+$ git@ssh.gitlab.aws.dev:genaiic-reusable-assets/demo-artifacts/ReVIEW.git
 ```
 
 ### *CDK Prerequisites*
@@ -52,10 +59,10 @@ Install required python packages into the virtual environment of your choice wit
 
 
 ### AWS Permission Prerequisites
-The minimal IAM permissions needed to bootstrap and deploy the stacks from this repo are described in `ReVIEW/infra/minimal-iam-policy.json`. Ensure the customer creates this policy and associates it with your user or role in their environment.
+The minimal IAM permissions needed to bootstrap and deploy the cdk are described in `ReVIEW/infra/minimal-iam-policy.json`. Ensure the customer creates this policy and associates it with your user or role in their environment.
 
 
-### *Deploy the backend CDK stack*
+### *Deploy the CDK stacks*
 
 ```{bash}
 $ cd infra
@@ -63,33 +70,33 @@ $ cdk bootstrap
 $ cdk deploy --all
 ```
 
-This will deploy the ReVIEW backend stack into your AWS account.
+This will deploy the ReVIEW backend stack into your AWS account, as well as the nested frontend stack.
 
-### *Deploy the frontend CDK stack*
-Not yet implemented. Currently you must run the following command interactively and port forward as necessary to access the UI in your browser:
-
-```{bash}
-$ streamlit run ReVIEW/frontend/🦻_Home.py --server.port=8502 --server.address=0.0.0.0
-```
 
 # Repo Structure
 - infra - Python backend code
-    - lambdas - Python lambda function code to be zipped then uploaded during deployment
-    - review_stack - Python CDK containing the backend stack
+  - app.py - Main cdk app definition
+  - lambdas - Python lambda function code to be zipped then uploaded during deployment
+  - stacks
+    - review_stack - Python CDK containing the backend stack definition
+    - frontend_stack - Python CDK containing the nested frontend stack definition
 - frontend - Python streamlit application code for the frontend
-    - Home.py - Main streamlit application entrypoint
-    - components/ - Utilities used by streamlit application
-    - pages/ - Different pages displayed in the frontend application
-    - assets/ - Static assets used by the frontend, e.g. analysis templates that application users can select
+  - 💡_Home.py - Main streamlit application entrypoint
+  - components/ - Utilities used by streamlit application
+  - pages/ - Different pages displayed in the frontend application
+  - assets/ - Static assets used by the frontend, e.g. analysis templates that application users can select
+  - Dockerfile - Docker file to build containerized application within this directory.
 - notebooks - Misc sandbox-style notebooks used during development
 - diagram - Architecture diagrams of the solution used in READMEs
 
 ## Pending Updates
-See the [issues board](FIX_THIS_TO_POINT_TO_GITLAB_ISSUES) for a list of all pending updates. Major updates include:
+See the [issues board](https://gitlab.aws.dev/genaiic-reusable-assets/demo-artifacts/ReVIEW/-/issues) for a list of all pending updates. Major updates include:
 
-* Adding a Cognito user pool and sharding the backend accordingly
-* Creating a separate frontend stack with containerized streamlit application running in ECS
 * Allowing users to delete old uploaded meetings from the frontend
-
+* Security updates / HTTPS support
+* Allowing answers in "chat with your media" to come from multiple timestamps
+* Implementing more analysis templates (prompts)
+* Improving latency of media viewer loading in "chat with your media"
+  
 ## Contributors
 - [David Kaleko](https://phonetool.amazon.com/users/kaleko), Senior Applied Scientist, AWS Generative AI Innovation Center

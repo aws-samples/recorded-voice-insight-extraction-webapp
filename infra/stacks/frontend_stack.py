@@ -60,7 +60,7 @@ class ReVIEWFrontendStack(Stack):
             ),
             memory_limit_mib=512,
             public_load_balancer=True,
-            load_balancer_name="kaleko-application-lb-name",
+            load_balancer_name="ReVIEW-app-alb",
         )
 
     def configure_custom_headers(self):
