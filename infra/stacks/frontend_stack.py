@@ -47,8 +47,8 @@ class ReVIEWFrontendStack(Stack):
             self,
             "AppService",
             cluster=self.cluster,
-            cpu=256,
-            desired_count=1,
+            cpu=8192,
+            desired_count=1,  # Possibly increase this to handle more concurrent requests
             task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
                 image=self.app_image,
                 container_port=8501,
@@ -58,7 +58,9 @@ class ReVIEWFrontendStack(Stack):
                     "COGNITO_POOL_ID": self.cognito_user_pool_id,
                 },
             ),
-            memory_limit_mib=512,
+            # Memory needs to be large to handle large media uploads
+            # https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ecs_patterns.ApplicationLoadBalancedFargateService.html#memorylimitmib
+            memory_limit_mib=61440,
             public_load_balancer=True,
             load_balancer_name="ReVIEW-app-alb",
         )
