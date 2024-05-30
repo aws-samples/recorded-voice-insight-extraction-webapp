@@ -3,8 +3,9 @@
 import boto3
 import pandas as pd
 from boto3.dynamodb.conditions import Key
+import os
 
-TABLE_NAME = "ReVIEW-App-Table"
+TABLE_NAME = os.environ["DDBTableName"]
 dyn_resource = boto3.resource("dynamodb")
 table = dyn_resource.Table(name=TABLE_NAME)
 

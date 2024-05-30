@@ -6,7 +6,12 @@ from stacks.review_stack import ReVIEWStack
 app = cdk.App()
 ReVIEWStack(
     app,
-    "ReVIEWStack",
+    # This ID is used to name s3 buckets, databases, etc.
+    # You can deploy two fully independent stacks into the same account if you use different IDs
+    # Stack names can only be alphanumeric and hyphens
+    # Stack names should be very short (max 14 characters)
+    # Note: the cognito user-pool name is hard coded and shared by all stacks for now.
+    "ReVIEW-dev",
     # If you don't specify 'env', this stack will be environment-agnostic.
     # Account/Region-dependent features and context lookups will not work,
     # but a single synthesized template can be deployed anywhere.

@@ -1,13 +1,8 @@
-import os
-
-import boto3
 import streamlit as st
 from components.cognito_utils import login
 from components.streamlit_utils import display_sidebar
-
-# Must match what's in the backend stack definition
-BUCKET_NAME = "review-app-assets"
-
+from components.s3_utils import uploadToS3
+from components.io_utils import check_valid_file_extension
 
 st.set_page_config(
     page_title="File Upload",
@@ -15,24 +10,6 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded",
 )
-
-
-def uploadToS3(fileobj, username):
-    s3 = boto3.client("s3")
-
-    try:
-        s3.upload_fileobj(
-            fileobj,
-            BUCKET_NAME,
-            os.path.join("recordings", username, os.path.split(fileobj.name)[-1]),
-        )
-        st.success(
-            f"{fileobj.name} successfully uploaded and submitted for transcription. Check its progress on the Job Status page."
-        )
-        return True
-    except FileNotFoundError:
-        st.error(f"File {fileobj.name} not found.")
-        return False
 
 
 st.title("File Uploader")
@@ -46,5 +23,19 @@ display_sidebar()
 
 uploaded_file = st.file_uploader("Upload a video or audio recording.")
 if uploaded_file is not None:
+    if not check_valid_file_extension(uploaded_file.name):
+        st.error(
+            'Invalid file extension. Allowed extensions are: "mp3", "mp4", "wav", "flac", "ogg", "amr", "webm", "m4a".'
+        )
+        st.stop()
+
     st.info(f"Uploading file {uploaded_file.name}...")
-    uploadToS3(uploaded_file, username=st.session_state["auth_username"])
+    upload_successful = uploadToS3(
+        uploaded_file, username=st.session_state["auth_username"]
+    )
+    if upload_successful:
+        st.success(
+            f"{uploaded_file.name} successfully uploaded and submitted for transcription. Check its progress on the Job Status page."
+        )
+    else:
+        st.error(f"File {uploaded_file.name} not found.")

@@ -8,7 +8,7 @@ import aws_cdk.aws_s3_notifications as s3n
 from aws_cdk import Duration, RemovalPolicy, Stack
 from constructs import Construct
 from .frontend_stack import ReVIEWFrontendStack
-
+import re
 
 """
 ReVIEW CFN Stack Definition
@@ -25,20 +25,24 @@ class ReVIEWStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # Ensure stack name is only numbers, letters, and hyphens
+        assert re.match(
+            r"^[a-zA-Z0-9-]+$", construct_id
+        ), "Stack name must only contain numbers, letters, and/or hyphens"
+
+        self.stack_name_lower = construct_id.lower()
         # Applying default props
         self.props = {
-            "s3BucketName": kwargs.get("s3BucketName", "review-app-assets"),
-            "s3LoggingBucketName": kwargs.get("s3LoggingBucketName", "review-app-logs"),
+            "s3BucketName": f"{self.stack_name_lower}-assets",
+            "s3LoggingBucketName": f"{self.stack_name_lower}-logs",
             # Where recordings are uploaded
-            "s3RecordingsPrefix": kwargs.get("s3RecordingsPrefix", "recordings"),
+            "s3RecordingsPrefix": "recordings",
             # Where .json transcripts get dumped
-            "s3TranscriptsPrefix": kwargs.get("s3TranscriptsPrefix", "transcripts"),
+            "s3TranscriptsPrefix": "transcripts",
             # Where .txt transcripts get dumped
-            "s3TextTranscriptsPrefix": kwargs.get(
-                "s3TextTranscriptsPrefix", "transcripts-txt"
-            ),
+            "s3TextTranscriptsPrefix": "transcripts-txt",
             # Name of dynamo DB app table
-            "DDBTableName": kwargs.get("DDBTableName", "ReVIEW-App-Table"),
+            "DDBTableName": f"{self.stack_name_lower}-app-table",
         }
 
         # The order of these matters, later ones refer to class variables
@@ -50,28 +54,28 @@ class ReVIEWStack(Stack):
         self.setup_lambdas()
         self.setup_events()
 
-        # Deploy frontend nested stack
+        # Deploy nested frontend stack
         self.deploy_frontend()
 
     def setup_logging(self):
         self.generateMediaTranscriptLogGroup = logs.LogGroup(
             self,
             "GenerateMediaTranscriptLogGroup",
-            log_group_name=f"""/aws/lambda/{self.stack_name}-GenerateMediaTranscript""",
+            log_group_name=f"""/aws/lambda/{self.stack_name_lower}-GenerateMediaTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
         )
         self.dumpTextTranscriptLogGroup = logs.LogGroup(
             self,
             "DumpTextTranscriptLogGroup",
-            log_group_name=f"""/aws/lambda/{self.stack_name}-DumpTextTranscript""",
+            log_group_name=f"""/aws/lambda/{self.stack_name_lower}-DumpTextTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
         )
 
     def setup_roles(self):
         # AWS transcribe access, s3 access, etc
-        self.masLambdaExecutionRole = iam.Role(
+        self.reviewLambdaExecutionRole = iam.Role(
             self,
-            "ReVIEWLambdaExecutionRole",
+            f"{self.stack_name_lower}-ReVIEWLambdaExecutionRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -105,7 +109,7 @@ class ReVIEWStack(Stack):
     def setup_buckets(self):
         self.loggingBucket = s3.Bucket(
             self,
-            "ReVIEWLoggingBucket",
+            f"{self.stack_name_lower}-LoggingBucket",
             bucket_name=f"{self.props['s3LoggingBucketName']}",
             access_control=s3.BucketAccessControl.LOG_DELIVERY_WRITE,
             public_read_access=False,
@@ -118,7 +122,7 @@ class ReVIEWStack(Stack):
 
         self.bucket = s3.Bucket(
             self,
-            "ReVIEWBucket",
+            f"{self.stack_name_lower}-Bucket",
             bucket_name=self.props["s3BucketName"],
             public_read_access=False,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -132,9 +136,9 @@ class ReVIEWStack(Stack):
     def setup_lambdas(self):
         self.generateMediaTranscript = aws_lambda.Function(
             self,
-            "GenerateMediaTranscript",
-            description=f"Stack {self.stack_name} Function GenerateMediaTranscript",
-            function_name=f"{self.stack_name}-GenerateMediaTranscript",
+            f"{self.stack_name_lower}-GenerateMediaTranscript",
+            description=f"Stack {self.stack_name_lower} Function GenerateMediaTranscript",
+            function_name=f"{self.stack_name_lower}-GenerateMediaTranscript",
             handler="generate-transcript-lambda.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
@@ -146,7 +150,7 @@ class ReVIEWStack(Stack):
                 "DYNAMO_TABLE_NAME": self.props["DDBTableName"],
             },
             timeout=Duration.seconds(15),
-            role=self.masLambdaExecutionRole,
+            role=self.reviewLambdaExecutionRole,
         )
 
         self.generateMediaTranscript.add_permission(
@@ -159,9 +163,9 @@ class ReVIEWStack(Stack):
 
         self.dumpTextTranscript = aws_lambda.Function(
             self,
-            "DumpTextTranscript",
-            description=f"Stack {self.stack_name} Function DumpTextTranscript",
-            function_name=f"{self.stack_name}-DumpTextTranscript",
+            f"{self.stack_name_lower}-DumpTextTranscript",
+            description=f"Stack {self.stack_name_lower} Function DumpTextTranscript",
+            function_name=f"{self.stack_name_lower}-DumpTextTranscript",
             handler="convert-json-to-txt-lambda.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
@@ -173,7 +177,7 @@ class ReVIEWStack(Stack):
                 "DYNAMO_TABLE_NAME": self.props["DDBTableName"],
             },
             timeout=Duration.seconds(15),
-            role=self.masLambdaExecutionRole,  # Reuse existing lambda role
+            role=self.reviewLambdaExecutionRole,  # Reuse existing lambda role
         )
 
         self.dumpTextTranscript.add_permission(
@@ -217,7 +221,7 @@ class ReVIEWStack(Stack):
 
         self.dynamodb_table = dynamodb.Table(
             self,
-            "ReVIEW-App-DDBTable-ID",
+            f"{self.stack_name_lower}-DDBTable-ID",
             table_name=self.props["DDBTableName"],
             partition_key=dynamodb.Attribute(
                 name="username", type=dynamodb.AttributeType.STRING
@@ -233,8 +237,11 @@ class ReVIEWStack(Stack):
     def deploy_frontend(self):
         self.frontend_stack = ReVIEWFrontendStack(
             self,
-            "STREAMLIT",
-            env=cdk.Environment(
-                region="us-east-1",
-            ),
+            f"{self.stack_name_lower}-streamlit",
+            # env=cdk.Environment(
+            #     region="us-east-1",
+            # ),
+            # Props are passed to frontend stack as they are needed by
+            # the streamlit app (backend bucket names, table names, etc)
+            backend_props=self.props,
         )
