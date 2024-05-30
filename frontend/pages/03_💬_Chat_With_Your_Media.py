@@ -71,6 +71,7 @@ if selected_media_name:
 
                 answer, timestamp_int = extract_timestamp_and_answer(llm_response)
             if timestamp_int >= 0:
+                # Note: this works for audio files, too.
                 video = st.video(
                     data=media_bytes,
                     start_time=timestamp_int,
