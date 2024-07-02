@@ -51,7 +51,8 @@ class ReVIEWFrontendStack(NestedStack):
         )
         # Docker build the frontend UI image
         self.app_image = ecs.ContainerImage.from_asset(
-            os.path.join(Path(__file__).parent.parent.parent, "frontend")
+            os.path.join(Path(__file__).parent.parent.parent, "frontend"),
+            # platform = Platform.LINUX_AMD64 ## Use this if Docker building on a mac OS
         )
         # Deploy the frontend UI image into a load balanced fargate service in the cluster
         self.service = ecs_patterns.ApplicationLoadBalancedFargateService(
