@@ -74,6 +74,13 @@ $ cdk deploy --all
 
 This will deploy the ReVIEW backend stack into your AWS account, as well as the nested frontend stack.
 
+### *Destroy the CDK stacks*
+
+```{bash}
+$ cdk destroy --all
+```
+
+This will destroy the ReVIEW backend stack and remove all components from your AWS account. If s3 buckets are non empty, they will be preserved and will need to be manually deleted.
 
 # Repo Structure
 - infra - Python backend code
