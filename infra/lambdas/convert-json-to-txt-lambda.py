@@ -35,9 +35,7 @@ def lambda_handler(event, context):
     try:
         assert extension == ".json"
     except AssertionError as err:
-        logger.exception(
-            f"Unable to dump txt from non-json file: {json_transcript_key}."
-        )
+        logger.warning(f"Unable to dump txt from non-json file: {json_transcript_key}.")
         raise err
 
     output_key = os.path.join(DESTINATION_PREFIX, username, uuid + ".txt")
