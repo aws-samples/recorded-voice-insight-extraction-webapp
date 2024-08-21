@@ -90,8 +90,8 @@ def lambda_handler(event, context):
         logger.info(f"Started transcription job name {job_name}, id {_job}")
 
     except Exception as e:
-        logger.error(f"ERROR Couldn't start transcription job {job_name}.")
-        logger.error(f"Exception: {e}")
+        logger.warning(f"ERROR Couldn't start transcription job {job_name}.")
+        logger.warning(f"Exception: {e}")
         raise
 
     logger.debug(f"Response to creating dynamodb item {uuid}: {response}")

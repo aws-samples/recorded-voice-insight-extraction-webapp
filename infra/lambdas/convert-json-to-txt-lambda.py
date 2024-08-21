@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-
 import boto3
 from lambda_utils import (
     update_ddb_entry,
@@ -36,9 +35,7 @@ def lambda_handler(event, context):
     try:
         assert extension == ".json"
     except AssertionError as err:
-        logger.exception(
-            f"Unable to dump txt from non-json file: {json_transcript_key}."
-        )
+        logger.warning(f"Unable to dump txt from non-json file: {json_transcript_key}.")
         raise err
 
     output_key = os.path.join(DESTINATION_PREFIX, username, uuid + ".txt")
@@ -46,9 +43,11 @@ def lambda_handler(event, context):
 
     try:
         # Download json_uri from s3 to tmp dir, read it in
-        tmp_json_file = "/tmp/json_transcript.json"
-        s3.download_file(S3_BUCKET, json_transcript_key, tmp_json_file)
-        full_json = json.load(open(tmp_json_file, "r"))
+        full_json = json.loads(
+            s3.get_object(Bucket=S3_BUCKET, Key=json_transcript_key)["Body"]
+            .read()
+            .decode()
+        )
         transcripts = full_json["results"]["transcripts"]
         assert len(transcripts) == 1
 
@@ -74,20 +73,14 @@ def lambda_handler(event, context):
         )
         logger.debug(f"Response to putting text into {uuid}: {response}")
 
-        # Dump text to tmp dir
-        tmp_txt_file = "/tmp/txt_transcript.txt"
-        with open(tmp_txt_file, "w") as f:
-            f.write(transcript)
-
-        # Upload tmp_txt_file from tmp dir to s3 (output_uri)
-        s3.upload_file(
-            tmp_txt_file,
-            S3_BUCKET,
-            output_key,
+        # Upload transcript to s3 as a text file
+        put_response = s3.put_object(
+            Body=bytes(transcript, "utf-8"), Bucket=S3_BUCKET, Key=output_key
         )
+        logger.debug(f"Response to putting text into s3: {put_response}")
 
     except AssertionError:
-        logger.error(f"{len(transcripts)} transcripts found in results. Expected 1.")
+        logger.warning(f"{len(transcripts)} transcripts found in results. Expected 1.")
         # Update job status in dynamodb
         update_job_status(
             table_name=DYNAMO_TABLE_NAME,
@@ -96,7 +89,7 @@ def lambda_handler(event, context):
             new_status="Failed",
         )
     except Exception as e:
-        logger.error(f"ERROR Exception caught in convert-json-to-txt-lambda: {e}.")
+        logger.warning(f"ERROR Exception caught in convert-json-to-txt-lambda: {e}.")
         # Update job status in dynamodb
         update_job_status(
             table_name=DYNAMO_TABLE_NAME,
