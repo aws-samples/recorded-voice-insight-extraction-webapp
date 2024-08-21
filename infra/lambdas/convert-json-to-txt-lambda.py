@@ -82,7 +82,7 @@ def lambda_handler(event, context):
         logger.debug(f"Response to putting text into s3: {put_response}")
 
     except AssertionError:
-        logger.error(f"{len(transcripts)} transcripts found in results. Expected 1.")
+        logger.warning(f"{len(transcripts)} transcripts found in results. Expected 1.")
         # Update job status in dynamodb
         update_job_status(
             table_name=DYNAMO_TABLE_NAME,
@@ -91,7 +91,7 @@ def lambda_handler(event, context):
             new_status="Failed",
         )
     except Exception as e:
-        logger.error(f"ERROR Exception caught in convert-json-to-txt-lambda: {e}.")
+        logger.warning(f"ERROR Exception caught in convert-json-to-txt-lambda: {e}.")
         # Update job status in dynamodb
         update_job_status(
             table_name=DYNAMO_TABLE_NAME,
