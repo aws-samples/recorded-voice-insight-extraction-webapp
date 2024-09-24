@@ -10,8 +10,9 @@ ReVIEWStack(
     # You can deploy two fully independent stacks into the same account if you use different IDs
     # Stack names can only be alphanumeric and hyphens
     # Stack names should be very short (max 14 characters)
+    # Stack names should be unique, as s3 buckets named after it must be globally unique.
     # Note: the cognito user-pool name is hard coded and shared by all stacks for now.
-    "ReVIEW-dev",
+    "ReVIEW-dev-339712833620",
     # If you don't specify 'env', this stack will be environment-agnostic.
     # Account/Region-dependent features and context lookups will not work,
     # but a single synthesized template can be deployed anywhere.
