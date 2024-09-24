@@ -29,6 +29,7 @@ from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as cfo
 
 from aws_cdk import aws_ecs_patterns as ecs_patterns
+import cdk_nag
 
 
 class ReVIEWFrontendStack(NestedStack):
@@ -56,10 +57,22 @@ class ReVIEWFrontendStack(NestedStack):
             value=self.cfn_distribution.domain_name,
         )
 
+        cdk_nag.NagSuppressions.add_resource_suppressions(
+            self.app_execution_role,
+            suppressions=[
+                {"id": "AwsSolutions-IAM4", "reason": "Managed policies ok"},
+                {"id": "AwsSolutions-IAM5", "reason": "Wildcard ok"},
+            ],
+        )
+
     def deploy_fargate_service(self):
         """Deploy VPC, cluster, app image into fargate"""
         # Create a VPC
-        self.vpc = ec2.Vpc(self, f"{self.fe_stack_name}-WebappVpc", max_azs=2)
+        self.vpc = ec2.Vpc(
+            self,
+            f"{self.fe_stack_name}-WebappVpc",
+            max_azs=2,
+        )
         # Create an ECS cluster in the VPC
         self.cluster = ecs.Cluster(
             self, f"{self.fe_stack_name}-WebappCluster", vpc=self.vpc
@@ -90,7 +103,8 @@ class ReVIEWFrontendStack(NestedStack):
             # https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ecs_patterns.ApplicationLoadBalancedFargateService.html#memorylimitmib
             memory_limit_mib=61440,
             public_load_balancer=True,
-            load_balancer_name=f"{self.fe_stack_name}-app-alb",
+            # Max length is 32 characters for ALB names
+            load_balancer_name=f"{self.fe_stack_name}-alb"[-32:],
         )
 
     def set_listener_custom_headers(self):

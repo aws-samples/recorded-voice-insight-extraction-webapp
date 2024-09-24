@@ -20,10 +20,11 @@ import aws_cdk.aws_lambda as aws_lambda
 import aws_cdk.aws_logs as logs
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_s3_notifications as s3n
-from aws_cdk import Duration, RemovalPolicy, Stack
+from aws_cdk import Duration, RemovalPolicy, Stack, Aspects
 from constructs import Construct
 from .frontend_stack import ReVIEWFrontendStack
 import re
+import cdk_nag
 
 """
 ReVIEW CFN Stack Definition
@@ -71,6 +72,10 @@ class ReVIEWStack(Stack):
 
         # Deploy nested frontend stack
         self.deploy_frontend()
+
+        # Attach cdk_nag to ensure AWS Solutions security level
+        # Uncomment to check stack security before deploying
+        # self.setup_cdk_nag()
 
     def setup_logging(self):
         self.generateMediaTranscriptLogGroup = logs.LogGroup(
@@ -146,6 +151,35 @@ class ReVIEWStack(Stack):
             server_access_logs_bucket=self.loggingBucket,
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
+        )
+
+        # Explicitly only allow HTTPS traffic to s3 buckets
+        self.loggingBucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="Allow HTTPS only to logging bucket",
+                actions=["s3:*"],
+                effect=iam.Effect.DENY,
+                resources=[
+                    self.loggingBucket.bucket_arn,
+                    f"{self.loggingBucket.bucket_arn}/*",
+                ],
+                conditions={"Bool": {"aws:SecureTransport": "false"}},
+                principals=[iam.AnyPrincipal()],
+            )
+        )
+
+        self.bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="Allow HTTPS only to assets bucket",
+                actions=["s3:*"],
+                effect=iam.Effect.DENY,
+                resources=[
+                    self.bucket.bucket_arn,
+                    f"{self.bucket.bucket_arn}/*",
+                ],
+                conditions={"Bool": {"aws:SecureTransport": "false"}},
+                principals=[iam.AnyPrincipal()],
+            )
         )
 
     def setup_lambdas(self):
@@ -252,11 +286,24 @@ class ReVIEWStack(Stack):
     def deploy_frontend(self):
         self.frontend_stack = ReVIEWFrontendStack(
             self,
-            f"{self.stack_name_lower}-streamlit",
+            f"{self.stack_name_lower}-fe",
             # env=cdk.Environment(
             #     region="us-east-1",
             # ),
             # Props are passed to frontend stack as they are needed by
             # the streamlit app (backend bucket names, table names, etc)
             backend_props=self.props,
+        )
+
+    def setup_cdk_nag(self):
+        """Use this function to enable cdk_nag package to block deployment of possibly insecure stack elements"""
+        # Attach cdk_nag to ensure AWS Solutions security level
+        Aspects.of(self).add(cdk_nag.AwsSolutionsChecks())
+
+        cdk_nag.NagSuppressions.add_resource_suppressions(
+            self.reviewLambdaExecutionRole,
+            suppressions=[
+                {"id": "AwsSolutions-IAM4", "reason": "Managed policies ok"},
+                {"id": "AwsSolutions-IAM5", "reason": "Wildcard ok"},
+            ],
         )
