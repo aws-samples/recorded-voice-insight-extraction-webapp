@@ -22,9 +22,10 @@ import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_s3_notifications as s3n
 from aws_cdk import Duration, RemovalPolicy, Stack, Aspects
 from constructs import Construct
-from .frontend_stack import ReVIEWFrontendStack
-from .kb_stacks import ReVIEWKnowledgeBaseRoleStack, ReVIEWKnowledgeBaseStack
-from .oss_stack import ReVIEWOSSStack
+
+# from .frontend_stack import ReVIEWFrontendStack
+# from .rag_stack import ReVIEWKnowledgeBaseRoleStack, ReVIEWKnowledgeBaseStack
+# from .oss_stack import ReVIEWOSSStack
 import cdk_nag
 
 """
@@ -278,33 +279,33 @@ class ReVIEWBackendStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
-    def deploy_frontend(self):
-        self.frontend_stack = ReVIEWFrontendStack(
-            self,
-            f"{self.props['unique_stack_name']}-fe",
-            backend_props=self.props,
-        )
+    # def deploy_frontend(self):
+    #     self.frontend_stack = ReVIEWFrontendStack(
+    #         self,
+    #         f"{self.props['unique_stack_name']}-fe",
+    #         backend_props=self.props,
+    #     )
 
-    def deploy_kb_role(self):
-        self.kb_role_stack = ReVIEWKnowledgeBaseRoleStack(
-            self,
-            f"{self.props['unique_stack_name']}-kb-role",
-            backend_props=self.props,
-        )
+    # def deploy_kb_role(self):
+    #     self.kb_role_stack = ReVIEWKnowledgeBaseRoleStack(
+    #         self,
+    #         f"{self.props['unique_stack_name']}-kb-role",
+    #         backend_props=self.props,
+    #     )
 
-    def deploy_oss(self):
-        self.oss_stack = ReVIEWOSSStack(
-            self,
-            f"{self.props['unique_stack_name']}-oss",
-            backend_props=self.props,
-        )
+    # def deploy_oss(self):
+    #     self.oss_stack = ReVIEWOSSStack(
+    #         self,
+    #         f"{self.props['unique_stack_name']}-oss",
+    #         backend_props=self.props,
+    #     )
 
-    def deploy_kb(self):
-        self.kb_stack = ReVIEWKnowledgeBaseStack(
-            self,
-            f"{self.props['unique_stack_name']}-kb",
-            backend_props=self.props,
-        )
+    # def deploy_kb(self):
+    #     self.kb_stack = ReVIEWKnowledgeBaseStack(
+    #         self,
+    #         f"{self.props['unique_stack_name']}-kb",
+    #         backend_props=self.props,
+    #     )
 
     def setup_cdk_nag(self):
         """Use this function to enable cdk_nag package to block deployment of possibly insecure stack elements"""

@@ -2,7 +2,8 @@
 
 import aws_cdk as cdk
 
-from stacks.review_stack import ReVIEWBackendStack
+from stacks.backend_stack import ReVIEWBackendStack
+from stacks.frontend_stack import ReVIEWFrontendStack
 from utils.config_manager import ConfigManager
 
 config_manager = ConfigManager("config.yaml")
@@ -25,6 +26,9 @@ ReVIEWBackendStack(
     # env=cdk.Environment(account='123456789012', region='us-east-1'),
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
 )
+
+# Frontend stack
+ReVIEWFrontendStack(app, props)
 
 # debugStack(app, "debug-stack")
 # debugStack2(app, "debug-stack2")

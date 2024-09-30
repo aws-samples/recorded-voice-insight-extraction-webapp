@@ -17,7 +17,7 @@
 from aws_cdk import aws_cognito as cognito
 
 import boto3
-from aws_cdk import Duration, RemovalPolicy, CfnOutput, NestedStack
+from aws_cdk import Duration, RemovalPolicy, CfnOutput, Stack
 from aws_cdk import aws_ec2 as ec2
 
 import os
@@ -32,12 +32,14 @@ from aws_cdk import aws_ecs_patterns as ecs_patterns
 import cdk_nag
 
 
-class ReVIEWFrontendStack(NestedStack):
-    def __init__(self, scope, construct_id, backend_props: dict, **kwargs):
+class ReVIEWFrontendStack(Stack):
+    def __init__(self, scope, props: dict, **kwargs):
+        self.props = props
+        construct_id = props["stack_name_base"] + "-frontend"
         super().__init__(scope, construct_id, **kwargs)
-        # backend_props are exported as env variables in the streamlit
+
+        # Note: all props are exported as env variables in the streamlit
         # docker container (e.g. backend bucket names, table names, etc)
-        self.backend_props = backend_props
 
         # if app.py calls ReVIEWStack(app,"ReVIEW-prod") then
         # construct_id here is "review-prod-streamlit"
@@ -50,6 +52,7 @@ class ReVIEWFrontendStack(NestedStack):
         self.custom_header_value = f"{self.fe_stack_name}-StreamlitCfnHeaderVal"
         self.set_listener_custom_headers()
         self.create_cloudfront_distribution()
+
         # Save cfn distribution domain name as output, for convenience
         CfnOutput(
             self,
@@ -96,7 +99,7 @@ class ReVIEWFrontendStack(NestedStack):
                 environment={
                     "COGNITO_CLIENT_ID": self.cognito_user_pool_client.user_pool_client_id,
                     "COGNITO_POOL_ID": self.cognito_user_pool_id,
-                    **self.backend_props,
+                    **self.props,
                 },
             ),
             # Memory needs to be large to handle large media uploads
@@ -160,6 +163,8 @@ class ReVIEWFrontendStack(NestedStack):
         )
 
     def setup_cognito(self):
+        # TODO: use params from config instead of hard coding
+
         # Cognito User Pool
         user_pool_common_config = {
             "id": "review-app-cognito-user-pool-id",
