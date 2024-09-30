@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 
 import aws_cdk as cdk
-from stacks.review_stack import ReVIEWStack
+
+from stacks.review_stack import ReVIEWBackendStack
+from utils.config_manager import ConfigManager
+
+config_manager = ConfigManager("config.yaml")
+props = config_manager.get_props()
 
 app = cdk.App()
-ReVIEWStack(
+
+# Backend stack
+ReVIEWBackendStack(
     app,
-    # This ID is used to name s3 buckets, databases, etc.
-    # You can deploy two fully independent stacks into the same account if you use different IDs
-    # Stack names can only be alphanumeric and hyphens
-    # Stack names should be very short (max 14 characters)
-    # Stack names should be unique, as s3 buckets named after it must be globally unique.
-    # Note: the cognito user-pool name is hard coded and shared by all stacks for now.
-    "ReVIEW-dev-your-acct-num-here",
+    props,
     # If you don't specify 'env', this stack will be environment-agnostic.
     # Account/Region-dependent features and context lookups will not work,
     # but a single synthesized template can be deployed anywhere.
@@ -25,4 +26,6 @@ ReVIEWStack(
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
 )
 
+# debugStack(app, "debug-stack")
+# debugStack2(app, "debug-stack2")
 app.synth()
