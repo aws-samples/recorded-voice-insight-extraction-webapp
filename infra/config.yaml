@@ -18,7 +18,7 @@ oss:
 
 embedding:
   model_id: "amazon.titan-embed-text-v2:0"
-  model_arn: "arn:aws:bedrock:::foundation-model/amazon.titan-embed-text-v2:0"
+  model_arn: "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0"
 
 kb:
   chunking_strategy: "FIXED_SIZE"
@@ -27,7 +27,7 @@ kb:
 
 llm:
   model_id: "anthropic.claude-3-sonnet-20240229-v1:0"
-  model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+  model_arn: "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
 
 frontend:
   cognito_pool_name: "foo"

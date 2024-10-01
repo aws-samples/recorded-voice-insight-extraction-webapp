@@ -18,8 +18,6 @@
 import logging
 import os
 
-logger = logging.getLogger()
-logger.setLevel("INFO")
 
 from oss_client_utils import (
     get_oss_http_client,
@@ -30,6 +28,9 @@ from oss_utils import (
     create_index_with_retries,
     get_host_from_collection_endpoint,
 )
+
+logger = logging.getLogger()
+logger.setLevel("INFO")
 
 
 def lambda_handler(event, context):
