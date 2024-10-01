@@ -188,7 +188,7 @@ class ReVIEWOSSConstruct(Construct):
 
     def create_oss_lambda_role(self):
         """Role used by all lambdas interacting with this oss collection"""
-        return iam.Role(
+        oss_role = iam.Role(
             self,
             f"{self.props['stack_name_base']}-OSSLambdaRole",
             assumed_by=ServicePrincipal("lambda.amazonaws.com"),
@@ -211,6 +211,9 @@ class ReVIEWOSSConstruct(Construct):
                 )
             },
         )
+
+        oss_role.apply_removal_policy(RemovalPolicy.DESTROY)
+        return oss_role
 
     def create_oss_index(self):
         """

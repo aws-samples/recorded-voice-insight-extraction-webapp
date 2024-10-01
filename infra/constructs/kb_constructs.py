@@ -101,6 +101,9 @@ class ReVIEWKnowledgeBaseRole(Construct):
             },
         )
 
+        # Delete role when destroying the stack
+        self.kb_role.apply_removal_policy(RemovalPolicy.DESTROY)
+
 
 class ReVIEWKnowledgeBaseConstruct(Construct):
     """Construct to deploy Bedrock knowledge base on top of existing oss"""
@@ -218,6 +221,7 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
                 resources=[knowledge_base.attr_knowledge_base_arn],
             )
         )
+        self.ingestLambdaRole.apply_removal_policy(RemovalPolicy.DESTROY)
 
         ingest_lambda = lambda_.Function(
             self,
@@ -248,6 +252,8 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
                 )
             ],
         )
+
+        self.queryLambdaRole.apply_removal_policy(RemovalPolicy.DESTROY)
 
         query_lambda = lambda_.Function(
             self,

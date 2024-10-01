@@ -122,6 +122,8 @@ class ReVIEWBackendStack(Stack):
             },
         )
 
+        self.reviewLambdaExecutionRole.apply_removal_policy(RemovalPolicy.DESTROY)
+
     def setup_buckets(self):
         self.loggingBucket = s3.Bucket(
             self,
