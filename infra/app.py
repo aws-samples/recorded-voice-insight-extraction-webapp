@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
+import sys
+import os
+
+# Add repo top dir to system path to facilitate absolute imports elsewhere
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import aws_cdk as cdk
 
 from stacks.backend_stack import ReVIEWBackendStack
 from stacks.frontend_stack import ReVIEWFrontendStack
+from stacks.rag_stack import ReVIEWRAGStack
 from utils.config_manager import ConfigManager
 
 config_manager = ConfigManager("config.yaml")
@@ -26,6 +32,9 @@ ReVIEWBackendStack(
     # env=cdk.Environment(account='123456789012', region='us-east-1'),
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
 )
+
+# RAG stack (OSS + Bedrock KB)
+ReVIEWRAGStack(app, props)
 
 # Frontend stack
 ReVIEWFrontendStack(app, props)
