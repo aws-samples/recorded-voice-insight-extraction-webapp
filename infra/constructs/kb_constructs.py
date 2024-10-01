@@ -20,6 +20,7 @@
 from constructs import Construct
 from aws_cdk import (
     Duration,
+    RemovalPolicy,
     aws_iam as iam,
     aws_lambda as lambda_,
     aws_ssm as ssm,
@@ -135,7 +136,7 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
     def create_knowledge_base(
         self, kb_principal_role: iam.Role, oss_collection_arn: str
     ) -> CfnKnowledgeBase:
-        return CfnKnowledgeBase(
+        cfn_kb = CfnKnowledgeBase(
             self,
             self.props["stack_name_base"] + "-kb",
             knowledge_base_configuration=CfnKnowledgeBase.KnowledgeBaseConfigurationProperty(
@@ -161,6 +162,10 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
                 ),
             ),
         )
+        # Delete entire KB when destroying the stack
+        cfn_kb.apply_removal_policy(RemovalPolicy.DESTROY)
+
+        return cfn_kb
 
     def create_data_source(self, knowledge_base: CfnKnowledgeBase) -> CfnDataSource:
         kb_id = knowledge_base.attr_knowledge_base_id
@@ -193,6 +198,7 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             ),
             knowledge_base_id=kb_id,
             name=self.props["stack_name_base"] + "-RAGDataSource",
+            data_deletion_policy="DELETE",  # RETAIN and DELETE are allowed
             description=self.props["stack_name_base"] + " RAG DataSource",
             vector_ingestion_configuration=vector_ingestion_config_variable,
         )
