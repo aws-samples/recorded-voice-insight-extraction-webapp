@@ -117,7 +117,7 @@ def lambda_handler(event, context):
         table_name=DYNAMO_TABLE_NAME,
         uuid=job_name,
         username=username,
-        new_status="In Progress",
+        new_status="Transcribing",
     )
     return {
         "statusCode": 200,

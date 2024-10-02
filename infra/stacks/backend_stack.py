@@ -80,10 +80,10 @@ class ReVIEWBackendStack(Stack):
             log_group_name=f"""/aws/lambda/{self.props['unique_stack_name']}-GenerateMediaTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
         )
-        self.dumpTextTranscriptLogGroup = logs.LogGroup(
+        self.postProcessTranscriptLogGroup = logs.LogGroup(
             self,
-            "DumpTextTranscriptLogGroup",
-            log_group_name=f"""/aws/lambda/{self.props['unique_stack_name']}-DumpTextTranscript""",
+            "PostProcessSTranscriptLogGroup",
+            log_group_name=f"""/aws/lambda/{self.props['unique_stack_name']}-PostProcessSTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -208,12 +208,12 @@ class ReVIEWBackendStack(Stack):
             source_account=self.props["account_id"],
         )
 
-        self.dumpTextTranscript = aws_lambda.Function(
+        self.postProcessTranscript = aws_lambda.Function(
             self,
-            f"{self.props['unique_stack_name']}-DumpTextTranscript",
-            description=f"Stack {self.props['unique_stack_name']} Function DumpTextTranscript",
-            function_name=f"{self.props['unique_stack_name']}-DumpTextTranscript",
-            handler="convert-json-to-txt-lambda.lambda_handler",
+            f"{self.props['unique_stack_name']}-PostProcessSTranscript",
+            description=f"Stack {self.props['unique_stack_name']} Function PostProcessSTranscript",
+            function_name=f"{self.props['unique_stack_name']}-PostProcessSTranscript",
+            handler="postprocess-transcript-lambda.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
             code=aws_lambda.Code.from_asset("lambdas/lambdas.zip"),
@@ -227,8 +227,8 @@ class ReVIEWBackendStack(Stack):
             role=self.reviewLambdaExecutionRole,  # Reuse existing lambda role
         )
 
-        self.dumpTextTranscript.add_permission(
-            "DumpTextTranscriptionInvokePermission",
+        self.postProcessTranscript.add_permission(
+            "PostProcessSTranscriptionInvokePermission",
             principal=iam.ServicePrincipal("s3.amazonaws.com"),
             action="lambda:InvokeFunction",
             source_arn=self.bucket.bucket_arn,
@@ -253,7 +253,7 @@ class ReVIEWBackendStack(Stack):
         # Event to convert json transcript to txt file once it lands in s3
         self.bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
-            s3n.LambdaDestination(self.dumpTextTranscript),
+            s3n.LambdaDestination(self.postProcessTranscript),
             s3.NotificationKeyFilter(
                 prefix=self.props["s3_transcripts_prefix"],
                 suffix=".json",

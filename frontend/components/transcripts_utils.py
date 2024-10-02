@@ -1,3 +1,5 @@
+# TODO: deprecate this once lambdas are setup that do this on ingest into KB
+
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 #

@@ -50,7 +50,7 @@ def get_LLM():
 llm = get_LLM()
 
 job_df = retrieve_all_items(username=st.session_state["auth_username"])
-completed_jobs = job_df[job_df.transcription_status == "Completed"]
+completed_jobs = job_df[job_df.job_status == "Completed"]
 
 selected_media_name = st.selectbox(
     "dummy_label",

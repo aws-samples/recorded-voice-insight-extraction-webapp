@@ -37,7 +37,7 @@ display_sidebar()
 st.dataframe(
     retrieve_all_items(username=st.session_state["auth_username"]),
     hide_index=True,
-    column_order=("media_name", "job_creation_time", "transcription_status"),
+    column_order=("media_name", "job_creation_time", "job_status"),
 )
 
 button_clicked = st.button("Refresh Table")

@@ -38,7 +38,7 @@ def retrieve_all_items(username, max_rows=None) -> pd.DataFrame:
         # return an empty dataframe with the right columns so user at least sees
         # what they should expect
         return pd.DataFrame(
-            {"media_name": [], "job_creation_time": [], "transcription_status": []}
+            {"media_name": [], "job_creation_time": [], "job_status": []}
         )
 
     result_df = (

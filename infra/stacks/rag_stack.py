@@ -18,19 +18,10 @@
 # Heavy inspo from here:
 # https://github.com/aws-samples/amazon-bedrock-samples/tree/main/knowledge-bases/features-examples/04-infrastructure/e2e_rag_using_bedrock_kb_cdk
 from aws_cdk import Stack
-from aws_cdk import (
-    Duration,
-    aws_iam as iam,
-    aws_lambda as lambda_,
-    aws_ssm as ssm,
-)
 
-from aws_cdk import aws_bedrock as bedrock
-
-from aws_cdk.aws_bedrock import CfnKnowledgeBase, CfnDataSource
 from infra.constructs.kb_constructs import (
-    ReVIEWKnowledgeBaseRole,
     ReVIEWKnowledgeBaseConstruct,
+    ReVIEWKnowledgeBaseRole,
 )
 from infra.constructs.oss_constructs import ReVIEWOSSConstruct
 

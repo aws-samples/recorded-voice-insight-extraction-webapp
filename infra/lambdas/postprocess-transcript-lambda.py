@@ -22,6 +22,9 @@ from lambda_utils import (
     update_ddb_entry,
     update_job_status,
     extract_username_from_s3_URI,
+    build_timestamped_segmented_transcript,
+    build_kb_metadata_json,
+    retrieve_media_name_by_jobid,
 )
 
 logger = logging.getLogger()
@@ -36,8 +39,8 @@ s3 = boto3.client("s3")
 
 
 def lambda_handler(event, context):
-    """Convert json to txt, and also log both to dynamodb"""
-    logger.debug("convert-json-to-txt-lambda handler called.")
+    """Convert json to txt, write txt and metadata to s3, and also log to dynamodb"""
+    logger.debug("postprocess-transcript-lambda handler called.")
     logger.debug(f"{event=}")
     logger.debug(f"{context=}")
 
@@ -64,10 +67,8 @@ def lambda_handler(event, context):
             .read()
             .decode()
         )
-        transcripts = full_json["results"]["transcripts"]
-        assert len(transcripts) == 1
 
-        # Save json to dynamodb #TODO:
+        # Save json URI to dynamodb
         response = update_ddb_entry(
             table_name=DYNAMO_TABLE_NAME,
             uuid=uuid,
@@ -75,11 +76,21 @@ def lambda_handler(event, context):
             new_item_name="json_transcript_uri",
             new_item_value=os.path.join("s3://", S3_BUCKET, json_transcript_key),
         )
-        logger.debug(f"Response to putting json into {uuid}: {response}")
+        logger.debug(f"Response to putting json URI into {uuid}: {response}")
 
-        transcript = transcripts[0]["transcript"]
+        # Convert json transcript into human readable form for LLM
+        transcript_processed = build_timestamped_segmented_transcript(full_json)
 
-        # Save txt to dynamodb
+        # Build json with metadata for Bedrock KB to index and filter on later
+        # Note: need to get media_uri from DDB
+        media_name = retrieve_media_name_by_jobid(
+            table_name=DYNAMO_TABLE_NAME,
+            job_id=uuid,
+            username=username,
+        )
+        meta_json = build_kb_metadata_json(username=username, media_name=media_name)
+
+        # Save txt URI to dynamodb
         response = update_ddb_entry(
             table_name=DYNAMO_TABLE_NAME,
             uuid=uuid,
@@ -87,25 +98,26 @@ def lambda_handler(event, context):
             new_item_name="txt_transcript_uri",
             new_item_value=os.path.join("s3://", S3_BUCKET, output_key),
         )
-        logger.debug(f"Response to putting text into {uuid}: {response}")
+        logger.debug(f"Response to putting text uri into {uuid}: {response}")
 
         # Upload transcript to s3 as a text file
         put_response = s3.put_object(
-            Body=bytes(transcript, "utf-8"), Bucket=S3_BUCKET, Key=output_key
+            Body=bytes(transcript_processed, "utf-8"), Bucket=S3_BUCKET, Key=output_key
         )
         logger.debug(f"Response to putting text into s3: {put_response}")
 
-    except AssertionError:
-        logger.warning(f"{len(transcripts)} transcripts found in results. Expected 1.")
-        # Update job status in dynamodb
-        update_job_status(
-            table_name=DYNAMO_TABLE_NAME,
-            uuid=uuid,
-            username=username,
-            new_status="Failed",
+        # Upload metadata to s3 as a json file
+        # of form blahblah.txt.metadata.json (required by Bedrock KB)
+        metadata_output_key = output_key + ".metadata.json"
+        put_response = s3.put_object(
+            Body=bytes(json.dumps(meta_json, indent=2), "utf-8"),
+            Bucket=S3_BUCKET,
+            Key=metadata_output_key,
         )
+        logger.debug(f"Response to putting text into s3: {put_response}")
+
     except Exception as e:
-        logger.warning(f"ERROR Exception caught in convert-json-to-txt-lambda: {e}.")
+        logger.warning(f"ERROR Exception caught in postprocess-transcript-lambda: {e}.")
         # Update job status in dynamodb
         update_job_status(
             table_name=DYNAMO_TABLE_NAME,
@@ -125,5 +137,5 @@ def lambda_handler(event, context):
 
     return {
         "statusCode": 200,
-        "body": json.dumps("json-to-text routine complete."),
+        "body": json.dumps("postprocess-transcript routine complete."),
     }
