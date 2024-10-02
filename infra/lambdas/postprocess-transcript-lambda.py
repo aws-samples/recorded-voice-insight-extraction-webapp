@@ -36,6 +36,7 @@ DESTINATION_PREFIX = os.environ.get("DESTINATION_PREFIX")
 DYNAMO_TABLE_NAME = os.environ.get("DYNAMO_TABLE_NAME")
 
 s3 = boto3.client("s3")
+ddb_table = boto3.resource("dynamodb").Table(name=DYNAMO_TABLE_NAME)
 
 
 def lambda_handler(event, context):
@@ -70,7 +71,7 @@ def lambda_handler(event, context):
 
         # Save json URI to dynamodb
         response = update_ddb_entry(
-            table_name=DYNAMO_TABLE_NAME,
+            table=ddb_table,
             uuid=uuid,
             username=username,
             new_item_name="json_transcript_uri",
@@ -84,7 +85,7 @@ def lambda_handler(event, context):
         # Build json with metadata for Bedrock KB to index and filter on later
         # Note: need to get media_uri from DDB
         media_name = retrieve_media_name_by_jobid(
-            table_name=DYNAMO_TABLE_NAME,
+            table=ddb_table,
             job_id=uuid,
             username=username,
         )
@@ -92,7 +93,7 @@ def lambda_handler(event, context):
 
         # Save txt URI to dynamodb
         response = update_ddb_entry(
-            table_name=DYNAMO_TABLE_NAME,
+            table=ddb_table,
             uuid=uuid,
             username=username,
             new_item_name="txt_transcript_uri",
@@ -120,7 +121,7 @@ def lambda_handler(event, context):
         logger.warning(f"ERROR Exception caught in postprocess-transcript-lambda: {e}.")
         # Update job status in dynamodb
         update_job_status(
-            table_name=DYNAMO_TABLE_NAME,
+            table=ddb_table,
             uuid=uuid,
             username=username,
             new_status="Failed",
@@ -129,7 +130,7 @@ def lambda_handler(event, context):
 
     # Update job status in dynamodb
     update_job_status(
-        table_name=DYNAMO_TABLE_NAME,
+        table=ddb_table,
         uuid=uuid,
         username=username,
         new_status="Completed",

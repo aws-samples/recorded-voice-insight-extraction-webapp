@@ -189,7 +189,7 @@ class ReVIEWBackendStack(Stack):
             handler="generate-transcript-lambda.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
-            code=aws_lambda.Code.from_asset("lambdas/lambdas.zip"),
+            code=aws_lambda.Code.from_asset("lambdas"),
             environment={
                 "DESTINATION_PREFIX": self.props["s3_transcripts_prefix"],
                 "S3_BUCKET": f"{self.props['s3_bucket_name']}",
@@ -216,7 +216,7 @@ class ReVIEWBackendStack(Stack):
             handler="postprocess-transcript-lambda.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
-            code=aws_lambda.Code.from_asset("lambdas/lambdas.zip"),
+            code=aws_lambda.Code.from_asset("lambdas"),
             environment={
                 "DESTINATION_PREFIX": self.props["s3_text_transcripts_prefix"],
                 "S3_BUCKET": self.props["s3_bucket_name"],

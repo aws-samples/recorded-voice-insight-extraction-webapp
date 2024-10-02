@@ -231,7 +231,7 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             description="Function for ReVIEW Knowledge Base Ingestion and sync",
             runtime=lambda_.Runtime.PYTHON_3_10,
             handler="kb-ingest-job-lambda.lambda_handler",
-            code=lambda_.Code.from_asset("lambdas/lambdas.zip"),
+            code=lambda_.Code.from_asset("lambdas"),
             timeout=Duration.minutes(5),
             environment=dict(
                 KNOWLEDGE_BASE_ID=knowledge_base.attr_knowledge_base_id,

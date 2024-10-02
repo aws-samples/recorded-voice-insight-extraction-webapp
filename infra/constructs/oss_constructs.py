@@ -249,7 +249,7 @@ class ReVIEWOSSConstruct(Construct):
             self,
             "ReVIEW-oss-index-creation-lambda",
             function_name=f"ReVIEW-{self.props['oss_index_name']}-InfraSetupLambda",
-            code=Code.from_asset("lambdas/lambdas.zip"),
+            code=Code.from_asset("lambdas"),
             handler="oss_handler.lambda_handler",
             description="Lambda function to create OSS index for ReVIEW App",
             role=self.oss_lambda_role,

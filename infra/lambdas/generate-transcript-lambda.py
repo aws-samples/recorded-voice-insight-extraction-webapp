@@ -36,6 +36,7 @@ DESTINATION_PREFIX = os.environ.get("DESTINATION_PREFIX")
 DYNAMO_TABLE_NAME = os.environ.get("DYNAMO_TABLE_NAME")
 
 transcribe_client = boto3.client("transcribe")
+ddb_table = boto3.resource("dynamodb").Table(name=DYNAMO_TABLE_NAME)
 
 
 def lambda_handler(event, context):
@@ -53,7 +54,7 @@ def lambda_handler(event, context):
 
     logger.debug(f"decoded recording_key = {recording_key}")
     _path, filename = os.path.split(recording_key)
-    filename_without_extension, extension = os.path.splitext(filename)
+    _filename_without_extension, extension = os.path.splitext(filename)
     media_format = extension[1:].lower()  # Drop the leading "." in extension
     assert media_format in [
         "mp3",
@@ -85,7 +86,7 @@ def lambda_handler(event, context):
     # Create item in dynamodb to track media_uri
 
     response = create_ddb_entry(
-        table_name=DYNAMO_TABLE_NAME,
+        table=ddb_table,
         uuid=job_name,
         media_uri=media_uri,
         username=username,
@@ -114,7 +115,7 @@ def lambda_handler(event, context):
 
     # Update job status in dynamodb
     update_job_status(
-        table_name=DYNAMO_TABLE_NAME,
+        table=ddb_table,
         uuid=job_name,
         username=username,
         new_status="Transcribing",
