@@ -60,3 +60,7 @@ class ReVIEWRAGStack(Stack):
             kb_principal_role=self.kb_role_construct.kb_role,
             oss_collection_arn=self.oss_construct.collection.attr_arn,
         )
+
+        # Don't deploy kb until oss is ready (including launching
+        # lambda functions to create indices? Not sure if that works)
+        self.kb_construct.node.add_dependency(self.oss_construct)

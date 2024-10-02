@@ -87,14 +87,15 @@ class ReVIEWOSSConstruct(Construct):
             },
             indent=2,
         )
-
-        return CfnSecurityPolicy(
+        pol = CfnSecurityPolicy(
             self,
             "EncryptionSecurityPolicy",
             policy=encryption_security_policy,
             name=f"{self.collection_name}-enc-pol",
             type="encryption",
         )
+        pol.apply_removal_policy(RemovalPolicy.DESTROY)
+        return pol
 
     def create_network_policy(self) -> CfnSecurityPolicy:
         network_security_policy = json.dumps(
@@ -116,23 +117,26 @@ class ReVIEWOSSConstruct(Construct):
             ],
             indent=2,
         )
-
-        return CfnSecurityPolicy(
+        pol = CfnSecurityPolicy(
             self,
             "NetworkSecurityPolicy",
             policy=network_security_policy,
             name=f"{self.collection_name}-ntw-pol",
             type="network",
         )
+        pol.apply_removal_policy(RemovalPolicy.DESTROY)
+        return pol
 
     def create_collection(self) -> CfnCollection:
-        return CfnCollection(
+        coll = CfnCollection(
             self,
             "OpsSearchCollection",
             name=self.collection_name,
             description="Collection to be used for ReVIEW App search using OpenSearch Serverless",
             type="VECTORSEARCH",  # [SEARCH, TIMESERIES]
         )
+        coll.apply_removal_policy(RemovalPolicy.DESTROY)
+        return coll
 
     def create_data_access_policy(
         self, principal_roles: list[iam.Role]
@@ -177,7 +181,7 @@ class ReVIEWOSSConstruct(Construct):
             indent=2,
         )
 
-        return CfnAccessPolicy(
+        pol = CfnAccessPolicy(
             self,
             "ReVIEWOSSDataAccessPolicy",
             name=f"{self.collection_name}",
@@ -185,12 +189,14 @@ class ReVIEWOSSConstruct(Construct):
             type="data",
             policy=data_access_policy,
         )
+        pol.apply_removal_policy(RemovalPolicy.DESTROY)
+        return pol
 
     def create_oss_lambda_role(self):
         """Role used by all lambdas interacting with this oss collection"""
         oss_role = iam.Role(
             self,
-            f"{self.props['stack_name_base']}-OSSLambdaRole",
+            "OSSLambdaRole",
             assumed_by=ServicePrincipal("lambda.amazonaws.com"),
             inline_policies={
                 "OSSLambdaPolicy": iam.PolicyDocument(
@@ -239,7 +245,7 @@ class ReVIEWOSSConstruct(Construct):
             "ReVIEW-oss-index-creation-lambda",
             function_name=f"ReVIEW-{self.props['oss_index_name']}-InfraSetupLambda",
             code=Code.from_asset("lambdas/lambdas.zip"),
-            handler="oss-create-index-lambda.lambda_handler",
+            handler="oss_handler.lambda_handler",
             description="Lambda function to create OSS index for ReVIEW App",
             role=self.oss_lambda_role,
             memory_size=1024,
@@ -256,6 +262,25 @@ class ReVIEWOSSConstruct(Construct):
         )
 
         # Create custom resource provider, to trigger the index creation lambda
+        oss_provider_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-OSSProviderRole",
+            assumed_by=ServicePrincipal("lambda.amazonaws.com"),
+        )
+        oss_provider_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "aoss:APIAccessAll",
+                    "aoss:List*",
+                    "aoss:Get*",
+                    "aoss:Create*",
+                    "aoss:Update*",
+                    "aoss:Delete*",
+                ],
+                resources=["*"],
+            )
+        )
+
         oss_index_creation_provider = cr.Provider(
             self,
             f"{self.props['stack_name_base']}-OSSProvider",
@@ -263,6 +288,7 @@ class ReVIEWOSSConstruct(Construct):
             log_group=LogGroup(
                 self, "OSSIndexCreationProviderLogs", retention=RetentionDays.ONE_DAY
             ),
+            role=oss_provider_role,
         )
 
         # Create a new custom resource consumer
@@ -277,6 +303,7 @@ class ReVIEWOSSConstruct(Construct):
                 "index_name": self.props["oss_index_name"],
                 "embedding_model_id": self.props["embedding_model_id"],
             },
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
         # Ensure the consumer is created after the provider

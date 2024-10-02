@@ -201,7 +201,9 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             ),
             knowledge_base_id=kb_id,
             name=self.props["stack_name_base"] + "-RAGDataSource",
-            data_deletion_policy="DELETE",  # RETAIN and DELETE are allowed
+            # RETAIN and DELETE are allowed, DELETE prevents stack from successfully
+            # removing this data source on cdk destroy... not sure why. Bug?
+            data_deletion_policy="RETAIN",
             description=self.props["stack_name_base"] + " RAG DataSource",
             vector_ingestion_configuration=vector_ingestion_config_variable,
         )
