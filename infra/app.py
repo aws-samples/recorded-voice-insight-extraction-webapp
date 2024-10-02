@@ -18,7 +18,7 @@ props = config_manager.get_props()
 app = cdk.App()
 
 # Backend stack
-ReVIEWBackendStack(
+backend_stack = ReVIEWBackendStack(
     app,
     props,
     # If you don't specify 'env', this stack will be environment-agnostic.
@@ -34,10 +34,15 @@ ReVIEWBackendStack(
 )
 
 # RAG stack (OSS + Bedrock KB)
-ReVIEWRAGStack(app, props)
+rag_stack = ReVIEWRAGStack(app, props)
 
 # Frontend stack
-ReVIEWFrontendStack(app, props)
+frontend_stack = ReVIEWFrontendStack(app, props)
+
+# Enforce ordering of stacks via dependency
+# TODO: maybe not necessary?
+rag_stack.add_dependency(backend_stack)
+frontend_stack.add_dependency(rag_stack)
 
 # debugStack(app, "debug-stack")
 # debugStack2(app, "debug-stack2")

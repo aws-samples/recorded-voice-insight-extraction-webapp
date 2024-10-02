@@ -51,12 +51,13 @@ class ReVIEWOSSConstruct(Construct):
         construct_id = f"{props['stack_name_base']}-oss"
         super().__init__(scope, construct_id, **kwargs)
 
+        self.collection_name = props["oss_collection_name"]
+
         # Create a role for lambdas that will access this OSS
         #  (allowed resources are of form
         # "arn:aws:aoss:*:[ACCOUNT_ID]:collection/*")
         self.oss_lambda_role = self.create_oss_lambda_role()
 
-        self.collection_name = props["oss_collection_name"]
         self.encryptionPolicy = self.create_encryption_policy()
         self.networkPolicy = self.create_network_policy()
         # Grant both input principal roles (e.g. bedrock KB) and
@@ -209,8 +210,12 @@ class ReVIEWOSSConstruct(Construct):
                                 "logs:PutLogEvents",
                             ],
                             resources=[
-                                f"arn:aws:aoss:*:{self.props['account_id']}:collection/*",
-                                "arn:aws:logs:*:*:*",
+                                ## Can't get any of these specific resources to work correctly...
+                                ## * is acceptable for a resource since actions are limited
+                                # f"arn:aws:aoss:{self.props['region_name']}:{self.props['account_id']}:collection/*",
+                                # f"arn:aws:aoss:{self.props['region_name']}:{self.props['account_id']}:index/*",
+                                # "arn:aws:logs:*:*:*",
+                                "*"
                             ],
                         )
                     ]
