@@ -53,7 +53,7 @@ class ConfigManager:
             "s3_recordings_prefix": self.config["s3"]["recordings_prefix"],
             "s3_transcripts_prefix": self.config["s3"]["transcripts_prefix"],
             "s3_text_transcripts_prefix": self.config["s3"]["text_transcripts_prefix"],
-            "ddb_table_name": f"{self.config['stack_name_base']}-{self.config['dynamo_db']['table_name_suffix']}",
+            "ddb_table_name": self.config["dynamo_db"]["table_name"],
             "account_id": self.config["account_id"],
             "region_name": self.config["region_name"],
             "oss_collection_name": self.config["oss"]["collection_name"],

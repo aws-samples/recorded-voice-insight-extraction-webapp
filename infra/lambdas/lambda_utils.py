@@ -109,9 +109,9 @@ def build_timestamped_segmented_transcript(full_transcript_json: dict) -> str:
     return "\n".join(lines)
 
 
-def build_kb_metadata_json(username: str, media_uri: str) -> dict:
+def build_kb_metadata_json(username: str, media_name: str) -> dict:
     """Custom metadata for bedrock knowledge base to grab and include in OpenSearch for filtering"""
-    return {"metadataAttributes": {"username": username, "media_uri": media_uri}}
+    return {"metadataAttributes": {"username": username, "media_name": media_name}}
 
 
 def retrieve_media_name_by_jobid(

@@ -248,14 +248,14 @@ class ReVIEWBackendStack(Stack):
         self.bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
             s3n.LambdaDestination(self.generateMediaTranscript),
-            s3.NotificationKeyFilter(prefix=self.props["s3_recordings_prefix"]),
+            s3.NotificationKeyFilter(prefix=f"{self.props['s3_recordings_prefix']}/"),
         )
         # Event to convert json transcript to txt file once it lands in s3
         self.bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
             s3n.LambdaDestination(self.postProcessTranscript),
             s3.NotificationKeyFilter(
-                prefix=self.props["s3_transcripts_prefix"],
+                prefix=f"{self.props['s3_transcripts_prefix']}/",
                 suffix=".json",
             ),
         )
