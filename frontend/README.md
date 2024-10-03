@@ -1,5 +1,5 @@
 Run command:
-
+>> source /home/ubuntu/gitlab/ReVIEW/tmp_dev_env.sh
 >> streamlit run /home/ubuntu/gitlab/ReVIEW/frontend/💡_Home.py \
 --server.port=8502 --server.address=0.0.0.0 --server.maxUploadSize=1028
 

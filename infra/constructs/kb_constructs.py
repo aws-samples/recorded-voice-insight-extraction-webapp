@@ -142,6 +142,7 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
         self.ingest_lambda = self.create_ingest_lambda(
             self.knowledge_base, self.data_source
         )
+        # TODO: implement query lambda. For now, putting it in frontend to avoid scope creep on this PR.
         # self.query_lambda = self.create_query_lambda(self.knowledge_base)
 
         # Set up s3 to trigger ingest lambda when new files appear
