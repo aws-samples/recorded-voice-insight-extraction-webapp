@@ -17,18 +17,22 @@
 
 # Heavy inspo from here:
 # https://github.com/aws-samples/amazon-bedrock-samples/tree/main/knowledge-bases/features-examples/04-infrastructure/e2e_rag_using_bedrock_kb_cdk
-from constructs import Construct
 from aws_cdk import (
     Duration,
     RemovalPolicy,
-    aws_iam as iam,
-    aws_lambda as lambda_,
-    aws_ssm as ssm,
 )
-
+import aws_cdk.aws_logs as logs
 from aws_cdk import aws_bedrock as bedrock
-
-from aws_cdk.aws_bedrock import CfnKnowledgeBase, CfnDataSource
+from aws_cdk import (
+    aws_iam as iam,
+)
+from aws_cdk import (
+    aws_lambda as _lambda,
+)
+from aws_cdk.aws_bedrock import CfnDataSource, CfnKnowledgeBase
+from constructs import Construct
+import aws_cdk.aws_s3 as s3
+import aws_cdk.aws_s3_notifications as s3n
 
 
 class ReVIEWKnowledgeBaseRole(Construct):
@@ -114,27 +118,34 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
         props: dict,
         kb_principal_role: iam.Role,
         oss_collection_arn: str,
+        source_bucket: s3.Bucket,
         **kwargs,
     ):
-        """Construct to deploy a knowledge base on top of existing OSS collection"""
+        """Construct to deploy a knowledge base on top of existing OSS collection
+        kb_principal_role is the IAM role that KB uses
+        oss_collection_arn is the OSS collection ARN KB will use
+        source_bucket is the s3 bucket in which files to be synced appear"""
 
         self.props = props
         construct_id = props["stack_name_base"] + "-kbconstruct"
         super().__init__(scope, construct_id, **kwargs)
 
         self.props = props
-
+        self.source_bucket = source_bucket
         #   Create Knowledgebase
         self.knowledge_base = self.create_knowledge_base(
             kb_principal_role, oss_collection_arn
         )
         self.data_source = self.create_data_source(self.knowledge_base)
 
-        # # Create ingest and query lambdas
-        # self.ingest_lambda = self.create_ingest_lambda(
-        #     self.knowledge_base, self.data_source
-        # )
+        # Create ingest and query lambdas
+        self.ingest_lambda = self.create_ingest_lambda(
+            self.knowledge_base, self.data_source
+        )
         # self.query_lambda = self.create_query_lambda(self.knowledge_base)
+
+        # Set up s3 to trigger ingest lambda when new files appear
+        self.setup_events()
 
     def create_knowledge_base(
         self, kb_principal_role: iam.Role, oss_collection_arn: str
@@ -195,7 +206,7 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
                 s3_configuration=CfnDataSource.S3DataSourceConfigurationProperty(
                     bucket_arn=self.props["s3_bucket_arn"],
                     # Only documents under transcripts-txt are indexed into KB
-                    inclusion_prefixes=[self.props["s3_transcripts_prefix"]],
+                    inclusion_prefixes=[self.props["s3_text_transcripts_prefix"]],
                 ),
                 type="S3",
             ),
@@ -203,46 +214,68 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             name=self.props["stack_name_base"] + "-RAGDataSource",
             # RETAIN and DELETE are allowed, DELETE prevents stack from successfully
             # removing this data source on cdk destroy... not sure why. Bug?
-            data_deletion_policy="RETAIN",
+            data_deletion_policy="DELETE",
             description=self.props["stack_name_base"] + " RAG DataSource",
             vector_ingestion_configuration=vector_ingestion_config_variable,
         )
 
     def create_ingest_lambda(
         self, knowledge_base: CfnKnowledgeBase, data_source: CfnDataSource
-    ) -> lambda_:
+    ) -> _lambda:
         # Create a role that allows lambda to start ingestion job
         self.ingestLambdaRole = iam.Role(
             self,
             f"{self.props['stack_name_base']}-IngestLambdaRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                ),
+                # TODO: custom access to
+                # arn:aws:dynamodb:us-east-1:339712833620:table/kazu-dev-app-table
+                # DDB access needed because this lambda udpates job statuses
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "AmazonDynamoDBFullAccess"
+                ),
+            ],
         )
         self.ingestLambdaRole.add_to_policy(
             iam.PolicyStatement(
-                actions=["bedrock:StartIngestionJob"],
+                actions=[
+                    "bedrock:StartIngestionJob",
+                ],
                 resources=[knowledge_base.attr_knowledge_base_arn],
             )
         )
+
         self.ingestLambdaRole.apply_removal_policy(RemovalPolicy.DESTROY)
 
-        ingest_lambda = lambda_.Function(
+        self.ingestLambdaLogGroup = logs.LogGroup(
             self,
-            self.props["stack_name_base"] + "-IngestionJob",
+            "KBIngestLambdaLogGroup",
+            log_group_name=f"""/aws/lambda/{self.props["unique_stack_name"]}-IngestionJob""",
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        ingest_lambda = _lambda.Function(
+            self,
+            self.props["unique_stack_name"] + "-IngestionJob",
             description="Function for ReVIEW Knowledge Base Ingestion and sync",
-            runtime=lambda_.Runtime.PYTHON_3_10,
-            handler="kb-ingest-job-lambda.lambda_handler",
-            code=lambda_.Code.from_asset("lambdas"),
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="kb.kb-ingest-job-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
             timeout=Duration.minutes(5),
             environment=dict(
                 KNOWLEDGE_BASE_ID=knowledge_base.attr_knowledge_base_id,
                 DATA_SOURCE_ID=data_source.attr_data_source_id,
+                DYNAMO_TABLE_NAME=self.props["ddb_table_name"],
             ),
             role=self.ingestLambdaRole,
         )
 
         return ingest_lambda
 
-    def create_query_lambda(self, knowledge_base: CfnKnowledgeBase) -> lambda_:
+    def create_query_lambda(self, knowledge_base: CfnKnowledgeBase) -> _lambda:
         # Create a role that allows lambda to query knowledge base
         self.queryLambdaRole = iam.Role(
             self,
@@ -257,13 +290,13 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
 
         self.queryLambdaRole.apply_removal_policy(RemovalPolicy.DESTROY)
 
-        query_lambda = lambda_.Function(
+        query_lambda = _lambda.Function(
             self,
             self.props["stack_name_base"] + "-KBQueryLambda",
             description="Function for ReVIEW to query Knowledge Base",
-            runtime=lambda_.Runtime.PYTHON_3_10,
-            handler="kb-query-lambda.handler",
-            code=lambda_.Code.from_asset("lambdas/lambdas.zip"),
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="kb.kb-query-lambda.handler",
+            code=_lambda.Code.from_asset("lambdas"),
             timeout=Duration.minutes(5),
             environment={
                 "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
@@ -272,11 +305,11 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             role=self.queryLambdaRole,
         )
         # _fn_url = query_lambda.add_function_url(
-        #     auth_type=lambda_.FunctionUrlAuthType.NONE,
-        #     invoke_mode=lambda_.InvokeMode.BUFFERED,
+        #     auth_type=_lambda.FunctionUrlAuthType.NONE,
+        #     invoke_mode=_lambda.InvokeMode.BUFFERED,
         #     cors={
         #         "allowed_origins": ["*"],
-        #         "allowed_methods": [lambda_.HttpMethod.POST],
+        #         "allowed_methods": [_lambda.HttpMethod.POST],
         #     },
         # )
 
@@ -292,3 +325,20 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
         # )
 
         return query_lambda
+
+    def setup_events(self):
+        # Create event notification to the bucket for lambda functions
+        # When an s3:ObjectCreated:* event happens in the bucket, the
+        # knowledge base should be synced
+        # (Note: this isn't great because only ~1 sync is allowed per second)
+        # TODO: Implement a queue to sync maximum of 1 per second or something
+
+        # Trigger when metadata file appears, as currently this shows up last
+        self.source_bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(self.ingest_lambda),
+            s3.NotificationKeyFilter(
+                prefix=f"{self.props['s3_text_transcripts_prefix']}/",
+                suffix=".metadata.json",
+            ),
+        )

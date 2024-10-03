@@ -18,7 +18,7 @@
 # Heavy inspo from here:
 # https://github.com/aws-samples/amazon-bedrock-samples/tree/main/knowledge-bases/features-examples/04-infrastructure/e2e_rag_using_bedrock_kb_cdk
 from aws_cdk import Stack
-
+import aws_cdk.aws_s3 as s3
 from infra.constructs.kb_constructs import (
     ReVIEWKnowledgeBaseConstruct,
     ReVIEWKnowledgeBaseRole,
@@ -30,6 +30,7 @@ class ReVIEWRAGStack(Stack):
     """Stack to deploy both knowledge base and opensearch serverless"""
 
     def __init__(self, scope, props: dict, **kwargs):
+        """source_bucket is the s3 bucket from which KB will grab text files to index"""
         self.props = props
         construct_id = props["stack_name_base"] + "-rag"
         super().__init__(scope, construct_id, **kwargs)
@@ -44,12 +45,18 @@ class ReVIEWRAGStack(Stack):
             data_access_principal_roles=[self.kb_role_construct.kb_role],
         )
 
+        # Get the source bucket created by the backend stack and provide to KB construct
+        # (this bucket is where KB grabs text files to chunk and index)
+        source_bucket = s3.Bucket.from_bucket_name(
+            self, "source_bucket", props["s3_bucket_name"]
+        )
         # Deploy KB on top of OSS collection, providing KB role and collection arn
         self.kb_construct = ReVIEWKnowledgeBaseConstruct(
             self,
             props=props,
             kb_principal_role=self.kb_role_construct.kb_role,
             oss_collection_arn=self.oss_construct.collection.attr_arn,
+            source_bucket=source_bucket,
         )
 
         # Don't deploy kb until oss is ready (including launching
