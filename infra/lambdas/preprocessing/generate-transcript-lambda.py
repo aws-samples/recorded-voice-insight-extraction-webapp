@@ -21,11 +21,10 @@ import uuid
 from urllib.parse import unquote_plus
 
 import boto3
-from lambda_utils import (
-    create_ddb_entry,
-    update_job_status,
-    extract_username_from_s3_URI,
-)
+
+from ddb.ddb_utils import update_job_status, create_ddb_entry
+from preprocessing.preprocessing_utils import extract_username_from_s3_URI
+
 
 logger = logging.getLogger()
 logger.setLevel("INFO")

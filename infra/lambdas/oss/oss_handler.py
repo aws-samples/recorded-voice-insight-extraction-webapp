@@ -58,6 +58,11 @@ def lambda_handler(event, context):
         return on_update(event)
     if request_type == "Delete":
         return on_delete(event)
+
+    # TODO: implement an is_complete function that will get retried until
+    # the index is fully created
+    # https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.custom_resources/README.html
+
     raise Exception("Invalid request type: %s" % request_type)
 
 

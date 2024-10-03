@@ -235,7 +235,7 @@ class ReVIEWOSSConstruct(Construct):
         dependency_layer = _lambda.LayerVersion(
             self,
             "dependency_layer",
-            code=_lambda.Code.from_asset("lambdas/dependency_layer.zip"),
+            code=_lambda.Code.from_asset("assets/oss_lambdas_dependency_layer.zip"),
             compatible_runtimes=[
                 _lambda.Runtime.PYTHON_3_8,
                 _lambda.Runtime.PYTHON_3_9,
@@ -248,8 +248,8 @@ class ReVIEWOSSConstruct(Construct):
         oss_index_creation_lambda = _lambda.Function(
             self,
             "ReVIEW-oss-index-creation-lambda",
-            function_name=f"ReVIEW-{self.props['oss_index_name']}-InfraSetupLambda",
-            code=Code.from_asset("lambdas"),
+            function_name=f"{self.props['oss_index_name']}-InfraSetupLambda",
+            code=Code.from_asset("lambdas/oss"),
             handler="oss_handler.lambda_handler",
             description="Lambda function to create OSS index for ReVIEW App",
             role=self.oss_lambda_role,

@@ -18,12 +18,14 @@ import json
 import logging
 import os
 import boto3
-from lambda_utils import (
-    update_ddb_entry,
-    update_job_status,
+from preprocessing.preprocessing_utils import (
     extract_username_from_s3_URI,
     build_timestamped_segmented_transcript,
     build_kb_metadata_json,
+)
+from ddb.ddb_utils import (
+    update_ddb_entry,
+    update_job_status,
     retrieve_media_name_by_jobid,
 )
 
@@ -133,7 +135,7 @@ def lambda_handler(event, context):
         table=ddb_table,
         uuid=uuid,
         username=username,
-        new_status="Completed",
+        new_status="Transcription Complete",
     )
 
     return {

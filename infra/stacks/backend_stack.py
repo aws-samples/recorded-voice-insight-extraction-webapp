@@ -82,8 +82,8 @@ class ReVIEWBackendStack(Stack):
         )
         self.postProcessTranscriptLogGroup = logs.LogGroup(
             self,
-            "PostProcessSTranscriptLogGroup",
-            log_group_name=f"""/aws/lambda/{self.props['unique_stack_name']}-PostProcessSTranscript""",
+            "PostProcessTranscriptLogGroup",
+            log_group_name=f"""/aws/lambda/{self.props['unique_stack_name']}-PostProcessTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -186,7 +186,7 @@ class ReVIEWBackendStack(Stack):
             f"{self.props['unique_stack_name']}-GenerateMediaTranscript",
             description=f"Stack {self.props['unique_stack_name']} Function GenerateMediaTranscript",
             function_name=f"{self.props['unique_stack_name']}-GenerateMediaTranscript",
-            handler="generate-transcript-lambda.lambda_handler",
+            handler="preprocessing.generate-transcript-lambda.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
             code=aws_lambda.Code.from_asset("lambdas"),
@@ -210,10 +210,10 @@ class ReVIEWBackendStack(Stack):
 
         self.postProcessTranscript = aws_lambda.Function(
             self,
-            f"{self.props['unique_stack_name']}-PostProcessSTranscript",
-            description=f"Stack {self.props['unique_stack_name']} Function PostProcessSTranscript",
-            function_name=f"{self.props['unique_stack_name']}-PostProcessSTranscript",
-            handler="postprocess-transcript-lambda.lambda_handler",
+            f"{self.props['unique_stack_name']}-PostProcessTranscript",
+            description=f"Stack {self.props['unique_stack_name']} Function PostProcessTranscript",
+            function_name=f"{self.props['unique_stack_name']}-PostProcessTranscript",
+            handler="preprocessing.postprocess-transcript-lambda.lambda_handler",
             runtime=aws_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
             code=aws_lambda.Code.from_asset("lambdas"),

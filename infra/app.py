@@ -40,10 +40,8 @@ rag_stack = ReVIEWRAGStack(app, props)
 frontend_stack = ReVIEWFrontendStack(app, props)
 
 # Enforce ordering of stacks via dependency
-# TODO: maybe not necessary?
+# because backend stack needs to create s3 buckets that are used by rag_stack
 rag_stack.add_dependency(backend_stack)
 frontend_stack.add_dependency(rag_stack)
 
-# debugStack(app, "debug-stack")
-# debugStack2(app, "debug-stack2")
 app.synth()
