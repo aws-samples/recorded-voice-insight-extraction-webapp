@@ -36,6 +36,7 @@ def get_bedrock_client(
     assumed_role: Optional[str] = None,
     region: Optional[str] = None,
     runtime: Optional[bool] = True,
+    agent: Optional[bool] = False,
 ):
     """Create a boto3 client for Amazon Bedrock, with optional configuration overrides
 
@@ -89,7 +90,9 @@ def get_bedrock_client(
         ]
         client_kwargs["aws_session_token"] = response["Credentials"]["SessionToken"]
 
-    if runtime:
+    if agent:
+        service_name = "bedrock-agent-runtime"
+    elif runtime:
         service_name = "bedrock-runtime"
     else:
         service_name = "bedrock"
@@ -199,3 +202,82 @@ def chat_transcript_query(segmented_transcript: str, user_query: str, llm: LLM) 
         prompt=chat_prompt,
         kwargs={"temperature": 0.1, "max_tokens": 200},
     )
+
+
+def deprecated_retrieve_and_generate(query: str, username: str, media_name=None) -> str:
+    """Unfortunately retrieve_and_generate API isn't flexible enough for this use case... its citations are nice, but
+    require adding the $output_format_instructions$ variable, which overrides any other prompting (e.g. asking the LLM
+    to return an answer and a timestamp). So. we'll use the retrieve API and do the generation ourselves to get the
+    output format we want."""
+
+    foundation_model = "anthropic.claude-3-sonnet-20240229-v1:0"
+
+    region_name = "us-east-1"
+
+    bedrock_agent_runtime_client = get_bedrock_client(
+        assumed_role=os.environ.get("BEDROCK_ASSUME_ROLE", None),
+        region=os.environ.get("AWS_DEFAULT_REGION", None),
+        agent=True,
+    )
+    # return {"metadataAttributes": {"username": username, "media_name": media_name}}
+    kb_id = os.environ["KNOWLEDGE_BASE_ID"]
+
+    # Always filter on username to prevent people from querying other users' data
+    # Optionally filter on media name if user wants to chat with just one media file
+    username_filter = {"equals": {"key": "username", "value": username}}
+    if not media_name:
+        retrieval_filter = username_filter
+    else:
+        retrieval_filter = {
+            "andAll": [
+                username_filter,
+                {"equals": {"key": "media_name", "value": media_name}},
+            ]
+        }
+
+    retrieval_config = {
+        "vectorSearchConfiguration": {"numberOfResults": 5, "filter": retrieval_filter},
+    }
+
+    CHAT_PROMPT_TEMPLATE = """You are an intelligent AI which attempts to answer questions based on retrieved chunks of automatically generated transcripts. 
+
+    I will provide you with retrieved chunks of transcripts. The user will provide you with a question.
+    
+    Each line in the transcript chunk includes an integer timestamp (in seconds) within square brackets, followed by a transcribed sentence.
+    
+    Using only information in the provided transcript chunks, attempt to answer the user's question.
+
+    Here are the retrieved chunks of transcripts in numbered order:
+    <transcript_chunks>
+    $search_results$
+    </transcript_chunks>
+
+    When you answer the question, your answer must contain only two parts: an integer timestamp representing the start of the portion of the transcript which contains the answer to the question, and an answer to the question itself. The timestamp should be included within <timestamp></timestamp> tags, and the answer within <answer></answer> tags.
+    
+    Here is the user's question:
+    <question>$query$</question>
+
+    $output_format_instructions$
+    """
+
+    response = bedrock_agent_runtime_client.retrieve_and_generate(
+        input={"text": query},
+        retrieveAndGenerateConfiguration={
+            "type": "KNOWLEDGE_BASE",
+            "knowledgeBaseConfiguration": {
+                "knowledgeBaseId": kb_id,
+                "modelArn": "arn:aws:bedrock:{}::foundation-model/{}".format(
+                    region_name, foundation_model
+                ),
+                "retrievalConfiguration": retrieval_config,
+                "generationConfiguration": {
+                    "promptTemplate": {"textPromptTemplate": CHAT_PROMPT_TEMPLATE}
+                },
+            },
+        },
+    )
+    """
+    if you include $output_format_instructions$, the API will return the usual response["output"]["text"] which is just flat text, but it also returns response["citations"] which is a list of dicts containing some text, and the references that text came from. If you concatenate all of the texts from the citation list, you get back the full response["output"]["text"]
+    Each citation element has "generatedResponsePart"."textResponsePart"."text", "retrievedReferences" list of dicts with "metadata"."media_name" (e.g. foo-bar.mp4)
+    """
+    return response["output"]["text"]
