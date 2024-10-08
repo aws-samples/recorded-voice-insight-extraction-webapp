@@ -45,8 +45,13 @@ if not st.session_state.get("auth_username", None):
     st.stop()
 
 username = st.session_state["auth_username"]
-knowledge_base_id = os.environ["KNOWLEDGE_BASE_ID"]
 
+kbqarag_args = {
+    "knowledge_base_id": os.environ["KNOWLEDGE_BASE_ID"],
+    "llm_id": os.environ["llm_model_id"],
+    "region_name": os.environ["region_name"],
+    "n_chunks": 5,
+}
 
 st.subheader("Pick media file to analyze:")
 display_sidebar()
@@ -62,8 +67,7 @@ def get_job_df(username):
     return retrieve_all_items(username=username)
 
 
-kbqarag = get_KBQARAG(knowledge_base_id=knowledge_base_id)
-
+kbqarag = get_KBQARAG(**kbqarag_args)
 
 job_df = get_job_df(username=username)
 completed_jobs = job_df[job_df.job_status == "Indexing"]  # TODO
@@ -164,7 +168,7 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
     draw_or_redraw_citation_buttons(full_answer)
 
     # Display the assistant response
-    assistant_message = full_answer.pprint_with_bibliography()
+    assistant_message = full_answer.pprint()
     st.markdown(assistant_message)
 
     # Add assistant response to chat history

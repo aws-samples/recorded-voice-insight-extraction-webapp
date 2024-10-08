@@ -26,8 +26,8 @@ kb:
   overlap_percentage: "20"
 
 llm:
-  model_id: "anthropic.claude-3-sonnet-20240229-v1:0"
-  model_arn: "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+  model_id: "anthropic.claude-3-5-sonnet-20240620-v1:0"
+  model_arn: "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0"
 
 frontend:
   cognito_pool_name: "foo"

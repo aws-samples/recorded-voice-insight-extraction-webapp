@@ -36,6 +36,11 @@ backend_stack = ReVIEWBackendStack(
 # RAG stack (OSS + Bedrock KB)
 rag_stack = ReVIEWRAGStack(app, props)
 
+# Add knowledge base ID to props for frontend to use
+props["KNOWLEDGE_BASE_ID"] = (
+    rag_stack.kb_construct.knowledge_base.attr_knowledge_base_id
+)
+
 # Frontend stack
 frontend_stack = ReVIEWFrontendStack(app, props)
 

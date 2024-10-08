@@ -45,6 +45,7 @@ class FullQAnswer(BaseModel):
 
         The JSON data should be enclosed between <json> and </json> tags.
         """
+        print(f"generation_response={generation_response}")
         pattern = r"<json>\s*(.*?)\s*</json>"
         matches = re.findall(pattern, generation_response, re.DOTALL)
         if not matches:
@@ -66,27 +67,14 @@ class FullQAnswer(BaseModel):
                 return partial.citations[0]
         raise ValueError("No citations found in any partial answers")
 
-    def pprint_with_bibliography(self) -> str:
+    def pprint(self) -> str:
+        """Format the FullQAnswer to a string for display by a chatbot"""
         result = ""
         citation_counter = 1
-        citations = []
 
         for partial in self.answer:
             result += partial.partial_answer
-
-            if partial.citations:
-                citation_refs = []
-                for citation in partial.citations:
-                    citation_refs.append(f"[{citation_counter}]")
-                    citations.append(
-                        f"[{citation_counter}] http://fake_url.com/{citation.media_name}?start_time={citation.timestamp}"
-                    )
-                    citation_counter += 1
-                result += "".join(citation_refs)
-
-            result += "\n"
-
-        result += "\nCitations:\n"
-        result += "\n".join(citations)
-
+            for _citation in partial.citations:
+                result += f"[{citation_counter}]"
+                citation_counter += 1
         return result
