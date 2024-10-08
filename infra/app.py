@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-import sys
-import os
-
-# Add repo top dir to system path to facilitate absolute imports elsewhere
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import aws_cdk as cdk
 

@@ -24,7 +24,16 @@ from typing import Optional
 import boto3
 from botocore.config import Config
 
-from frontend.schemas.qa_response import FullQAnswer
+# Add frontend dir to system path to facilitate absolute import
+import sys
+
+sys.path.append(
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend"
+    )
+)
+
+from schemas.qa_response import FullQAnswer
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -270,3 +279,43 @@ class KBQARAG:
         )
         answer: FullQAnswer = FullQAnswer.from_LLM_response(generation_response)
         return answer
+
+
+class LLM:
+    def __init__(self):
+        self.accept = "application/json"
+        self.content_type = "application/json"
+        self.boto3_bedrock = get_bedrock_client(
+            assumed_role=os.environ.get("BEDROCK_ASSUME_ROLE", None),
+            region=os.environ.get("AWS_DEFAULT_REGION", None),
+        )
+
+    def generate(
+        self, model_id: str, system_prompt: str, prompt: str, kwargs: dict = {}
+    ) -> str:
+        """Generate using message API"""
+
+        logger.debug("BEGIN Prompt\n" + "=" * 20)
+        logger.debug(prompt)
+        logger.debug("END Prompt\n" + "=" * 20)
+
+        body = {
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": prompt}],
+            "anthropic_version": "",
+            **kwargs,
+        }
+        logger.info(f"body = {body}")
+
+        response = self.boto3_bedrock.invoke_model(
+            modelId=model_id, body=json.dumps(body)
+        )
+        response = json.loads(response["body"].read().decode("utf-8"))
+
+        completion = response["content"][0]["text"]
+
+        logger.debug("BEGIN Completion\n" + "=" * 20)
+        logger.debug(completion)
+        logger.debug("END Completion\n" + "=" * 20)
+
+        return completion

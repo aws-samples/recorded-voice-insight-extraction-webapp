@@ -15,6 +15,7 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 import os
 import streamlit as st
+
 from components.bedrock_utils import KBQARAG
 from components.db_utils import retrieve_all_items
 from components.s3_utils import retrieve_media_bytes, retrieve_transcript_by_jobid
@@ -48,9 +49,9 @@ username = st.session_state["auth_username"]
 
 kbqarag_args = {
     "knowledge_base_id": os.environ["KNOWLEDGE_BASE_ID"],
-    "llm_id": os.environ["llm_model_id"],
+    "foundation_model": os.environ["llm_model_id"],
     "region_name": os.environ["region_name"],
-    "n_chunks": 5,
+    "num_chunks": 5,
 }
 
 st.subheader("Pick media file to analyze:")

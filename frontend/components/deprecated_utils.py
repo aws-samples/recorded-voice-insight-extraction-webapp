@@ -17,53 +17,13 @@
 """Deprecated utils saved here for posterity"""
 
 import json
-from bedrock_utils import get_bedrock_client
+from bedrock_utils import get_bedrock_client, LLM
 import os
 import logging
 import pandas as pd
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-
-class LLM:
-    def __init__(self):
-        self.accept = "application/json"
-        self.content_type = "application/json"
-        self.boto3_bedrock = get_bedrock_client(
-            assumed_role=os.environ.get("BEDROCK_ASSUME_ROLE", None),
-            region=os.environ.get("AWS_DEFAULT_REGION", None),
-        )
-
-    def generate(
-        self, model_id: str, system_prompt: str, prompt: str, kwargs: dict = {}
-    ) -> str:
-        """Generate using message API"""
-
-        logger.debug("BEGIN Prompt\n" + "=" * 20)
-        logger.debug(prompt)
-        logger.debug("END Prompt\n" + "=" * 20)
-
-        body = {
-            "system": system_prompt,
-            "messages": [{"role": "user", "content": prompt}],
-            "anthropic_version": "",
-            **kwargs,
-        }
-        logger.info(f"body = {body}")
-
-        response = self.boto3_bedrock.invoke_model(
-            modelId=model_id, body=json.dumps(body)
-        )
-        response = json.loads(response["body"].read().decode("utf-8"))
-
-        completion = response["content"][0]["text"]
-
-        logger.debug("BEGIN Completion\n" + "=" * 20)
-        logger.debug(completion)
-        logger.debug("END Completion\n" + "=" * 20)
-
-        return completion
 
 
 def get_analysis_templates() -> pd.DataFrame:
