@@ -90,7 +90,7 @@ class ReVIEWFrontendStack(Stack):
             self,
             f"{self.fe_stack_name}-AppService",
             cluster=self.cluster,
-            cpu=8192,
+            cpu=1024,
             desired_count=1,  # Possibly increase this to handle more concurrent requests
             task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
                 image=self.app_image,
@@ -102,9 +102,9 @@ class ReVIEWFrontendStack(Stack):
                     **self.props,
                 },
             ),
-            # Memory needs to be large to handle large media uploads
+            # Memory needs to be large enough to handle large media uploads
             # https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ecs_patterns.ApplicationLoadBalancedFargateService.html#memorylimitmib
-            memory_limit_mib=61440,
+            memory_limit_mib=8192,
             public_load_balancer=True,
             # Max length is 32 characters for ALB names
             load_balancer_name=f"{self.fe_stack_name}-alb"[-32:],
