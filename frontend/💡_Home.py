@@ -14,9 +14,15 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+import os
+import sys
+
 import streamlit as st
 from components.cognito_utils import login
 from components.streamlit_utils import display_sidebar
+
+# Add repo top dir to system path to facilitate absolute imports elsewhere
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logger = st.logger.get_logger(__name__)
 
