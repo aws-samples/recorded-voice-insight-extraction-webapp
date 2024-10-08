@@ -66,6 +66,7 @@ class ConfigManager:
             "kb_role_name": f"{unique_stack_name}-kb-role",
             "llm_model_id": self.config["llm"]["model_id"],
             "llm_model_arn": self.config["llm"]["model_arn"],
+            "cognito_pool_name": self.config["frontend"]["cognito_pool_name"],
         }
 
         return props

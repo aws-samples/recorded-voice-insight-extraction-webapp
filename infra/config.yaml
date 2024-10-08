@@ -1,4 +1,4 @@
-stack_name_base: "kazu-dev"
+stack_name_base: "review-dev"
 account_id: "XXXYOUR-ACCOUNT-ID-HEREXXX"
 region_name: "us-east-1"
 
@@ -10,11 +10,11 @@ s3:
   text_transcripts_prefix: "transcripts-txt"
 
 dynamo_db:
-  table_name: "kazu-dev-app-table"
+  table_name: "review-dev-app-table"
 
 oss:
-  collection_name: "kazu-dev-collection"
-  index_name: "kazu-dev-idx"
+  collection_name: "review-dev-collection"
+  index_name: "review-dev-idx"
 
 embedding:
   model_id: "amazon.titan-embed-text-v2:0"
@@ -30,4 +30,4 @@ llm:
   model_arn: "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0"
 
 frontend:
-  cognito_pool_name: "foo"
+  cognito_pool_name: "review-app-cognito-user-pool"

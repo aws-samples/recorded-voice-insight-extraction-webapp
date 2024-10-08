@@ -168,7 +168,7 @@ class ReVIEWFrontendStack(Stack):
         # Cognito User Pool
         user_pool_common_config = {
             "id": "review-app-cognito-user-pool-id",
-            "user_pool_name": "review-app-cognito-user-pool",
+            "user_pool_name": self.props["cognito_pool_name"],
             "auto_verify": cognito.AutoVerifiedAttrs(email=True),
             "removal_policy": RemovalPolicy.RETAIN,
             "password_policy": cognito.PasswordPolicy(
@@ -190,9 +190,9 @@ class ReVIEWFrontendStack(Stack):
         existing_pools = cognito_client.list_user_pools(MaxResults=10)["UserPools"]
         found_existing_pool = False
         for pool in existing_pools:
-            if pool["Name"] == "review-app-cognito-user-pool":
+            if pool["Name"] == self.props["cognito_pool_name"]:
                 self.cognito_user_pool = cognito.UserPool.from_user_pool_id(
-                    self, "review-app-cognito-user-pool-id", user_pool_id=pool["Id"]
+                    self, "review-app-cognito-user-pool", user_pool_id=pool["Id"]
                 )
                 found_existing_pool = True
                 break
