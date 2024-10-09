@@ -82,7 +82,14 @@ def lambda_handler(event, context):
                 new_item_name="ingestion_job_id",
                 new_item_value=response["ingestionJob"]["ingestionJobId"],
             )
-            return {"ingestionJob": response["ingestionJob"]}
+            # Return the ingestion job ID rather than relying on downstream lambdas to read it from dynamo
+            # due to potential consistency issues
+            return {
+                "ingestion_job_id": response["ingestionJob"]["ingestionJobId"],
+                "uuid": job_id,
+                "username": username,
+            }
+
         except Exception as e:
             # E.g. too many ingestion jobs to the same KB will raise a
             # botocore.errorfactory.ConflictException

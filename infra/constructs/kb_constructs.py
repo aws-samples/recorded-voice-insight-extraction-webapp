@@ -17,22 +17,34 @@
 
 # Heavy inspo from here:
 # https://github.com/aws-samples/amazon-bedrock-samples/tree/main/knowledge-bases/features-examples/04-infrastructure/e2e_rag_using_bedrock_kb_cdk
+import aws_cdk.aws_logs as logs
+import aws_cdk.aws_s3 as s3
+import aws_cdk.aws_s3_notifications as s3n
 from aws_cdk import (
     Duration,
     RemovalPolicy,
 )
-import aws_cdk.aws_logs as logs
 from aws_cdk import aws_bedrock as bedrock
+from aws_cdk import (
+    aws_events as events,
+)
+from aws_cdk import (
+    aws_events_targets as targets,
+)
 from aws_cdk import (
     aws_iam as iam,
 )
 from aws_cdk import (
     aws_lambda as _lambda,
 )
+from aws_cdk import (
+    aws_stepfunctions as sfn,
+)
+from aws_cdk import (
+    aws_stepfunctions_tasks as sfn_tasks,
+)
 from aws_cdk.aws_bedrock import CfnDataSource, CfnKnowledgeBase
 from constructs import Construct
-import aws_cdk.aws_s3 as s3
-import aws_cdk.aws_s3_notifications as s3n
 
 
 class ReVIEWKnowledgeBaseRole(Construct):
@@ -130,7 +142,6 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
         construct_id = props["stack_name_base"] + "-kbconstruct"
         super().__init__(scope, construct_id, **kwargs)
 
-        self.props = props
         self.source_bucket = source_bucket
         #   Create Knowledgebase
         self.knowledge_base = self.create_knowledge_base(
@@ -138,15 +149,8 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
         )
         self.data_source = self.create_data_source(self.knowledge_base)
 
-        # Create ingest and query lambdas
-        self.ingest_lambda = self.create_ingest_lambda(
-            self.knowledge_base, self.data_source
-        )
         # TODO: implement query lambda. For now, putting it in frontend to avoid scope creep on this PR.
         # self.query_lambda = self.create_query_lambda(self.knowledge_base)
-
-        # Set up s3 to trigger ingest lambda when new files appear
-        self.setup_events()
 
     def create_knowledge_base(
         self, kb_principal_role: iam.Role, oss_collection_arn: str
@@ -220,62 +224,6 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             vector_ingestion_configuration=vector_ingestion_config_variable,
         )
 
-    def create_ingest_lambda(
-        self, knowledge_base: CfnKnowledgeBase, data_source: CfnDataSource
-    ) -> _lambda:
-        # Create a role that allows lambda to start ingestion job
-        self.ingestLambdaRole = iam.Role(
-            self,
-            f"{self.props['stack_name_base']}-IngestLambdaRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "CloudWatchLogsFullAccess"
-                ),
-                # TODO: custom access to
-                # arn:aws:dynamodb:us-east-1:339712833620:table/kazu-dev-app-table
-                # DDB access needed because this lambda udpates job statuses
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "AmazonDynamoDBFullAccess"
-                ),
-            ],
-        )
-        self.ingestLambdaRole.add_to_policy(
-            iam.PolicyStatement(
-                actions=[
-                    "bedrock:StartIngestionJob",
-                ],
-                resources=[knowledge_base.attr_knowledge_base_arn],
-            )
-        )
-
-        self.ingestLambdaRole.apply_removal_policy(RemovalPolicy.DESTROY)
-
-        self.ingestLambdaLogGroup = logs.LogGroup(
-            self,
-            "KBIngestLambdaLogGroup",
-            log_group_name=f"""/aws/lambda/{self.props["unique_stack_name"]}-IngestionJob""",
-            removal_policy=RemovalPolicy.DESTROY,
-        )
-
-        ingest_lambda = _lambda.Function(
-            self,
-            self.props["unique_stack_name"] + "-IngestionJob",
-            description="Function for ReVIEW Knowledge Base Ingestion and sync",
-            runtime=_lambda.Runtime.PYTHON_3_10,
-            handler="kb.kb-ingest-job-lambda.lambda_handler",
-            code=_lambda.Code.from_asset("lambdas"),
-            timeout=Duration.minutes(5),
-            environment=dict(
-                KNOWLEDGE_BASE_ID=knowledge_base.attr_knowledge_base_id,
-                DATA_SOURCE_ID=data_source.attr_data_source_id,
-                DYNAMO_TABLE_NAME=self.props["ddb_table_name"],
-            ),
-            role=self.ingestLambdaRole,
-        )
-
-        return ingest_lambda
-
     def create_query_lambda(self, knowledge_base: CfnKnowledgeBase) -> _lambda:
         # Create a role that allows lambda to query knowledge base
         self.queryLambdaRole = iam.Role(
@@ -327,19 +275,240 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
 
         return query_lambda
 
-    def setup_events(self):
+
+class ReVIEWKnowledgeBaseSyncConstruct(Construct):
+    """Construct to handle syncing of knowledge base (w/ polling for status)"""
+
+    def __init__(
+        self,
+        scope,
+        props: dict,
+        knowledge_base: CfnKnowledgeBase,
+        data_source: CfnDataSource,
+        source_bucket: s3.Bucket,
+        **kwargs,
+    ):
+        self.props = props
+        construct_id = props["stack_name_base"] + "-kbsyncconstruct"
+        super().__init__(scope, construct_id, **kwargs)
+
+        # Create ingest lambda
+        self.ingest_lambda = self.create_ingest_lambda(knowledge_base, data_source)
+
+        # Create job status polling lambda
+        self.job_status_lambda = self.create_job_status_lambda(knowledge_base)
+
+        # Create a state machine (Step Functions) to ingest and poll for status
+        self.sync_state_machine = self.create_sync_state_machine(
+            ingest_lambda=self.ingest_lambda, job_status_lambda=self.job_status_lambda
+        )
+
+        # Set up s3 to launch state machine when new files appear (w/ EventBridge)
+        self.setup_events(source_bucket)
+
+    def create_ingest_lambda_role(self, knowledge_base: CfnKnowledgeBase) -> iam.Role:
+        """Create a role that allows lambda to start ingestion job"""
+        ingest_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-IngestLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                ),
+                # TODO: custom access to
+                # arn:aws:dynamodb:us-east-1:339712833620:table/kazu-dev-app-table
+                # DDB access needed because this lambda updates job statuses
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "AmazonDynamoDBFullAccess"
+                ),
+            ],
+        )
+        ingest_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:StartIngestionJob",
+                ],
+                resources=[knowledge_base.attr_knowledge_base_arn],
+            )
+        )
+
+        ingest_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
+        return ingest_lambda_role
+
+    def create_ingest_lambda(
+        self,
+        knowledge_base: CfnKnowledgeBase,
+        data_source: CfnDataSource,
+    ) -> _lambda:
+        self.ingest_lambda_log_group = logs.LogGroup(
+            self,
+            "KBIngestLambdaLogGroup",
+            log_group_name=f"""/aws/lambda/{self.props["unique_stack_name"]}-IngestionJob""",
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        """Create a lambda function to launch knowledge base sync and save sync job ID to dynamodb"""
+        ingest_lambda = _lambda.Function(
+            self,
+            self.props["unique_stack_name"] + "-IngestionJob",
+            description="Function for ReVIEW Knowledge Base Ingestion and sync",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="kb.kb-ingest-job-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            timeout=Duration.minutes(5),
+            environment=dict(
+                KNOWLEDGE_BASE_ID=knowledge_base.attr_knowledge_base_id,
+                DATA_SOURCE_ID=data_source.attr_data_source_id,
+                DYNAMO_TABLE_NAME=self.props["ddb_table_name"],
+            ),
+            role=self.create_ingest_lambda_role(knowledge_base),
+        )
+
+        return ingest_lambda
+
+    def create_job_status_lambda_role(
+        self, knowledge_base: CfnKnowledgeBase
+    ) -> iam.Role:
+        """Create a role that allows lambda to poll knowledge base ingestion job status"""
+        job_status_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-IngestLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                ),
+                # TODO: custom access to
+                # arn:aws:dynamodb:us-east-1:339712833620:table/kazu-dev-app-table
+                # DDB access needed because this lambda updates job statuses
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "AmazonDynamoDBFullAccess"
+                ),
+            ],
+        )
+        job_status_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:GetIngestionJob"],
+                resources=[knowledge_base.attr_knowledge_base_arn],
+            )
+        )
+
+        job_status_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
+        return job_status_lambda_role
+
+    def create_job_status_lambda(
+        self, knowledge_base: CfnKnowledgeBase, data_source: CfnDataSource
+    ) -> _lambda:
+        """Create a lambda function to poll a knowledge base job status"""
+        # Create a new Lambda function to check job status
+        return _lambda.Function(
+            self,
+            f"{self.props['unique_stack_name']}-JobStatusChecker",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="kb.kb-job-status-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            timeout=Duration.minutes(1),
+            environment={
+                "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
+                "DYNAMO_TABLE_NAME": self.props["ddb_table_name"],
+                "DATA_SOURCE_ID": data_source.attr_data_source_id,
+            },
+            role=self.create_job_status_lambda_role(knowledge_base),
+        )
+
+    def create_sync_state_machine(
+        self, ingest_lambda: _lambda, job_status_lambda: _lambda
+    ) -> sfn.StateMachine:
+        """State machine to submit a sync request then poll the status until complete"""
+
+        submit_job_task = sfn_tasks.LambdaInvoke(
+            self,
+            "SubmitJob",
+            lambda_function=ingest_lambda,
+            output_path="$.Payload",
+        )
+
+        check_job_status_task = sfn_tasks.LambdaInvoke(
+            self,
+            "CheckJobStatus",
+            lambda_function=job_status_lambda,
+            input_path="$",
+            output_path="$.Payload",
+        )
+
+        wait_state = sfn.Wait(
+            self, "Wait30Seconds", time=sfn.WaitTime.duration(Duration.seconds(30))
+        )
+
+        job_failed = sfn.Fail(
+            self,
+            "JobFailed",
+            cause="Knowledge Base sync job failed",
+            error="Job failure",
+        )
+
+        job_succeeded = sfn.Succeed(
+            self,
+            "JobSucceeded",
+            comment="Knowledge Base sync job completed successfully",
+        )
+
+        # Define the state machine
+        definition = submit_job_task.next(check_job_status_task).next(
+            sfn.Choice(self, "JobComplete?")
+            .when(sfn.Condition.string_equals("$.status", "FAILED"), job_failed)
+            .when(sfn.Condition.string_equals("$.status", "COMPLETED"), job_succeeded)
+            .otherwise(wait_state.next(check_job_status_task))
+        )
+
+        return sfn.StateMachine(
+            self,
+            f"{self.props['unique_stack_name']}-SyncStateMachine",
+            definition=definition,
+            timeout=Duration.hours(2),
+        )
+
+    def setup_events(self, source_bucket: s3.Bucket):
+        """Transcripts appearing in s3 trigger the sync state machine to begin"""
         # Create event notification to the bucket for lambda functions
         # When an s3:ObjectCreated:* event happens in the bucket, the
-        # knowledge base should be synced
-        # (Note: this isn't great because only ~1 sync is allowed per second)
-        # TODO: Implement a queue to sync maximum of 1 per second or something
+        # state machine should be launched
 
         # Trigger when metadata file appears, as currently this shows up last
-        self.source_bucket.add_event_notification(
+        source_bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
-            s3n.LambdaDestination(self.ingest_lambda),
+            s3n.SfnStateMachineTarget(self.sync_state_machine),
             s3.NotificationKeyFilter(
                 prefix=f"{self.props['s3_text_transcripts_prefix']}/",
                 suffix=".metadata.json",
             ),
+        )
+
+        # Create an EventBridge rule
+        rule = events.Rule(
+            self,
+            f"{self.props['unique_stack_name']}-S3EventRule",
+            event_pattern=events.EventPattern(
+                source=["aws.s3"],
+                detail_type=["Object Created"],
+                detail={
+                    "bucket": {"name": [source_bucket.bucket_name]},
+                    "object": {
+                        "key": [
+                            {
+                                "prefix": f"{self.props['s3_text_transcripts_prefix']}/",
+                                "suffix": ".metadata.json",
+                            }
+                        ]
+                    },
+                },
+            ),
+        )
+
+        # Add the state machine as a target for the rule
+        rule.add_target(targets.SfnStateMachine(self.sync_state_machine))
+
+        # Enable EventBridge notifications for the S3 bucket
+        source_bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED, s3n.EventBridgeDestination()
         )

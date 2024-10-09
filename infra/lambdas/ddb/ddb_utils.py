@@ -78,3 +78,18 @@ def retrieve_media_name_by_jobid(table, job_id: str, username: str) -> str | Non
         Key={"username": username, "UUID": job_id}, ProjectionExpression="media_name"
     )["Item"]
     return response["media_name"]
+
+
+def batch_update_job_statuses(table, ingestion_job_id: str, new_status: str):
+    """Scan through table and update status of all rows with ingestion_job_id to new_status"""
+    response = table.scan(
+        FilterExpression="ingestion_job_id = :job_id",
+        ExpressionAttributeValues={":job_id": ingestion_job_id},
+    )
+
+    for item in response["Items"]:
+        table.update_item(
+            Key={"UUID": item["UUID"], "username": item["username"]},
+            UpdateExpression="SET job_status = :status",
+            ExpressionAttributeValues={":status": new_status},
+        )
