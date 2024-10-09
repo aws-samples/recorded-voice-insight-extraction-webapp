@@ -163,8 +163,6 @@ class ReVIEWFrontendStack(Stack):
         )
 
     def setup_cognito(self):
-        # TODO: use params from config instead of hard coding
-
         # Cognito User Pool
         user_pool_common_config = {
             "id": "review-app-cognito-user-pool-id",
