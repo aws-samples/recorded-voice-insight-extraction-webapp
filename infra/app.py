@@ -1,18 +1,26 @@
 #!/usr/bin/env python3
+import sys
+import os
+
+# Add repo top dir to system path to facilitate absolute imports elsewhere
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import aws_cdk as cdk
-from stacks.review_stack import ReVIEWStack
+
+from stacks.backend_stack import ReVIEWBackendStack
+from stacks.frontend_stack import ReVIEWFrontendStack
+from stacks.rag_stack import ReVIEWRAGStack
+from utils.config_manager import ConfigManager
+
+config_manager = ConfigManager("config.yaml")
+props = config_manager.get_props()
 
 app = cdk.App()
-ReVIEWStack(
+
+# Backend stack
+backend_stack = ReVIEWBackendStack(
     app,
-    # This ID is used to name s3 buckets, databases, etc.
-    # You can deploy two fully independent stacks into the same account if you use different IDs
-    # Stack names can only be alphanumeric and hyphens
-    # Stack names should be very short (max 14 characters)
-    # Stack names should be unique, as s3 buckets named after it must be globally unique.
-    # Note: the cognito user-pool name is hard coded and shared by all stacks for now.
-    "ReVIEW-dev-your-acct-num-here",
+    props,
     # If you don't specify 'env', this stack will be environment-agnostic.
     # Account/Region-dependent features and context lookups will not work,
     # but a single synthesized template can be deployed anywhere.
@@ -24,5 +32,21 @@ ReVIEWStack(
     # env=cdk.Environment(account='123456789012', region='us-east-1'),
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
 )
+
+# RAG stack (OSS + Bedrock KB)
+rag_stack = ReVIEWRAGStack(app, props)
+
+# Add knowledge base ID to props for frontend to use
+props["KNOWLEDGE_BASE_ID"] = (
+    rag_stack.kb_construct.knowledge_base.attr_knowledge_base_id
+)
+
+# Frontend stack
+frontend_stack = ReVIEWFrontendStack(app, props)
+
+# Enforce ordering of stacks via dependency
+# because backend stack needs to create s3 buckets that are used by rag_stack
+rag_stack.add_dependency(backend_stack)
+frontend_stack.add_dependency(rag_stack)
 
 app.synth()

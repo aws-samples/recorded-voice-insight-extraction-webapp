@@ -1,5 +1,3 @@
-# TODO: deprecate this once lambdas are setup that do this on ingest into KB
-
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 #
@@ -16,7 +14,21 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""Helper utilities for parsing transcript jsons from Amazon Transcribe"""
+
+import os
+
+
+def extract_username_from_s3_URI(uri: str) -> str:
+    """URIs are like s3://bucket/blah/username/file_they_uploaded.mp4
+    Return username
+    TODO: test for security flaws, e.g. if usernames can contain / character"""
+    return os.path.split(uri)[0].split("/")[-1]
+
+
+def extract_uuid_from_s3_URI(uri: str) -> str:
+    """URIs are like s3://bucket/blah/username/[uuid].txt.metadata.json
+    Return uuid"""
+    return os.path.split(uri)[-1].split(".")[0]
 
 
 def build_timestamped_segmented_transcript(full_transcript_json: dict) -> str:
@@ -48,3 +60,8 @@ def build_timestamped_segmented_transcript(full_transcript_json: dict) -> str:
             else:
                 lines[-1] += f" {word}"
     return "\n".join(lines)
+
+
+def build_kb_metadata_json(username: str, media_name: str) -> dict:
+    """Custom metadata for bedrock knowledge base to grab and include in OpenSearch for filtering"""
+    return {"metadataAttributes": {"username": username, "media_name": media_name}}

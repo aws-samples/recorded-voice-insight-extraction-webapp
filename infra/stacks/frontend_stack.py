@@ -17,7 +17,7 @@
 from aws_cdk import aws_cognito as cognito
 
 import boto3
-from aws_cdk import Duration, RemovalPolicy, CfnOutput, NestedStack
+from aws_cdk import Duration, RemovalPolicy, CfnOutput, Stack
 from aws_cdk import aws_ec2 as ec2
 
 import os
@@ -32,12 +32,14 @@ from aws_cdk import aws_ecs_patterns as ecs_patterns
 import cdk_nag
 
 
-class ReVIEWFrontendStack(NestedStack):
-    def __init__(self, scope, construct_id, backend_props: dict, **kwargs):
+class ReVIEWFrontendStack(Stack):
+    def __init__(self, scope, props: dict, **kwargs):
+        self.props = props
+        construct_id = props["stack_name_base"] + "-frontend"
         super().__init__(scope, construct_id, **kwargs)
-        # backend_props are exported as env variables in the streamlit
+
+        # Note: all props are exported as env variables in the streamlit
         # docker container (e.g. backend bucket names, table names, etc)
-        self.backend_props = backend_props
 
         # if app.py calls ReVIEWStack(app,"ReVIEW-prod") then
         # construct_id here is "review-prod-streamlit"
@@ -50,6 +52,7 @@ class ReVIEWFrontendStack(NestedStack):
         self.custom_header_value = f"{self.fe_stack_name}-StreamlitCfnHeaderVal"
         self.set_listener_custom_headers()
         self.create_cloudfront_distribution()
+
         # Save cfn distribution domain name as output, for convenience
         CfnOutput(
             self,
@@ -87,7 +90,7 @@ class ReVIEWFrontendStack(NestedStack):
             self,
             f"{self.fe_stack_name}-AppService",
             cluster=self.cluster,
-            cpu=8192,
+            cpu=1024,
             desired_count=1,  # Possibly increase this to handle more concurrent requests
             task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
                 image=self.app_image,
@@ -96,12 +99,12 @@ class ReVIEWFrontendStack(NestedStack):
                 environment={
                     "COGNITO_CLIENT_ID": self.cognito_user_pool_client.user_pool_client_id,
                     "COGNITO_POOL_ID": self.cognito_user_pool_id,
-                    **self.backend_props,
+                    **self.props,
                 },
             ),
-            # Memory needs to be large to handle large media uploads
+            # Memory needs to be large enough to handle large media uploads
             # https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ecs_patterns.ApplicationLoadBalancedFargateService.html#memorylimitmib
-            memory_limit_mib=61440,
+            memory_limit_mib=8192,
             public_load_balancer=True,
             # Max length is 32 characters for ALB names
             load_balancer_name=f"{self.fe_stack_name}-alb"[-32:],
@@ -160,10 +163,12 @@ class ReVIEWFrontendStack(NestedStack):
         )
 
     def setup_cognito(self):
+        # TODO: use params from config instead of hard coding
+
         # Cognito User Pool
         user_pool_common_config = {
             "id": "review-app-cognito-user-pool-id",
-            "user_pool_name": "review-app-cognito-user-pool",
+            "user_pool_name": self.props["cognito_pool_name"],
             "auto_verify": cognito.AutoVerifiedAttrs(email=True),
             "removal_policy": RemovalPolicy.RETAIN,
             "password_policy": cognito.PasswordPolicy(
@@ -185,9 +190,9 @@ class ReVIEWFrontendStack(NestedStack):
         existing_pools = cognito_client.list_user_pools(MaxResults=10)["UserPools"]
         found_existing_pool = False
         for pool in existing_pools:
-            if pool["Name"] == "review-app-cognito-user-pool":
+            if pool["Name"] == self.props["cognito_pool_name"]:
                 self.cognito_user_pool = cognito.UserPool.from_user_pool_id(
-                    self, "review-app-cognito-user-pool-id", user_pool_id=pool["Id"]
+                    self, "review-app-cognito-user-pool", user_pool_id=pool["Id"]
                 )
                 found_existing_pool = True
                 break

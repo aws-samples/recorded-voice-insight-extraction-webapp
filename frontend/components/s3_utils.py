@@ -21,7 +21,7 @@ import os
 import boto3
 
 # Must match what's in the backend stack definition
-BUCKET_NAME = os.environ["s3BucketName"]
+BUCKET_NAME = os.environ["s3_bucket_name"]
 
 # Initialize the s3 client
 s3 = boto3.client("s3")

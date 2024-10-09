@@ -26,3 +26,58 @@ def display_sidebar():
         if check1:
             logout()
             st.rerun()
+
+
+def reset_citation_session_state():
+    # Remove all citation button related stuff from session state variable
+    # Create a list of keys to be removed
+    keys_to_remove = [
+        key for key in st.session_state.keys() if key.startswith("citation_")
+    ]
+
+    # Remove the keys from the dictionary
+    for key in keys_to_remove:
+        del st.session_state[key]
+
+    st.session_state["n_buttons"] = 0
+
+
+def draw_or_redraw_citation_buttons(full_answer=None):
+    # If a full_answer is provided, use it to draw buttons
+    if full_answer:
+        all_citations = [
+            citation
+            for partial_answer in full_answer.answer
+            for citation in partial_answer.citations
+        ]
+
+        n_buttons = len(all_citations)
+        st.session_state["n_buttons"] = n_buttons
+        # Only draw buttons if there are any citations
+        if n_buttons:
+            cols = st.columns(n_buttons)
+            buttons = []
+            for i, (col, citation) in enumerate(zip(cols, all_citations), 1):
+                with col:
+                    buttons.append(st.button(f"{i}", key=f"citation_button_{i}"))
+                    st.session_state[f"citation_media_{i}"] = citation.media_name
+                    st.session_state[f"citation_timestamp_{i}"] = citation.timestamp
+    # If no full_answer was provided, use session state to draw buttons
+    else:
+        n_buttons = st.session_state["n_buttons"]
+        # Only draw buttons if there are any citations
+        if n_buttons:
+            cols = st.columns(n_buttons)
+            buttons = []
+            for i, col in enumerate(cols, 1):
+                with col:
+                    buttons.append(st.button(f"[{i}]", key=f"citation_button_{i}"))
+
+
+def display_video_at_timestamp(media_bytes, timestamp):
+    if timestamp >= 0:
+        # Note: this works for audio files, too.
+        _video = st.video(
+            data=media_bytes,
+            start_time=timestamp,
+        )

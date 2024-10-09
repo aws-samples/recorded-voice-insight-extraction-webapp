@@ -1,2 +1,0 @@
-zip -j -r /home/ubuntu/gitlab/ReVIEW/infra/lambdas/lambdas.zip \
-/home/ubuntu/gitlab/ReVIEW/infra/lambdas/ -i '*.py'

@@ -1,0 +1,33 @@
+stack_name_base: "review-dev"
+account_id: "XXXYOUR-ACCOUNT-ID-HEREXXX"
+region_name: "us-east-1"
+
+s3:
+  bucket_name_suffix: "assets"
+  logging_bucket_name_suffix: "logs"
+  recordings_prefix: "recordings"
+  transcripts_prefix: "transcripts"
+  text_transcripts_prefix: "transcripts-txt"
+
+dynamo_db:
+  table_name: "review-dev-app-table"
+
+oss:
+  collection_name: "review-dev-collection"
+  index_name: "review-dev-idx"
+
+embedding:
+  model_id: "amazon.titan-embed-text-v2:0"
+  model_arn: "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0"
+
+kb:
+  chunking_strategy: "FIXED_SIZE"
+  max_tokens: "512"
+  overlap_percentage: "20"
+
+llm:
+  model_id: "anthropic.claude-3-5-sonnet-20240620-v1:0"
+  model_arn: "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0"
+
+frontend:
+  cognito_pool_name: "review-app-cognito-user-pool"

@@ -1,2 +1,3 @@
-Diagram is in xml format can can be loaded and modified with design-inspector.a2z.com.
-Export it with as a png with a 10 pixel border.
+Diagrams in .xml format are older and deprecated. To access them, load with design-inspector.a2z.com and export it with as a png with a 10 pixel border.
+
+Current diagrams are in pptx format and align with AWS APG best practices.
