@@ -63,14 +63,9 @@ def get_KBQARAG(**kwargs):
     return KBQARAG(**kwargs)
 
 
-@st.cache_resource
-def get_job_df(username):
-    return retrieve_all_items(username=username)
-
-
 kbqarag = get_KBQARAG(**kbqarag_args)
 
-job_df = get_job_df(username=username)
+job_df = retrieve_all_items(username=username)
 completed_jobs = job_df[job_df.job_status == "Indexing"]  # TODO
 
 CHAT_WITH_ALL_STRING = "Chat with all media files"

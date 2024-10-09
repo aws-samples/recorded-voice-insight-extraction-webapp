@@ -19,14 +19,15 @@
 import json
 import logging
 import os
+
+import sys
 from typing import Optional
 
 import boto3
+import pandas as pd
 from botocore.config import Config
 
 # Add frontend dir to system path to facilitate absolute import
-import sys
-
 sys.path.append(
     os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend"
@@ -319,3 +320,31 @@ class LLM:
         logger.debug("END Completion\n" + "=" * 20)
 
         return completion
+
+
+def get_analysis_templates() -> pd.DataFrame:
+    """Read analysis templates (from csv for now, from db later) and return df"""
+    dirname = os.path.dirname(__file__)  # Location of this python file
+    analysis_templates_file_fullpath = os.path.join(
+        dirname, "../assets/analysis_templates.csv"
+    )
+    return pd.read_csv(analysis_templates_file_fullpath)
+
+
+def run_analysis(analysis_id: int, transcript: str, llm: LLM):
+    # Get analysis template from csv
+    template_df = get_analysis_templates()
+    ana_series = template_df.set_index("template_id").loc[analysis_id]
+    # Build prompt, set model ID, bedrock kwargs, etc
+    system_prompt = ana_series["template_system_prompt"]
+    ana_template = ana_series["template_string"]
+    ana_prompt = ana_template.format(transcript=transcript)
+    ana_kwargs = json.loads(ana_series["bedrock_kwargs"])
+    ana_model_id = ana_series["model_id"]
+    # Inference LLM & return result
+    return llm.generate(
+        model_id=ana_model_id,
+        system_prompt=system_prompt,
+        prompt=ana_prompt,
+        kwargs=ana_kwargs,
+    )

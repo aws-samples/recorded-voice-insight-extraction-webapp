@@ -16,42 +16,12 @@
 
 """Deprecated utils saved here for posterity"""
 
-import json
-from bedrock_utils import get_bedrock_client, LLM
+from bedrock_utils import get_bedrock_client, LLM, get_analysis_templates
 import os
 import logging
-import pandas as pd
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-
-def get_analysis_templates() -> pd.DataFrame:
-    """Read analysis templates (from csv for now, from db later) and return df"""
-    dirname = os.path.dirname(__file__)  # Location of this python file
-    analysis_templates_file_fullpath = os.path.join(
-        dirname, "../assets/analysis_templates.csv"
-    )
-    return pd.read_csv(analysis_templates_file_fullpath)
-
-
-def run_analysis(analysis_id: int, transcript: str, llm: LLM):
-    # Get analysis template from csv
-    template_df = get_analysis_templates()
-    ana_series = template_df.set_index("template_id").loc[analysis_id]
-    # Build prompt, set model ID, bedrock kwargs, etc
-    system_prompt = ana_series["template_system_prompt"]
-    ana_template = ana_series["template_string"]
-    ana_prompt = ana_template.format(transcript=transcript)
-    ana_kwargs = json.loads(ana_series["bedrock_kwargs"])
-    ana_model_id = ana_series["model_id"]
-    # Inference LLM & return result
-    return llm.generate(
-        model_id=ana_model_id,
-        system_prompt=system_prompt,
-        prompt=ana_prompt,
-        kwargs=ana_kwargs,
-    )
 
 
 def deprecated_chat_transcript_query(
