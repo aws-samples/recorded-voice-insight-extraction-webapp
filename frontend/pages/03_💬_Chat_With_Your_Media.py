@@ -66,7 +66,7 @@ def get_KBQARAG(**kwargs):
 kbqarag = get_KBQARAG(**kbqarag_args)
 
 job_df = retrieve_all_items(username=username)
-completed_jobs = job_df[job_df.job_status == "Indexing"]  # TODO
+completed_jobs = job_df[job_df.job_status == "Completed"]
 
 CHAT_WITH_ALL_STRING = "Chat with all media files"
 selected_media_name = st.selectbox(
