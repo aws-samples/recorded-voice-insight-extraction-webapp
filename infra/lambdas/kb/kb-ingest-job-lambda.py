@@ -53,7 +53,7 @@ def lambda_handler(event, context):
     s3_file_key = event["detail"]["object"]["key"]
     logger.debug(f"Ingest lambda {s3_file_key=}")
     username = extract_username_from_s3_URI(s3_file_key)
-    job_id = extract_uuid_from_s3_URI(s3_file_key)
+    ddb_uuid = extract_uuid_from_s3_URI(s3_file_key)
 
     # Retry a few times
     # TODO: handle this better with a queue or something
@@ -67,23 +67,27 @@ def lambda_handler(event, context):
             # Update DDB status
             update_job_status(
                 table=ddb_table,
-                uuid=job_id,
+                uuid=ddb_uuid,
                 username=username,
                 new_status=JobStatus.INDEXING,
             )
+            logger.debug(f"Updated job status for {ddb_uuid=} to Indexing.")
             # Add ingestion job ID to DDB to check ingestion status later
             update_ddb_entry(
                 table=ddb_table,
-                uuid=job_id,
+                uuid=ddb_uuid,
                 username=username,
                 new_item_name="ingestion_job_id",
                 new_item_value=response["ingestionJob"]["ingestionJobId"],
+            )
+            logger.debug(
+                f"Updated DDB entry {ddb_uuid=} by adding an ingestion_job_id field, with value {response['ingestionJob']['ingestionJobId']}."
             )
             # Return the ingestion job ID rather than relying on downstream lambdas to read it from dynamo
             # due to potential consistency issues
             return {
                 "ingestion_job_id": response["ingestionJob"]["ingestionJobId"],
-                "uuid": job_id,
+                "uuid": ddb_uuid,
                 "username": username,
             }
 
@@ -99,11 +103,11 @@ def lambda_handler(event, context):
                 time.sleep(5)
             else:
                 logger.debug(
-                    "Ingestion job failed and no retries left. Marking {uuid=} as Failed."
+                    f"Ingestion job failed and no retries left. Marking {ddb_uuid=} as Failed."
                 )
                 update_job_status(
                     table=ddb_table,
-                    uuid=job_id,
+                    uuid=ddb_uuid,
                     username=username,
                     new_status=JobStatus.FAILED,
                 )

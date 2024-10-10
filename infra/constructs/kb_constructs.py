@@ -350,7 +350,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         ingest_lambda = _lambda.Function(
             self,
             self.props["unique_stack_name"] + "-IngestionJob",
-            description="Function for ReVIEW Knowledge Base Ingestion and sync",
+            description="ReVIEW KB Ingestion Job Launch",
             runtime=_lambda.Runtime.PYTHON_3_10,
             handler="kb.kb-ingest-job-lambda.lambda_handler",
             code=_lambda.Code.from_asset("lambdas"),
@@ -403,6 +403,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         return _lambda.Function(
             self,
             f"{self.props['unique_stack_name']}-JobStatusChecker",
+            description="ReVIEW KB Ingestion Job Status Checker",
             runtime=_lambda.Runtime.PYTHON_3_10,
             handler="kb.kb-job-status-lambda.lambda_handler",
             code=_lambda.Code.from_asset("lambdas"),

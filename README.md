@@ -44,7 +44,7 @@ Here is an overview of the architecture for the solution.
 
 * **(1)** Users connect to a CloudFront distribution which forwards traffic to the application load balancer via HTTPS with a custom header. 
 * **(2)** The containerized Streamlit application running in ECS connects to Amazon Cognito to authenticate users. 
-* **(3)** Users upload media files to an S3 bucket, which are then transcribed with a lambda function. Once transcripts are created in s3, another lambda syncs the transcripts with a Bedrock Knowledge Base, which handles chunking, embedding, and later retrieval. 
+* **(3)** Users upload media files to an S3 bucket, which are then transcribed with a lambda function. Once transcripts are created in s3, an EventBridge notification triggers an AWS Step Functions workflow to (asynchronously) sync the transcripts (and track the sync job status) with a Bedrock Knowledge Base, which handles chunking, embedding, and later retrieval. 
 * **(4)** The application functionality leverages Large Language Models in Bedrock to analyze transcripts (or chunks of transcripts retrieved from the knowledge base **(5)**) and identify timestamps at which to replay media to the users. 
 * **(6)** DynamoDB is used to track job processing statuses and cache previous LLM responses.
 

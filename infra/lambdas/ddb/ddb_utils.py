@@ -18,6 +18,7 @@ from enum import Enum
 import datetime
 import os
 from typing import Any
+from boto3.dynamodb.conditions import Key
 
 
 class JobStatus(Enum):
@@ -84,12 +85,12 @@ def retrieve_media_name_by_jobid(table, job_id: str, username: str) -> str | Non
 
 def batch_update_job_statuses(table, ingestion_job_id: str, new_status: JobStatus):
     """Scan through table and update status of all rows with ingestion_job_id to new_status"""
+
     response = table.scan(
-        FilterExpression="ingestion_job_id = :job_id",
-        ExpressionAttributeValues={":job_id": ingestion_job_id},
+        FilterExpression=Key("ingestion_job_id").eq(ingestion_job_id),
     )
 
     for item in response["Items"]:
         update_job_status(
-            table, uuid=item["UUID"], username=item["username"], new_status=JobStatus
+            table, uuid=item["UUID"], username=item["username"], new_status=new_status
         )

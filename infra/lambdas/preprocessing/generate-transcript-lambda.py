@@ -22,7 +22,7 @@ from urllib.parse import unquote_plus
 
 import boto3
 
-from ddb.ddb_utils import update_job_status, create_ddb_entry
+from ddb.ddb_utils import update_job_status, create_ddb_entry, JobStatus
 from preprocessing.preprocessing_utils import extract_username_from_s3_URI
 
 
@@ -117,7 +117,7 @@ def lambda_handler(event, context):
         table=ddb_table,
         uuid=job_name,
         username=username,
-        new_status="Transcribing",
+        new_status=JobStatus.TRANSCRIBING,
     )
     return {
         "statusCode": 200,
