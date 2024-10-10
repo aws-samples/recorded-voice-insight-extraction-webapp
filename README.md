@@ -48,6 +48,11 @@ Here is an overview of the architecture for the solution.
 * **(4)** The application functionality leverages Large Language Models in Bedrock to analyze transcripts (or chunks of transcripts retrieved from the knowledge base **(5)**) and identify timestamps at which to replay media to the users. 
 * **(6)** DynamoDB is used to track job processing statuses and cache previous LLM responses.
 
+Here are the details of the [AWS Step Functions](https://aws.amazon.com/step-functions/) workflow for knowledge base sync and checking sync status, which gets triggered initially via [Amazon Event Bridge](https://aws.amazon.com/eventbridge/) by a transcript appearing in s3:
+<p align="center">
+    <img src=diagram/step-functions-kb-sync-workflow.png alt="Knowledge Base Sync Step Functions Workflow" width="80%">
+</p>
+The workflow is triggered by an Event Bridge notifications 
 
 # Deployment
 
