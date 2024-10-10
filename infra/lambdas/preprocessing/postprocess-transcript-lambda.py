@@ -27,6 +27,7 @@ from ddb.ddb_utils import (
     update_ddb_entry,
     update_job_status,
     retrieve_media_name_by_jobid,
+    JobStatus,
 )
 
 logger = logging.getLogger()
@@ -126,7 +127,7 @@ def lambda_handler(event, context):
             table=ddb_table,
             uuid=uuid,
             username=username,
-            new_status="Failed",
+            new_status=JobStatus.FAILED,
         )
         raise
 
@@ -135,7 +136,7 @@ def lambda_handler(event, context):
         table=ddb_table,
         uuid=uuid,
         username=username,
-        new_status="Transcription Complete",
+        new_status=JobStatus.TRANSCRIPTION_COMPLETE,
     )
 
     return {

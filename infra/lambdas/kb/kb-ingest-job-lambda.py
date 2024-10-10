@@ -20,10 +20,8 @@ import time
 
 import boto3
 
-from ddb.ddb_utils import (
-    update_ddb_entry,
-    update_job_status,
-)
+from ddb.ddb_utils import update_ddb_entry, update_job_status, JobStatus
+
 from preprocessing.preprocessing_utils import (
     extract_username_from_s3_URI,
     extract_uuid_from_s3_URI,
@@ -52,10 +50,10 @@ def lambda_handler(event, context):
         "dataSourceId": DATA_SOURCE_ID,
         # "clientToken": context.aws_request_id,
     }
-    s3_file_key = event["Records"][0]["s3"]["object"]["key"]
+    s3_file_key = event["detail"]["object"]["key"]
     logger.debug(f"Ingest lambda {s3_file_key=}")
     username = extract_username_from_s3_URI(s3_file_key)
-    job_id = extract_uuid_from_s3_URI(s3_file_key)
+    ddb_uuid = extract_uuid_from_s3_URI(s3_file_key)
 
     # Retry a few times
     # TODO: handle this better with a queue or something
@@ -67,22 +65,32 @@ def lambda_handler(event, context):
             response = bedrock_agent_client.start_ingestion_job(**input_data)
             logger.debug(f"Ingestion job response: {response=}")
             # Update DDB status
-            # TODO:
             update_job_status(
                 table=ddb_table,
-                uuid=job_id,
+                uuid=ddb_uuid,
                 username=username,
-                new_status="Indexing",
+                new_status=JobStatus.INDEXING,
             )
+            logger.debug(f"Updated job status for {ddb_uuid=} to Indexing.")
             # Add ingestion job ID to DDB to check ingestion status later
             update_ddb_entry(
                 table=ddb_table,
-                uuid=job_id,
+                uuid=ddb_uuid,
                 username=username,
                 new_item_name="ingestion_job_id",
                 new_item_value=response["ingestionJob"]["ingestionJobId"],
             )
-            return {"ingestionJob": response["ingestionJob"]}
+            logger.debug(
+                f"Updated DDB entry {ddb_uuid=} by adding an ingestion_job_id field, with value {response['ingestionJob']['ingestionJobId']}."
+            )
+            # Return the ingestion job ID rather than relying on downstream lambdas to read it from dynamo
+            # due to potential consistency issues
+            return {
+                "ingestion_job_id": response["ingestionJob"]["ingestionJobId"],
+                "uuid": ddb_uuid,
+                "username": username,
+            }
+
         except Exception as e:
             # E.g. too many ingestion jobs to the same KB will raise a
             # botocore.errorfactory.ConflictException
@@ -95,12 +103,12 @@ def lambda_handler(event, context):
                 time.sleep(5)
             else:
                 logger.debug(
-                    "Ingestion job failed and no retries left. Marking {uuid=} as Failed."
+                    f"Ingestion job failed and no retries left. Marking {ddb_uuid=} as Failed."
                 )
                 update_job_status(
                     table=ddb_table,
-                    uuid=job_id,
+                    uuid=ddb_uuid,
                     username=username,
-                    new_status="Failed",
+                    new_status=JobStatus.FAILED,
                 )
                 raise e

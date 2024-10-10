@@ -14,9 +14,20 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+from enum import Enum
 import datetime
 import os
 from typing import Any
+from boto3.dynamodb.conditions import Key
+
+
+class JobStatus(Enum):
+    TRANSCRIBING = "Transcribing"
+    INDEXING = "Indexing"
+    TRANSCRIPTION_COMPLETE = "Transcription Complete"
+    COMPLETED = "Completed"
+    FAILED = "Failed"
+    IN_TRANSCRIPTION_QUEUE = "In Transcription Queue"
 
 
 def update_ddb_entry(
@@ -34,24 +45,16 @@ def update_ddb_entry(
     )
 
 
-def update_job_status(table, uuid: str, username: str, new_status: str):
+def update_job_status(table, uuid: str, username: str, new_status: JobStatus):
     """Update transcription job status
     "table" input is a dynamo DB resource Table"""
-    assert new_status in [
-        "Transcribing",
-        "Indexing",
-        "Transcription Complete",
-        "Completed",
-        "Failed",
-        "In Transcription Queue",
-    ]
 
     return update_ddb_entry(
         table=table,
         uuid=uuid,
         username=username,
         new_item_name="job_status",
-        new_item_value=new_status,
+        new_item_value=new_status.value,
     )
 
 
@@ -65,7 +68,7 @@ def create_ddb_entry(table, uuid: str, media_uri: str, username: str):
             "media_uri": media_uri,
             "job_creation_time": str(datetime.datetime.now()),
             "media_name": os.path.split(media_uri)[-1],
-            "job_status": "In Transcription Queue",
+            "job_status": JobStatus.IN_TRANSCRIPTION_QUEUE.value,
         }
     )
 
@@ -78,3 +81,16 @@ def retrieve_media_name_by_jobid(table, job_id: str, username: str) -> str | Non
         Key={"username": username, "UUID": job_id}, ProjectionExpression="media_name"
     )["Item"]
     return response["media_name"]
+
+
+def batch_update_job_statuses(table, ingestion_job_id: str, new_status: JobStatus):
+    """Scan through table and update status of all rows with ingestion_job_id to new_status"""
+
+    response = table.scan(
+        FilterExpression=Key("ingestion_job_id").eq(ingestion_job_id),
+    )
+
+    for item in response["Items"]:
+        update_job_status(
+            table, uuid=item["UUID"], username=item["username"], new_status=new_status
+        )
