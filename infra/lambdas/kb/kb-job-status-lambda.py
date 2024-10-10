@@ -17,7 +17,7 @@
 import os
 import logging
 import boto3
-from ddb.ddb_utils import batch_update_job_statuses
+from ddb.ddb_utils import batch_update_job_statuses, JobStatus
 
 KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
 DYNAMO_TABLE_NAME = os.environ["DYNAMO_TABLE_NAME"]
@@ -46,11 +46,16 @@ def lambda_handler(event, context):
         job_status = response["ingestionJob"]["status"]
         logger.debug(f"Ingestion job status: {job_status}")
 
-        if job_status == "COMPLETED":
-            batch_update_job_statuses(table, ingestion_job_id, "Complete")
-        elif job_status == "FAILED":
-            batch_update_job_statuses(table, ingestion_job_id, "Failed")
+        # Possible Bedrock knowledge base sync job statuses:
+        # "STARTING" | "IN_PROGRESS" | "COMPLETE" | "FAILED" | "STOPPING" | "STOPPED"
 
+        # If job is complete or failed, update dynamoDB
+        if job_status == "COMPLETE":
+            batch_update_job_statuses(table, ingestion_job_id, JobStatus.COMPLETED)
+        elif job_status == "FAILED":
+            batch_update_job_statuses(table, ingestion_job_id, JobStatus.FAILED)
+        # Return the job status regardless
+        # how does this response get used by the state machine with "$.Payload"
         return {"status": job_status, "ingestion_job_id": ingestion_job_id}
 
     except Exception as e:

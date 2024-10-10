@@ -20,10 +20,8 @@ import time
 
 import boto3
 
-from ddb.ddb_utils import (
-    update_ddb_entry,
-    update_job_status,
-)
+from ddb.ddb_utils import update_ddb_entry, update_job_status, JobStatus
+
 from preprocessing.preprocessing_utils import (
     extract_username_from_s3_URI,
     extract_uuid_from_s3_URI,
@@ -52,7 +50,7 @@ def lambda_handler(event, context):
         "dataSourceId": DATA_SOURCE_ID,
         # "clientToken": context.aws_request_id,
     }
-    s3_file_key = event["Records"][0]["s3"]["object"]["key"]
+    s3_file_key = event["detail"]["object"]["key"]
     logger.debug(f"Ingest lambda {s3_file_key=}")
     username = extract_username_from_s3_URI(s3_file_key)
     job_id = extract_uuid_from_s3_URI(s3_file_key)
@@ -67,12 +65,11 @@ def lambda_handler(event, context):
             response = bedrock_agent_client.start_ingestion_job(**input_data)
             logger.debug(f"Ingestion job response: {response=}")
             # Update DDB status
-            # TODO:
             update_job_status(
                 table=ddb_table,
                 uuid=job_id,
                 username=username,
-                new_status="Indexing",
+                new_status=JobStatus.INDEXING,
             )
             # Add ingestion job ID to DDB to check ingestion status later
             update_ddb_entry(
@@ -108,6 +105,6 @@ def lambda_handler(event, context):
                     table=ddb_table,
                     uuid=job_id,
                     username=username,
-                    new_status="Failed",
+                    new_status=JobStatus.FAILED,
                 )
                 raise e

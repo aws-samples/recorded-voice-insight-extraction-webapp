@@ -22,6 +22,7 @@ import aws_cdk.aws_s3 as s3
 from infra.constructs.kb_constructs import (
     ReVIEWKnowledgeBaseConstruct,
     ReVIEWKnowledgeBaseRole,
+    ReVIEWKnowledgeBaseSyncConstruct,
 )
 from infra.constructs.oss_constructs import ReVIEWOSSConstruct
 
@@ -62,3 +63,12 @@ class ReVIEWRAGStack(Stack):
         # Don't deploy kb until oss is ready (including launching
         # lambda functions to create indices? Not sure if that works)
         self.kb_construct.node.add_dependency(self.oss_construct)
+
+        # Construct to handle syncing of knowledge base
+        self.kb_sync_construct = ReVIEWKnowledgeBaseSyncConstruct(
+            self,
+            props=props,
+            knowledge_base=self.kb_construct.knowledge_base,
+            data_source=self.kb_construct.data_source,
+            source_bucket=source_bucket,
+        )

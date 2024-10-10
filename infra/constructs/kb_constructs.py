@@ -19,11 +19,8 @@
 # https://github.com/aws-samples/amazon-bedrock-samples/tree/main/knowledge-bases/features-examples/04-infrastructure/e2e_rag_using_bedrock_kb_cdk
 import aws_cdk.aws_logs as logs
 import aws_cdk.aws_s3 as s3
-import aws_cdk.aws_s3_notifications as s3n
-from aws_cdk import (
-    Duration,
-    RemovalPolicy,
-)
+
+from aws_cdk import Duration, RemovalPolicy
 from aws_cdk import aws_bedrock as bedrock
 from aws_cdk import (
     aws_events as events,
@@ -296,7 +293,9 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         self.ingest_lambda = self.create_ingest_lambda(knowledge_base, data_source)
 
         # Create job status polling lambda
-        self.job_status_lambda = self.create_job_status_lambda(knowledge_base)
+        self.job_status_lambda = self.create_job_status_lambda(
+            knowledge_base, data_source
+        )
 
         # Create a state machine (Step Functions) to ingest and poll for status
         self.sync_state_machine = self.create_sync_state_machine(
@@ -372,7 +371,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         """Create a role that allows lambda to poll knowledge base ingestion job status"""
         job_status_lambda_role = iam.Role(
             self,
-            f"{self.props['stack_name_base']}-IngestLambdaRole",
+            f"{self.props['stack_name_base']}-IngestJobStatusLambdaRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -423,14 +422,14 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
 
         submit_job_task = sfn_tasks.LambdaInvoke(
             self,
-            "SubmitJob",
+            "SubmitKBSyncJob",
             lambda_function=ingest_lambda,
             output_path="$.Payload",
         )
 
         check_job_status_task = sfn_tasks.LambdaInvoke(
             self,
-            "CheckJobStatus",
+            "CheckKBSyncJobStatus",
             lambda_function=job_status_lambda,
             input_path="$",
             output_path="$.Payload",
@@ -442,30 +441,30 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
 
         job_failed = sfn.Fail(
             self,
-            "JobFailed",
+            "KBSyncJobFailed",
             cause="Knowledge Base sync job failed",
             error="Job failure",
         )
 
         job_succeeded = sfn.Succeed(
             self,
-            "JobSucceeded",
+            "KBSyncJobSucceeded",
             comment="Knowledge Base sync job completed successfully",
         )
 
         # Define the state machine
-        definition = submit_job_task.next(check_job_status_task).next(
+        chain = submit_job_task.next(check_job_status_task).next(
             sfn.Choice(self, "JobComplete?")
             .when(sfn.Condition.string_equals("$.status", "FAILED"), job_failed)
-            .when(sfn.Condition.string_equals("$.status", "COMPLETED"), job_succeeded)
+            .when(sfn.Condition.string_equals("$.status", "COMPLETE"), job_succeeded)
             .otherwise(wait_state.next(check_job_status_task))
         )
 
         return sfn.StateMachine(
             self,
             f"{self.props['unique_stack_name']}-SyncStateMachine",
-            definition=definition,
-            timeout=Duration.hours(2),
+            definition_body=sfn.DefinitionBody.from_chainable(chain),
+            timeout=Duration.hours(1),  # TODO: timeout should update ddb status
         )
 
     def setup_events(self, source_bucket: s3.Bucket):
@@ -473,18 +472,10 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         # Create event notification to the bucket for lambda functions
         # When an s3:ObjectCreated:* event happens in the bucket, the
         # state machine should be launched
-
+        # Note the s3 bucket has event_bridge_enabled=True so it sends notifications to EB
         # Trigger when metadata file appears, as currently this shows up last
-        source_bucket.add_event_notification(
-            s3.EventType.OBJECT_CREATED,
-            s3n.SfnStateMachineTarget(self.sync_state_machine),
-            s3.NotificationKeyFilter(
-                prefix=f"{self.props['s3_text_transcripts_prefix']}/",
-                suffix=".metadata.json",
-            ),
-        )
 
-        # Create an EventBridge rule
+        # Create an EventBridge rule to listen for specific EB notifications
         rule = events.Rule(
             self,
             f"{self.props['unique_stack_name']}-S3EventRule",
@@ -496,8 +487,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
                     "object": {
                         "key": [
                             {
-                                "prefix": f"{self.props['s3_text_transcripts_prefix']}/",
-                                "suffix": ".metadata.json",
+                                "wildcard": f"{self.props['s3_text_transcripts_prefix']}/*.metadata.json"
                             }
                         ]
                     },
@@ -507,8 +497,3 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
 
         # Add the state machine as a target for the rule
         rule.add_target(targets.SfnStateMachine(self.sync_state_machine))
-
-        # Enable EventBridge notifications for the S3 bucket
-        source_bucket.add_event_notification(
-            s3.EventType.OBJECT_CREATED, s3n.EventBridgeDestination()
-        )

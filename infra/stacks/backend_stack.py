@@ -149,6 +149,7 @@ class ReVIEWBackendStack(Stack):
             server_access_logs_bucket=self.loggingBucket,
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
+            event_bridge_enabled=True,  # EventBridge used to trigger some step functions
         )
 
         # Explicitly only allow HTTPS traffic to s3 buckets
