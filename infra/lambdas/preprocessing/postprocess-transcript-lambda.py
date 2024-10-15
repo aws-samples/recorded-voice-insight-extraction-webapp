@@ -23,12 +23,9 @@ from preprocessing.preprocessing_utils import (
     build_timestamped_segmented_transcript,
     build_kb_metadata_json,
 )
-from ddb.ddb_utils import (
-    update_ddb_entry,
-    update_job_status,
-    retrieve_media_name_by_jobid,
-    JobStatus,
-)
+from lambda_utils.invoke_lambda import invoke_lambda
+
+from schemas.job_status import JobStatus
 
 logger = logging.getLogger()
 logger.setLevel("DEBUG")
@@ -36,10 +33,12 @@ logger.setLevel("DEBUG")
 S3_BUCKET = os.environ.get("S3_BUCKET")
 SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX")
 DESTINATION_PREFIX = os.environ.get("DESTINATION_PREFIX")
-DYNAMO_TABLE_NAME = os.environ.get("DYNAMO_TABLE_NAME")
+DDB_LAMBDA_NAME = os.environ.get("DDB_LAMBDA_NAME")
 
 s3 = boto3.client("s3")
-ddb_table = boto3.resource("dynamodb").Table(name=DYNAMO_TABLE_NAME)
+
+# Create a Lambda client so this lambda can invoke other lambdas
+lambda_client = boto3.client("lambda")
 
 
 def lambda_handler(event, context):
@@ -73,13 +72,18 @@ def lambda_handler(event, context):
         )
 
         # Save json URI to dynamodb
-        response = update_ddb_entry(
-            table=ddb_table,
-            uuid=uuid,
-            username=username,
-            new_item_name="json_transcript_uri",
-            new_item_value=os.path.join("s3://", S3_BUCKET, json_transcript_key),
+        response = invoke_lambda(
+            lambda_client=lambda_client,
+            lambda_function_name=DDB_LAMBDA_NAME,
+            action="update_ddb_entry",
+            params={
+                "job_id": uuid,
+                "username": username,
+                "new_item_name": "json_transcript_uri",
+                "new_item_value": os.path.join("s3://", S3_BUCKET, json_transcript_key),
+            },
         )
+
         logger.debug(f"Response to putting json URI into {uuid}: {response}")
 
         # Convert json transcript into human readable form for LLM
@@ -87,21 +91,31 @@ def lambda_handler(event, context):
 
         # Build json with metadata for Bedrock KB to index and filter on later
         # Note: need to get media_uri from DDB
-        media_name = retrieve_media_name_by_jobid(
-            table=ddb_table,
-            job_id=uuid,
-            username=username,
+        media_name = invoke_lambda(
+            lambda_client=lambda_client,
+            lambda_function_name=DDB_LAMBDA_NAME,
+            action="retrieve_media_name_by_jobid",
+            params={
+                "job_id": uuid,
+                "username": username,
+            },
         )
+
         meta_json = build_kb_metadata_json(username=username, media_name=media_name)
 
         # Save txt URI to dynamodb
-        response = update_ddb_entry(
-            table=ddb_table,
-            uuid=uuid,
-            username=username,
-            new_item_name="txt_transcript_uri",
-            new_item_value=os.path.join("s3://", S3_BUCKET, output_key),
+        response = invoke_lambda(
+            lambda_client=lambda_client,
+            lambda_function_name=DDB_LAMBDA_NAME,
+            action="update_ddb_entry",
+            params={
+                "job_id": uuid,
+                "username": username,
+                "new_item_name": "txt_transcript_uri",
+                "new_item_value": os.path.join("s3://", S3_BUCKET, output_key),
+            },
         )
+
         logger.debug(f"Response to putting text uri into {uuid}: {response}")
 
         # Upload transcript to s3 as a text file
@@ -123,20 +137,28 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.warning(f"ERROR Exception caught in postprocess-transcript-lambda: {e}.")
         # Update job status in dynamodb
-        update_job_status(
-            table=ddb_table,
-            uuid=uuid,
-            username=username,
-            new_status=JobStatus.FAILED,
+        response = invoke_lambda(
+            lambda_client=lambda_client,
+            lambda_function_name=DDB_LAMBDA_NAME,
+            action="update_job_status",
+            params={
+                "job_id": uuid,
+                "username": username,
+                "new_status": JobStatus.FAILED.value,
+            },
         )
         raise
 
     # Update job status in dynamodb
-    update_job_status(
-        table=ddb_table,
-        uuid=uuid,
-        username=username,
-        new_status=JobStatus.TRANSCRIPTION_COMPLETE,
+    response = invoke_lambda(
+        lambda_client=lambda_client,
+        lambda_function_name=DDB_LAMBDA_NAME,
+        action="update_job_status",
+        params={
+            "job_id": uuid,
+            "username": username,
+            "new_status": JobStatus.TRANSCRIPTION_COMPLETE.value,
+        },
     )
 
     return {

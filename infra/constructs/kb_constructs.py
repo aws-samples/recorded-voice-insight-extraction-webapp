@@ -289,6 +289,8 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         construct_id = props["stack_name_base"] + "-kbsyncconstruct"
         super().__init__(scope, construct_id, **kwargs)
 
+        self.ddb_handler_lambda = props["ddb_handler_lambda"]
+
         # Create ingest lambda
         self.ingest_lambda = self.create_ingest_lambda(knowledge_base, data_source)
 
@@ -315,12 +317,6 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "CloudWatchLogsFullAccess"
                 ),
-                # TODO: custom access to
-                # arn:aws:dynamodb:us-east-1:339712833620:table/kazu-dev-app-table
-                # DDB access needed because this lambda updates job statuses
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "AmazonDynamoDBFullAccess"
-                ),
             ],
         )
         ingest_lambda_role.add_to_policy(
@@ -329,6 +325,13 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
                     "bedrock:StartIngestionJob",
                 ],
                 resources=[knowledge_base.attr_knowledge_base_arn],
+            )
+        )
+        # Allow lambda to invoke the dynamodb handling lambda for job status updates etc
+        ingest_lambda_role.add_to_policy(
+            statement=iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.ddb_handler_lambda.function_arn],
             )
         )
 
@@ -358,7 +361,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
             environment=dict(
                 KNOWLEDGE_BASE_ID=knowledge_base.attr_knowledge_base_id,
                 DATA_SOURCE_ID=data_source.attr_data_source_id,
-                DYNAMO_TABLE_NAME=self.props["ddb_table_name"],
+                DDB_LAMBDA_NAME=self.ddb_handler_lambda.function_name,
             ),
             role=self.create_ingest_lambda_role(knowledge_base),
         )
@@ -392,6 +395,14 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
             )
         )
 
+        # Allow lambda to invoke the dynamodb handling lambda for job status updates etc
+        job_status_lambda_role.add_to_policy(
+            statement=iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.ddb_handler_lambda.function_arn],
+            )
+        )
+
         job_status_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
         return job_status_lambda_role
 
@@ -410,7 +421,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
             timeout=Duration.minutes(1),
             environment={
                 "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
-                "DYNAMO_TABLE_NAME": self.props["ddb_table_name"],
+                "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
                 "DATA_SOURCE_ID": data_source.attr_data_source_id,
             },
             role=self.create_job_status_lambda_role(knowledge_base),
@@ -465,6 +476,8 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
             self,
             f"{self.props['unique_stack_name']}-SyncStateMachine",
             definition_body=sfn.DefinitionBody.from_chainable(chain),
+            # Adding lambda versions into state machine name will trigger re-deploying state machine if lambda code changes
+            state_machine_name=f"{self.props['unique_stack_name']}-SyncStateMachine-{ingest_lambda.current_version.version}-{job_status_lambda.current_version.version}",
             timeout=Duration.hours(1),  # TODO: timeout should update ddb status
         )
 

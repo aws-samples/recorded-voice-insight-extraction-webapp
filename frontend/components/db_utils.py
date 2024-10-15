@@ -18,22 +18,38 @@
 
 import boto3
 import pandas as pd
-from boto3.dynamodb.conditions import Key
-import os
+import json
 
-TABLE_NAME = os.environ["ddb_table_name"]
-dyn_resource = boto3.resource("dynamodb")
-table = dyn_resource.Table(name=TABLE_NAME)
+# Create a Lambda client
+lambda_client = boto3.client("lambda")
+
+
+# TODO: replace with API gateway
+def invoke_ddb_lambda(action, params):
+    lambda_params = {
+        "FunctionName": "review-dev-339712833620-DDBHandlerLambda",  # API gateway knows this
+        "InvocationType": "RequestResponse",
+        "Payload": json.dumps({"action": action, **params}),
+    }
+
+    try:
+        response = lambda_client.invoke(**lambda_params)
+        result = json.loads(response["Payload"].read().decode("utf-8"))
+        return json.loads(result["body"]) if result.get("body") else None
+    except Exception as e:
+        print(f"Error invoking Lambda: {str(e)}")
+        raise
 
 
 def retrieve_all_items(username, max_rows=None) -> pd.DataFrame:
     """Query dynamodb table for rows from this username and return
     specific columns w/ optional max # of rows"""
 
-    query_results = table.query(KeyConditionExpression=Key("username").eq(username))[
-        "Items"
-    ]
-    if not query_results:
+    lambda_results = invoke_ddb_lambda(
+        "retrieve_all_items", {"username": username, "max_rows": max_rows}
+    )
+    # Lambda returns json, convert to dataframe for UI
+    if not lambda_results:
         # If no results at all in the DB (user hasn't uploaded anything yet),
         # return an empty dataframe with the right columns so user at least sees
         # what they should expect
@@ -42,16 +58,12 @@ def retrieve_all_items(username, max_rows=None) -> pd.DataFrame:
         )
 
     result_df = (
-        pd.DataFrame.from_records(query_results)
+        pd.DataFrame.from_records(lambda_results)
         .sort_values("job_creation_time", ascending=False)
         .reset_index(drop=True)
     )
 
     return result_df if not max_rows else result_df.head(n=max_rows)
-
-
-def template_id_to_dynamo_field_name(template_id: int) -> str:
-    return f"llm_analysis_template_{template_id}"
 
 
 def retrieve_analysis_by_jobid(
@@ -60,14 +72,10 @@ def retrieve_analysis_by_jobid(
     """Retrieve analysis from dynamodb table by job_id
     (if analysis is cached, else none)"""
 
-    llm_ana_key = template_id_to_dynamo_field_name(template_id)
-    response = table.get_item(
-        Key={"username": username, "UUID": job_id}, ProjectionExpression=llm_ana_key
-    )["Item"]
-    try:
-        return response[llm_ana_key]
-    except KeyError:
-        return None
+    return invoke_ddb_lambda(
+        "retrieve_analysis_by_jobid",
+        {"job_id": job_id, "username": username, "template_id": int(template_id)},
+    )
 
 
 def store_analysis_result(
@@ -75,13 +83,12 @@ def store_analysis_result(
 ) -> str | None:
     """Store completed analysis in dynamodb table"""
 
-    llm_ana_key = template_id_to_dynamo_field_name(template_id)
-
-    table.update_item(
-        Key={"username": username, "UUID": job_id},
-        UpdateExpression="SET #new_attr = :new_value",
-        ExpressionAttributeNames={"#new_attr": llm_ana_key},
-        ExpressionAttributeValues={":new_value": analysis_result},
+    return invoke_ddb_lambda(
+        "store_analysis_result",
+        {
+            "job_id": job_id,
+            "username": username,
+            "template_id": int(template_id),
+            "analysis_result": analysis_result,
+        },
     )
-
-    return

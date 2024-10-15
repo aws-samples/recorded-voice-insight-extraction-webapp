@@ -38,12 +38,15 @@ class ReVIEWFrontendStack(Stack):
         construct_id = props["stack_name_base"] + "-frontend"
         super().__init__(scope, construct_id, **kwargs)
 
-        # Note: all props are exported as env variables in the streamlit
-        # docker container (e.g. backend bucket names, table names, etc)
+        # Note: all props (which have string values) are exported as env variables
+        # in the streamlit docker container (backend bucket names, table names, etc)
 
         # if app.py calls ReVIEWStack(app,"ReVIEW-prod") then
         # construct_id here is "review-prod-streamlit"
         self.fe_stack_name = construct_id
+
+        # TODO: this will be replaced with API Gateway
+        self.ddb_handler_lambda = props["ddb_handler_lambda"]
 
         self.setup_cognito()
         self.create_frontend_app_execution_role()
@@ -99,7 +102,8 @@ class ReVIEWFrontendStack(Stack):
                 environment={
                     "COGNITO_CLIENT_ID": self.cognito_user_pool_client.user_pool_client_id,
                     "COGNITO_POOL_ID": self.cognito_user_pool_id,
-                    **self.props,
+                    # Export all string props as environment variables in the frontend
+                    **{k: v for k, v in self.props.items() if isinstance(v, str)},
                 },
             ),
             # Memory needs to be large enough to handle large media uploads
@@ -149,9 +153,12 @@ class ReVIEWFrontendStack(Stack):
         self.app_execution_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
         )
-        # Frontend UI needs read/write access dynamodb
-        self.app_execution_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonDynamoDBFullAccess")
+        # Frontend UI needs to be able to invoke lambda function that read/writes to dynamodb
+        self.app_execution_role.add_to_policy(
+            statement=iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.ddb_handler_lambda.function_arn],
+            )
         )
         # Frontend UI needs to access cognito to check logins
         self.app_execution_role.add_managed_policy(

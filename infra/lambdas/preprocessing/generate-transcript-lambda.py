@@ -22,9 +22,9 @@ from urllib.parse import unquote_plus
 
 import boto3
 
-from ddb.ddb_utils import update_job_status, create_ddb_entry, JobStatus
+from schemas.job_status import JobStatus
 from preprocessing.preprocessing_utils import extract_username_from_s3_URI
-
+from lambda_utils.invoke_lambda import invoke_lambda
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -32,10 +32,13 @@ logger.setLevel("INFO")
 S3_BUCKET = os.environ.get("S3_BUCKET")
 SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX")
 DESTINATION_PREFIX = os.environ.get("DESTINATION_PREFIX")
-DYNAMO_TABLE_NAME = os.environ.get("DYNAMO_TABLE_NAME")
+DDB_LAMBDA_NAME = os.environ.get("DDB_LAMBDA_NAME")
 
+# Create an Amazon Transcribe client
 transcribe_client = boto3.client("transcribe")
-ddb_table = boto3.resource("dynamodb").Table(name=DYNAMO_TABLE_NAME)
+
+# Create a Lambda client so this lambda can invoke other lambdas
+lambda_client = boto3.client("lambda")
 
 
 def lambda_handler(event, context):
@@ -47,7 +50,7 @@ def lambda_handler(event, context):
     # Sometimes recording_key is url-encoded, and transcription API wants non-url-encoded
     # https://stackoverflow.com/questions/44779042/aws-how-to-fix-s3-event-replacing-space-with-sign-in-object-key-names-in-js
     logger.debug(
-        f"recording_key from event: {event["Records"][0]["s3"]["object"]["key"]}"
+        f'recording_key from event: {event["Records"][0]["s3"]["object"]["key"]}'
     )
     recording_key = unquote_plus(event["Records"][0]["s3"]["object"]["key"])
 
@@ -82,15 +85,16 @@ def lambda_handler(event, context):
     # has similar regex requirements
     output_key = "{}/{}/{}.json".format(DESTINATION_PREFIX, username, job_name)
     logger.debug(f"{output_key=}")
-    # Create item in dynamodb to track media_uri
 
-    response = create_ddb_entry(
-        table=ddb_table,
-        uuid=job_name,
-        media_uri=media_uri,
-        username=username,
+    # Create item in dynamodb to track media_uri
+    response = invoke_lambda(
+        lambda_client=lambda_client,
+        lambda_function_name=DDB_LAMBDA_NAME,
+        action="create_ddb_entry",
+        params={"job_id": job_name, "media_uri": media_uri, "username": username},
     )
 
+    # Launch a transcription job
     job_args = {
         "TranscriptionJobName": job_name,
         "Media": {"MediaFileUri": media_uri},
@@ -113,12 +117,17 @@ def lambda_handler(event, context):
     logger.debug(f"Response to creating dynamodb item {uuid}: {response}")
 
     # Update job status in dynamodb
-    update_job_status(
-        table=ddb_table,
-        uuid=job_name,
-        username=username,
-        new_status=JobStatus.TRANSCRIBING,
+    response = invoke_lambda(
+        lambda_client=lambda_client,
+        lambda_function_name=DDB_LAMBDA_NAME,
+        action="update_job_status",
+        params={
+            "job_id": job_name,
+            "username": username,
+            "new_status": JobStatus.TRANSCRIBING.value,
+        },
     )
+
     return {
         "statusCode": 200,
         "body": json.dumps(f"Started transcription job {job_name}"),

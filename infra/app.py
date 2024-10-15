@@ -13,6 +13,8 @@ from stacks.rag_stack import ReVIEWRAGStack
 from utils.config_manager import ConfigManager
 
 config_manager = ConfigManager("config.yaml")
+# Initial props consist of configuration parameters
+# More props are added between stack deployments to pass inter-stack variables
 props = config_manager.get_props()
 
 app = cdk.App()
@@ -32,6 +34,11 @@ backend_stack = ReVIEWBackendStack(
     # env=cdk.Environment(account='123456789012', region='us-east-1'),
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
 )
+
+# Downstream stacks need access to the dynamodb handling lambda function
+# (e.g. those stacks will deploy lambda functions which need scoped permission
+# to invoke the dynamodb handling lambda
+props["ddb_handler_lambda"] = backend_stack.ddb_handler_lambda
 
 # RAG stack (OSS + Bedrock KB)
 rag_stack = ReVIEWRAGStack(app, props)

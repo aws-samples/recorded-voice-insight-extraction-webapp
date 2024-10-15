@@ -37,7 +37,7 @@ class ReVIEWBackendStack(Stack):
     """Backend of ReVIEW Application, including:
         transcription, s3 buckets, dynamodb, lambdas
 
-    Note: `cdk destroy` will wipe everything (s3, dynamo, etc), but will
+    Note: `cdk destroy` will wipe everything in the backend, but will
     NOT delete the Cognito user pool. Delete it in console if you wish.
     `cdk deploy` checks if a user pool with that name exists before
     creating a new one."""
@@ -51,36 +51,24 @@ class ReVIEWBackendStack(Stack):
         # The order of these matters, later ones refer to class variables
         # instantiated in previous
         self.setup_logging()
+        self.setup_dynamodb()
         self.setup_roles()
         self.setup_buckets()
-        self.setup_dynamodb()
         self.setup_lambdas()
         self.setup_events()
-
-        # # Deploy knowledge base role stack
-        # self.deploy_kb_role()
-
-        # # Deploy opensearch serverless infra stack
-        # self.deploy_oss()
-
-        # # Deploy knowledge base stack
-        # self.deploy_kb()
-
-        # # Deploy nested frontend stack
-        # self.deploy_frontend()
 
         # Attach cdk_nag to ensure AWS Solutions security level
         # Uncomment to check stack security before deploying
         # self.setup_cdk_nag()
 
     def setup_logging(self):
-        self.generateMediaTranscriptLogGroup = logs.LogGroup(
+        self.generate_media_transcript_lambdaLogGroup = logs.LogGroup(
             self,
             "GenerateMediaTranscriptLogGroup",
             log_group_name=f"""/aws/lambda/{self.props['unique_stack_name']}-GenerateMediaTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
         )
-        self.postProcessTranscriptLogGroup = logs.LogGroup(
+        self.postprocess_transcript_lambdaLogGroup = logs.LogGroup(
             self,
             "PostProcessTranscriptLogGroup",
             log_group_name=f"""/aws/lambda/{self.props['unique_stack_name']}-PostProcessTranscript""",
@@ -89,7 +77,8 @@ class ReVIEWBackendStack(Stack):
 
     def setup_roles(self):
         # AWS transcribe access, s3 access, etc
-        self.reviewLambdaExecutionRole = iam.Role(
+        # TODO: break into separate roles for each lambda w/ narrower scopes
+        self.backend_lambda_execution_role = iam.Role(
             self,
             f"{self.props['unique_stack_name']}-ReVIEWLambdaExecutionRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -102,9 +91,6 @@ class ReVIEWBackendStack(Stack):
                 ),
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "CloudWatchLogsFullAccess"
-                ),
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "AmazonDynamoDBFullAccess"
                 ),
             ],
             inline_policies={
@@ -122,7 +108,40 @@ class ReVIEWBackendStack(Stack):
             },
         )
 
-        self.reviewLambdaExecutionRole.apply_removal_policy(RemovalPolicy.DESTROY)
+        self.backend_lambda_execution_role.apply_removal_policy(RemovalPolicy.DESTROY)
+
+        # DDB lambda only has access to the one ddb table
+        self.ddb_lambda_execution_role = iam.Role(
+            self,
+            f"{self.props['unique_stack_name']}-ReVIEWDDBLambdaExecutionRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                )
+            ],
+            inline_policies={
+                "DDBLambdaPolicy": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "dynamodb:GetItem",
+                                "dynamodb:PutItem",
+                                "dynamodb:UpdateItem",
+                                "dynamodb:DeleteItem",
+                                "dynamodb:Query",
+                                "dynamodb:Scan",
+                                "dynamodb:BatchGetItem",
+                                "dynamodb:BatchWriteItem",
+                            ],
+                            resources=[self.dynamodb_table.table_arn],
+                        )
+                    ]
+                )
+            },
+        )
+
+        self.ddb_lambda_execution_role.apply_removal_policy(RemovalPolicy.DESTROY)
 
     def setup_buckets(self):
         self.loggingBucket = s3.Bucket(
@@ -182,7 +201,24 @@ class ReVIEWBackendStack(Stack):
         )
 
     def setup_lambdas(self):
-        self.generateMediaTranscript = aws_lambda.Function(
+        # Create DDB handler lambda first, as other lambdas need permission to invoke this one
+        self.ddb_handler_lambda = aws_lambda.Function(
+            self,
+            f"{self.props['unique_stack_name']}-DDBHandlerLambda",
+            description=f"Stack {self.props['unique_stack_name']} Function DDBHandlerLambda",
+            function_name=f"{self.props['unique_stack_name']}-DDBHandlerLambda",
+            handler="ddb.ddb-handler-lambda.lambda_handler",
+            runtime=aws_lambda.Runtime.PYTHON_3_12,
+            memory_size=128,
+            code=aws_lambda.Code.from_asset("lambdas"),
+            environment={
+                "DYNAMO_TABLE_NAME": self.props["ddb_table_name"],
+            },
+            timeout=Duration.seconds(15),
+            role=self.ddb_lambda_execution_role,
+        )
+
+        self.generate_media_transcript_lambda = aws_lambda.Function(
             self,
             f"{self.props['unique_stack_name']}-GenerateMediaTranscript",
             description=f"Stack {self.props['unique_stack_name']} Function GenerateMediaTranscript",
@@ -195,13 +231,13 @@ class ReVIEWBackendStack(Stack):
                 "DESTINATION_PREFIX": self.props["s3_transcripts_prefix"],
                 "S3_BUCKET": f"{self.props['s3_bucket_name']}",
                 "SOURCE_PREFIX": self.props["s3_recordings_prefix"],
-                "DYNAMO_TABLE_NAME": self.props["ddb_table_name"],
+                "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
             },
             timeout=Duration.seconds(15),
-            role=self.reviewLambdaExecutionRole,
+            role=self.backend_lambda_execution_role,
         )
 
-        self.generateMediaTranscript.add_permission(
+        self.generate_media_transcript_lambda.add_permission(
             "GenerateMediaTranscriptionInvokePermission",
             principal=iam.ServicePrincipal("s3.amazonaws.com"),
             action="lambda:InvokeFunction",
@@ -209,7 +245,7 @@ class ReVIEWBackendStack(Stack):
             source_account=self.props["account_id"],
         )
 
-        self.postProcessTranscript = aws_lambda.Function(
+        self.postprocess_transcript_lambda = aws_lambda.Function(
             self,
             f"{self.props['unique_stack_name']}-PostProcessTranscript",
             description=f"Stack {self.props['unique_stack_name']} Function PostProcessTranscript",
@@ -222,13 +258,13 @@ class ReVIEWBackendStack(Stack):
                 "DESTINATION_PREFIX": self.props["s3_text_transcripts_prefix"],
                 "S3_BUCKET": self.props["s3_bucket_name"],
                 "SOURCE_PREFIX": self.props["s3_transcripts_prefix"],
-                "DYNAMO_TABLE_NAME": self.props["ddb_table_name"],
+                "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
             },
             timeout=Duration.seconds(15),
-            role=self.reviewLambdaExecutionRole,  # Reuse existing lambda role
+            role=self.backend_lambda_execution_role,  # Reuse existing lambda role
         )
 
-        self.postProcessTranscript.add_permission(
+        self.postprocess_transcript_lambda.add_permission(
             "PostProcessSTranscriptionInvokePermission",
             principal=iam.ServicePrincipal("s3.amazonaws.com"),
             action="lambda:InvokeFunction",
@@ -236,25 +272,33 @@ class ReVIEWBackendStack(Stack):
             source_account=self.props["account_id"],
         )
 
+        # Grant other lambda roles permission to invoke the ddb lambda
+        self.backend_lambda_execution_role.add_to_policy(
+            statement=iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.ddb_handler_lambda.function_arn],
+            )
+        )
+
         ## This creates a sev2 ticket
-        # self.generateMediaTranscript.grant_invoke(
+        # self.generate_media_transcript_lambda.grant_invoke(
         #     iam.ServicePrincipal("s3.amazonaws.com")
         # )
 
     def setup_events(self):
         # Create event notification to the bucket for lambda functions
         # When an s3:ObjectCreated:* event happens in the bucket, the
-        # generateMediaTranscript function should be called, with the
+        # generate_media_transcript_lambda function should be called, with the
         # logging configuration pointing towards destinationBucketName
         self.bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
-            s3n.LambdaDestination(self.generateMediaTranscript),
+            s3n.LambdaDestination(self.generate_media_transcript_lambda),
             s3.NotificationKeyFilter(prefix=f"{self.props['s3_recordings_prefix']}/"),
         )
         # Event to convert json transcript to txt file once it lands in s3
         self.bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
-            s3n.LambdaDestination(self.postProcessTranscript),
+            s3n.LambdaDestination(self.postprocess_transcript_lambda),
             s3.NotificationKeyFilter(
                 prefix=f"{self.props['s3_transcripts_prefix']}/",
                 suffix=".json",
@@ -282,41 +326,13 @@ class ReVIEWBackendStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
-    # def deploy_frontend(self):
-    #     self.frontend_stack = ReVIEWFrontendStack(
-    #         self,
-    #         f"{self.props['unique_stack_name']}-fe",
-    #         backend_props=self.props,
-    #     )
-
-    # def deploy_kb_role(self):
-    #     self.kb_role_stack = ReVIEWKnowledgeBaseRoleStack(
-    #         self,
-    #         f"{self.props['unique_stack_name']}-kb-role",
-    #         backend_props=self.props,
-    #     )
-
-    # def deploy_oss(self):
-    #     self.oss_stack = ReVIEWOSSStack(
-    #         self,
-    #         f"{self.props['unique_stack_name']}-oss",
-    #         backend_props=self.props,
-    #     )
-
-    # def deploy_kb(self):
-    #     self.kb_stack = ReVIEWKnowledgeBaseStack(
-    #         self,
-    #         f"{self.props['unique_stack_name']}-kb",
-    #         backend_props=self.props,
-    #     )
-
     def setup_cdk_nag(self):
         """Use this function to enable cdk_nag package to block deployment of possibly insecure stack elements"""
         # Attach cdk_nag to ensure AWS Solutions security level
         Aspects.of(self).add(cdk_nag.AwsSolutionsChecks())
 
         cdk_nag.NagSuppressions.add_resource_suppressions(
-            self.reviewLambdaExecutionRole,
+            self.backend_lambda_execution_role,
             suppressions=[
                 {"id": "AwsSolutions-IAM4", "reason": "Managed policies ok"},
                 {"id": "AwsSolutions-IAM5", "reason": "Wildcard ok"},

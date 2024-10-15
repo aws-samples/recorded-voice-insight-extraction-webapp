@@ -20,8 +20,8 @@ import time
 
 import boto3
 
-from ddb.ddb_utils import update_ddb_entry, update_job_status, JobStatus
-
+from schemas.job_status import JobStatus
+from lambda_utils.invoke_lambda import invoke_lambda
 from preprocessing.preprocessing_utils import (
     extract_username_from_s3_URI,
     extract_uuid_from_s3_URI,
@@ -30,12 +30,12 @@ from preprocessing.preprocessing_utils import (
 KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
 DATA_SOURCE_ID = os.environ["DATA_SOURCE_ID"]
 AWS_REGION = os.environ["AWS_REGION"]
-DYNAMO_TABLE_NAME = os.environ.get("DYNAMO_TABLE_NAME")
-
-ddb_table = boto3.resource("dynamodb").Table(name=DYNAMO_TABLE_NAME)
+DDB_LAMBDA_NAME = os.environ.get("DDB_LAMBDA_NAME")
 
 bedrock_agent_client = boto3.client("bedrock-agent", region_name=AWS_REGION)
 
+# Create a Lambda client so this lambda can invoke other lambdas
+lambda_client = boto3.client("lambda")
 
 logger = logging.getLogger()
 logger.setLevel("DEBUG")
@@ -58,35 +58,47 @@ def lambda_handler(event, context):
     # Retry a few times
     # TODO: handle this better with a queue or something
     response = None
-    retries_left = 3
+    retries_left = 5
     while response is None:
         try:
             logger.debug(f"Starting ingestion job with {input_data=}")
-            response = bedrock_agent_client.start_ingestion_job(**input_data)
-            logger.debug(f"Ingestion job response: {response=}")
-            # Update DDB status
-            update_job_status(
-                table=ddb_table,
-                uuid=ddb_uuid,
-                username=username,
-                new_status=JobStatus.INDEXING,
+            ingest_start_response = bedrock_agent_client.start_ingestion_job(
+                **input_data
             )
+            ingest_job_id = ingest_start_response["ingestionJob"]["ingestionJobId"]
+            logger.debug(f"Ingestion job response: {ingest_start_response=}")
+            # Update DDB status
+            response = invoke_lambda(
+                lambda_client=lambda_client,
+                lambda_function_name=DDB_LAMBDA_NAME,
+                action="update_job_status",
+                params={
+                    "job_id": ddb_uuid,
+                    "username": username,
+                    "new_status": JobStatus.INDEXING.value,
+                },
+            )
+
             logger.debug(f"Updated job status for {ddb_uuid=} to Indexing.")
             # Add ingestion job ID to DDB to check ingestion status later
-            update_ddb_entry(
-                table=ddb_table,
-                uuid=ddb_uuid,
-                username=username,
-                new_item_name="ingestion_job_id",
-                new_item_value=response["ingestionJob"]["ingestionJobId"],
+            response = invoke_lambda(
+                lambda_client=lambda_client,
+                lambda_function_name=DDB_LAMBDA_NAME,
+                action="update_ddb_entry",
+                params={
+                    "job_id": ddb_uuid,
+                    "username": username,
+                    "new_item_name": "ingestion_job_id",
+                    "new_item_value": ingest_job_id,
+                },
             )
             logger.debug(
-                f"Updated DDB entry {ddb_uuid=} by adding an ingestion_job_id field, with value {response['ingestionJob']['ingestionJobId']}."
+                f"Updated DDB entry {ddb_uuid=} by adding an ingestion_job_id field, with value {ingest_job_id=}."
             )
             # Return the ingestion job ID rather than relying on downstream lambdas to read it from dynamo
             # due to potential consistency issues
             return {
-                "ingestion_job_id": response["ingestionJob"]["ingestionJobId"],
+                "ingestion_job_id": ingest_job_id,
                 "uuid": ddb_uuid,
                 "username": username,
             }
@@ -98,17 +110,22 @@ def lambda_handler(event, context):
             if retries_left:
                 response = None
                 logger.debug(
-                    f"Ingestion job failed with exception: {e}... retrying in 5 sec"
+                    f"Ingestion job failed with exception: {e}... retrying in 1 min"
                 )
-                time.sleep(5)
+                time.sleep(60)
             else:
                 logger.debug(
                     f"Ingestion job failed and no retries left. Marking {ddb_uuid=} as Failed."
                 )
-                update_job_status(
-                    table=ddb_table,
-                    uuid=ddb_uuid,
-                    username=username,
-                    new_status=JobStatus.FAILED,
+                response = invoke_lambda(
+                    lambda_client=lambda_client,
+                    lambda_function_name=DDB_LAMBDA_NAME,
+                    action="update_job_status",
+                    params={
+                        "job_id": ddb_uuid,
+                        "username": username,
+                        "new_status": JobStatus.FAILED.value,
+                    },
                 )
+
                 raise e

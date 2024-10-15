@@ -65,6 +65,7 @@ class ReVIEWRAGStack(Stack):
         self.kb_construct.node.add_dependency(self.oss_construct)
 
         # Construct to handle syncing of knowledge base
+        # TODO: check to make sure cdk destroy removes this
         self.kb_sync_construct = ReVIEWKnowledgeBaseSyncConstruct(
             self,
             props=props,
