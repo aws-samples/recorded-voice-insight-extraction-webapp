@@ -108,7 +108,11 @@ def retrieve_and_generate_answer(query: str, username: str) -> FullQAnswer:
             "username": username,
         }
     )
-    return FullQAnswer(**lambda_response)
+    try:
+        return FullQAnswer(**lambda_response)
+    except Exception as e:
+        print(f"Error parsing KB response: {str(e)}")
+        raise
 
 
 def generate_answer_no_chunking(
@@ -128,4 +132,8 @@ def generate_answer_no_chunking(
         }
     )
 
-    return FullQAnswer(**lambda_response)
+    try:
+        return FullQAnswer(**lambda_response)
+    except Exception as e:
+        print(f"Error parsing LLM response: {str(e)}")
+        raise

@@ -41,18 +41,21 @@ logger.setLevel("DEBUG")
 
 def lambda_handler(event, context):
     """
-    Event will provide:
-    * query
-    * username
-    * optional media name and full transcript (to query one file)
+    Event will provide either:
+    * query and username (to query all media uploaded by that user)
+
+    OR
+    * query, media_name, and full_transcript (to query one specific file)
 
     Lambda returns a json which can be parsed into a FullQAnswer object like
     answer = FullQAnswer(**lambda_response)
     """
     query = event["query"]
-    username = event["username"]
+    username = event.get("username", None)
     media_name = event.get("media_name", None)
     full_transcript = event.get("full_transcript", None)
+
+    assert (query and username) or (query and media_name and full_transcript)
 
     # If no specific media file is selected, use RAG over all files
     if not media_name:

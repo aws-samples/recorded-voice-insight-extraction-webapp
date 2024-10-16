@@ -118,9 +118,7 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
             # If no specific media file is selected, use RAG over all files
             if not selected_media_name:
                 full_answer = retrieve_and_generate_answer(
-                    query=user_message,
-                    username=username,
-                    media_name=None,
+                    query=user_message, username=username
                 )
             # If one file was selected, no retrieval is needed
             else:

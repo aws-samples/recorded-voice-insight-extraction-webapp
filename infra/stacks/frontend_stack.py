@@ -153,11 +153,12 @@ class ReVIEWFrontendStack(Stack):
         self.app_execution_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
         )
-        # Frontend UI needs to be able to invoke lambda function that read/writes to dynamodb
+        # Frontend UI needs to be able to invoke several lambda functions
+        # This will be replaced with API Gateway soon
         self.app_execution_role.add_to_policy(
             statement=iam.PolicyStatement(
                 actions=["lambda:InvokeFunction"],
-                resources=[self.ddb_handler_lambda.function_arn],
+                resources=["*"],
             )
         )
         # Frontend UI needs to access cognito to check logins
