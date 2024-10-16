@@ -14,54 +14,60 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import os
-from boto3 import client
-import json
+"""Lambda to handle interactions with Bedrock Knowledge Base"""
 
-bedrock_agent_runtime_client = client(
-    "bedrock-agent-runtime", region_name=os.environ["AWS_REGION"]
+import os
+from kb.kb_utils import KBQARAG
+import logging
+
+
+KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
+AWS_REGION = os.environ["AWS_REGION"]
+NUM_CHUNKS = os.environ["NUM_CHUNKS"]
+FOUNDATION_MODEL = os.environ["FOUNDATION_MODEL_ID"]
+
+
+# Class to handle connections to Bedrock and QA RAG workflow processes
+kbqarag = KBQARAG(
+    knowledge_base_id=KNOWLEDGE_BASE_ID,
+    region_name=AWS_REGION,
+    num_chunks=NUM_CHUNKS,
+    foundation_model=FOUNDATION_MODEL,
 )
 
-# TODO: use retrieve API with custom stuff to handle chunks and metadata
-CHAT_PROMPT_TEMPLATE = """
-You are an intelligent AI which attempts to answer questions based on an automatically generated transcript.
-
-<transcript>$search_results</transcript>
-
-Each line in the transcript above includes an integer timestamp (in seconds) within square brackets, followed by a statement.
-
-Using only information in the above transcript, attempt to answer the question below.
-
-<question>$query</question>
-
-Your response must contain two parts, an integer timestamp representing the start of the portion of the transcript which contains the answer to the question, and an answer to the question itself. The timestamp should be included within <timestamp></timestamp> tags, and the answer within <answer></answer> tags. If you are unable to answer the question, return a timestamp of -1 and an answer of "I am unable to find the answer to your question within the provided transcript."
-"""
+logger = logging.getLogger()
+logger.setLevel("DEBUG")
 
 
 def lambda_handler(event, context):
-    question = json.loads(event["body"])["question"]
+    """
+    Event will provide:
+    * query
+    * username
+    * optional media name and full transcript (to query one file)
 
-    input_data = {
-        "input": {"text": question},
-        "retrieveAndGenerateConfiguration": {
-            "type": "KNOWLEDGE_BASE",
-            "knowledgeBaseConfiguration": {
-                "knowledgeBaseId": os.environ["KNOWLEDGE_BASE_ID"],
-                "modelArn": os.environ["LLM_ARN"],
-            },
-            "retrievalConfiguration": {
-                "vectorSearchConfiguration": {
-                    "numberOfResults": 1,
-                    # "filter": retrieval_filter, #TODO: filter based on user ID
-                },
-            },
-            "generationConfiguration": {
-                "promptTemplate": {"textPromptTemplate": CHAT_PROMPT_TEMPLATE}
-            },
-        },
-    }
+    Lambda returns a json which can be parsed into a FullQAnswer object like
+    answer = FullQAnswer(**lambda_response)
+    """
+    query = event["query"]
+    username = event["username"]
+    media_name = event.get("media_name", None)
+    full_transcript = event.get("full_transcript", None)
 
-    command = bedrock_agent_runtime_client.RetrieveAndGenerateCommand(input_data)
-    response = bedrock_agent_runtime_client.send(command)
-
-    return {"response": response.output.text}
+    # If no specific media file is selected, use RAG over all files
+    if not media_name:
+        full_answer: dict = kbqarag.retrieve_and_generate_answer(
+            query=query,
+            username=username,
+            media_name=None,
+        )
+    # If one file was selected, no knowledge base or retrieval is needed,
+    # pass the full transcript in to an LLM for generation
+    # Media name is provided for use in the LLM-generated citations
+    else:
+        full_answer: dict = kbqarag.generate_answer_no_chunking(
+            query=query,
+            media_name=media_name,
+            full_transcript=full_transcript,
+        )
+    return full_answer

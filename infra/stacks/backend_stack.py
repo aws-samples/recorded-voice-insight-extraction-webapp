@@ -16,16 +16,13 @@
 
 import aws_cdk.aws_dynamodb as dynamodb
 import aws_cdk.aws_iam as iam
-import aws_cdk.aws_lambda as aws_lambda
+import aws_cdk.aws_lambda as _lambda
 import aws_cdk.aws_logs as logs
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_s3_notifications as s3n
 from aws_cdk import Duration, RemovalPolicy, Stack, Aspects
 from constructs import Construct
 
-# from .frontend_stack import ReVIEWFrontendStack
-# from .rag_stack import ReVIEWKnowledgeBaseRoleStack, ReVIEWKnowledgeBaseStack
-# from .oss_stack import ReVIEWOSSStack
 import cdk_nag
 
 """
@@ -143,6 +140,28 @@ class ReVIEWBackendStack(Stack):
 
         self.ddb_lambda_execution_role.apply_removal_policy(RemovalPolicy.DESTROY)
 
+        # Role for lambda that accesses Bedrock LLMs
+        self.llm_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-LLMLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                ),
+            ],
+        )
+        self.llm_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:InvokeModel",
+                ],
+                resources=["*"],  # Needs access to every LLM
+            )
+        )
+
+        self.llm_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
+
     def setup_buckets(self):
         self.loggingBucket = s3.Bucket(
             self,
@@ -202,15 +221,15 @@ class ReVIEWBackendStack(Stack):
 
     def setup_lambdas(self):
         # Create DDB handler lambda first, as other lambdas need permission to invoke this one
-        self.ddb_handler_lambda = aws_lambda.Function(
+        self.ddb_handler_lambda = _lambda.Function(
             self,
             f"{self.props['unique_stack_name']}-DDBHandlerLambda",
             description=f"Stack {self.props['unique_stack_name']} Function DDBHandlerLambda",
             function_name=f"{self.props['unique_stack_name']}-DDBHandlerLambda",
             handler="ddb.ddb-handler-lambda.lambda_handler",
-            runtime=aws_lambda.Runtime.PYTHON_3_12,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
-            code=aws_lambda.Code.from_asset("lambdas"),
+            code=_lambda.Code.from_asset("lambdas"),
             environment={
                 "DYNAMO_TABLE_NAME": self.props["ddb_table_name"],
             },
@@ -218,15 +237,15 @@ class ReVIEWBackendStack(Stack):
             role=self.ddb_lambda_execution_role,
         )
 
-        self.generate_media_transcript_lambda = aws_lambda.Function(
+        self.generate_media_transcript_lambda = _lambda.Function(
             self,
             f"{self.props['unique_stack_name']}-GenerateMediaTranscript",
             description=f"Stack {self.props['unique_stack_name']} Function GenerateMediaTranscript",
             function_name=f"{self.props['unique_stack_name']}-GenerateMediaTranscript",
             handler="preprocessing.generate-transcript-lambda.lambda_handler",
-            runtime=aws_lambda.Runtime.PYTHON_3_12,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
-            code=aws_lambda.Code.from_asset("lambdas"),
+            code=_lambda.Code.from_asset("lambdas"),
             environment={
                 "DESTINATION_PREFIX": self.props["s3_transcripts_prefix"],
                 "S3_BUCKET": f"{self.props['s3_bucket_name']}",
@@ -245,15 +264,15 @@ class ReVIEWBackendStack(Stack):
             source_account=self.props["account_id"],
         )
 
-        self.postprocess_transcript_lambda = aws_lambda.Function(
+        self.postprocess_transcript_lambda = _lambda.Function(
             self,
             f"{self.props['unique_stack_name']}-PostProcessTranscript",
             description=f"Stack {self.props['unique_stack_name']} Function PostProcessTranscript",
             function_name=f"{self.props['unique_stack_name']}-PostProcessTranscript",
             handler="preprocessing.postprocess-transcript-lambda.lambda_handler",
-            runtime=aws_lambda.Runtime.PYTHON_3_12,
+            runtime=_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
-            code=aws_lambda.Code.from_asset("lambdas"),
+            code=_lambda.Code.from_asset("lambdas"),
             environment={
                 "DESTINATION_PREFIX": self.props["s3_text_transcripts_prefix"],
                 "S3_BUCKET": self.props["s3_bucket_name"],
@@ -280,10 +299,18 @@ class ReVIEWBackendStack(Stack):
             )
         )
 
-        ## This creates a sev2 ticket
-        # self.generate_media_transcript_lambda.grant_invoke(
-        #     iam.ServicePrincipal("s3.amazonaws.com")
-        # )
+        # Lambda to invoke Bedrock LLMs
+        self.llm_lambda = _lambda.Function(
+            self,
+            self.props["stack_name_base"] + "-LLMLambda",
+            function_name=f"{self.props['unique_stack_name']}-LLMHandlerLambda",
+            description="Function for ReVIEW to invoke Bedrock LLM models",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="bedrock.llm-handler-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            timeout=Duration.minutes(5),
+            role=self.llm_lambda_role,
+        )
 
     def setup_events(self):
         # Create event notification to the bucket for lambda functions

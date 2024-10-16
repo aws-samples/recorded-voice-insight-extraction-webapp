@@ -140,14 +140,14 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
         super().__init__(scope, construct_id, **kwargs)
 
         self.source_bucket = source_bucket
-        #   Create Knowledgebase
+        # Create Knowledgebase
         self.knowledge_base = self.create_knowledge_base(
             kb_principal_role, oss_collection_arn
         )
         self.data_source = self.create_data_source(self.knowledge_base)
 
-        # TODO: implement query lambda. For now, putting it in frontend to avoid scope creep on this PR.
-        # self.query_lambda = self.create_query_lambda(self.knowledge_base)
+        # Create lambda to query knowledge base
+        self.query_lambda = self.create_query_lambda(self.knowledge_base)
 
     def create_knowledge_base(
         self, kb_principal_role: iam.Role, oss_collection_arn: str
@@ -221,34 +221,60 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             vector_ingestion_configuration=vector_ingestion_config_variable,
         )
 
-    def create_query_lambda(self, knowledge_base: CfnKnowledgeBase) -> _lambda:
-        # Create a role that allows lambda to query knowledge base
-        self.queryLambdaRole = iam.Role(
+    def create_query_lambda_role(self, knowledge_base: CfnKnowledgeBase) -> iam.Role:
+        """Create a role that allows lambda query Bedrock KB"""
+        query_lambda_role = iam.Role(
             self,
-            f"{self.stack_name_lower}-ReVIEWqueryLambdaRole",
+            f"{self.props['stack_name_base']}-KBQueryLambdaRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "AmazonBedrockFullAccess"
-                )
+                    "CloudWatchLogsFullAccess"
+                ),
             ],
         )
+        query_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:RetrieveAndGenerate",
+                    "bedrock:Retrieve",
+                    "bedrock:InvokeModel",
+                ],
+                resources=["*"],  # Needs access to all LLMs
+            )
+        )
 
-        self.queryLambdaRole.apply_removal_policy(RemovalPolicy.DESTROY)
+        query_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
+        return query_lambda_role
+
+    def create_query_lambda(self, knowledge_base: CfnKnowledgeBase) -> _lambda:
+        # Create a role that allows lambda to query knowledge base
+        # self.queryLambdaRole = iam.Role(
+        #     self,
+        #     f"{self.stack_name_lower}-ReVIEWqueryLambdaRole",
+        #     assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+        #     managed_policies=[
+        #         iam.ManagedPolicy.from_aws_managed_policy_name(
+        #             "AmazonBedrockFullAccess"
+        #         )
+        #     ],
+        # )
 
         query_lambda = _lambda.Function(
             self,
             self.props["stack_name_base"] + "-KBQueryLambda",
+            function_name=f"{self.props['unique_stack_name']}-KBQueryLambda",
             description="Function for ReVIEW to query Knowledge Base",
             runtime=_lambda.Runtime.PYTHON_3_10,
-            handler="kb.kb-query-lambda.handler",
+            handler="kb.kb-query-lambda.lambda_handler",
             code=_lambda.Code.from_asset("lambdas"),
             timeout=Duration.minutes(5),
             environment={
                 "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
-                "LLM_ARN": self.backend_props["llmModelArn"],
+                "FOUNDATION_MODEL_ID": self.props["llm_model_id"],
+                "NUM_CHUNKS": self.props["kb_num_chunks"],
             },
-            role=self.queryLambdaRole,
+            role=self.create_query_lambda_role(knowledge_base=knowledge_base),
         )
         # _fn_url = query_lambda.add_function_url(
         #     auth_type=_lambda.FunctionUrlAuthType.NONE,
@@ -257,17 +283,6 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
         #         "allowed_origins": ["*"],
         #         "allowed_methods": [_lambda.HttpMethod.POST],
         #     },
-        # )
-
-        # query_lambda.add_to_role_policy(
-        #     iam.PolicyStatement(
-        #         actions=[
-        #             "bedrock:RetrieveAndGenerate",
-        #             "bedrock:Retrieve",
-        #             "bedrock:InvokeModel",
-        #         ],
-        #         resources=["*"],
-        #     )
         # )
 
         return query_lambda

@@ -64,6 +64,7 @@ class ConfigManager:
             "kb_max_tokens": self.config["kb"]["max_tokens"],
             "kb_overlap_percentage": self.config["kb"]["overlap_percentage"],
             "kb_role_name": f"{unique_stack_name}-kb-role",
+            "kb_num_chunks": self.config["kb"]["num_chunks"],
             "llm_model_id": self.config["llm"]["model_id"],
             "llm_model_arn": self.config["llm"]["model_arn"],
             "cognito_pool_name": self.config["frontend"]["cognito_pool_name"],

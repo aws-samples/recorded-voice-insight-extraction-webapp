@@ -24,6 +24,7 @@ kb:
   chunking_strategy: "FIXED_SIZE"
   max_tokens: "512"
   overlap_percentage: "20"
+  num_chunks: "5"
 
 llm:
   model_id: "anthropic.claude-3-5-sonnet-20240620-v1:0"
