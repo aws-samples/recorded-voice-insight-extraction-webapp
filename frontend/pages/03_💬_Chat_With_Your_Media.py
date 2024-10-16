@@ -16,7 +16,10 @@
 import os
 import streamlit as st
 
-from components.bedrock_utils import KBQARAG
+from components.bedrock_utils import (
+    retrieve_and_generate_answer,
+    generate_answer_no_chunking,
+)
 from components.db_utils import retrieve_all_items
 from components.s3_utils import retrieve_media_bytes, retrieve_transcript_by_jobid
 from components.cognito_utils import login
@@ -47,23 +50,8 @@ if not st.session_state.get("auth_username", None):
 
 username = st.session_state["auth_username"]
 
-kbqarag_args = {
-    "knowledge_base_id": os.environ["KNOWLEDGE_BASE_ID"],
-    "foundation_model": os.environ["llm_model_id"],
-    "region_name": os.environ["region_name"],
-    "num_chunks": 5,
-}
-
 st.subheader("Pick media file to analyze:")
 display_sidebar()
-
-
-@st.cache_resource
-def get_KBQARAG(**kwargs):
-    return KBQARAG(**kwargs)
-
-
-kbqarag = get_KBQARAG(**kbqarag_args)
 
 job_df = retrieve_all_items(username=username)
 completed_jobs = job_df[job_df.job_status == "Completed"]
@@ -129,7 +117,7 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
         with st.spinner("Thinking..."):
             # If no specific media file is selected, use RAG over all files
             if not selected_media_name:
-                full_answer = kbqarag.retrieve_and_generate_answer(
+                full_answer = retrieve_and_generate_answer(
                     query=user_message,
                     username=username,
                     media_name=None,
@@ -142,7 +130,7 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
                 full_transcript = retrieve_transcript_by_jobid(
                     job_id=selected_job_id, username=username
                 )
-                full_answer = kbqarag.generate_answer_no_chunking(
+                full_answer = generate_answer_no_chunking(
                     query=user_message,
                     media_name=selected_media_name,
                     full_transcript=full_transcript,

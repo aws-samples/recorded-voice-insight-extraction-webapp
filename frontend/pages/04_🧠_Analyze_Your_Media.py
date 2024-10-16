@@ -16,7 +16,7 @@
 
 import streamlit as st
 import streamlit_scrollable_textbox as stx
-from components.bedrock_utils import LLM, get_analysis_templates, run_analysis
+from components.bedrock_utils import get_analysis_templates, run_analysis
 from components.db_utils import (
     retrieve_all_items,
     retrieve_analysis_by_jobid,
@@ -41,13 +41,6 @@ if not st.session_state.get("auth_username", None):
 st.subheader("Pick a media file to analyze:")
 display_sidebar()
 
-
-@st.cache_resource
-def get_LLM():
-    return LLM()
-
-
-llm = get_LLM()
 
 job_df = retrieve_all_items(username=st.session_state["auth_username"])
 completed_jobs = job_df[job_df.job_status == "Completed"]
@@ -97,12 +90,12 @@ if button_clicked:
     else:
         st.info("Analysis results will be displayed here when complete:")
         username = st.session_state["auth_username"]
-        print(f"retrieving {selected_job_id=} {username=}")
+
         transcript = retrieve_transcript_by_jobid(
             job_id=selected_job_id, username=st.session_state["auth_username"]
         )
         analysis_result = run_analysis(
-            analysis_id=selected_analysis_id, transcript=transcript, llm=llm
+            analysis_id=selected_analysis_id, transcript=transcript
         )
         store_analysis_result(
             job_id=selected_job_id,
