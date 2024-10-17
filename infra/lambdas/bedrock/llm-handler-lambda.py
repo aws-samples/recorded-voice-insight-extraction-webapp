@@ -46,8 +46,6 @@ def lambda_handler(event, context):
     if "body" in event:
         event = json.loads(event["body"])
 
-    event = json.loads(event["body"])
-
     foundation_model_id = event["foundation_model_id"]
     system_prompt = event["system_prompt"]
     main_prompt = event["main_prompt"]
