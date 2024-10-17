@@ -50,6 +50,15 @@ def lambda_handler(event, context):
     Lambda returns a json which can be parsed into a FullQAnswer object like
     answer = FullQAnswer(**lambda_response)
     """
+    # When this lambda is called by the frontend via API gateway, the event
+    # has a 'body' key. When this lambda is called by other lambdas, this is
+    # unnecessary
+
+    logger.debug(f"{event=}")
+
+    if "body" in event:
+        event = json.loads(event["body"])
+
     query = event["query"]
     username = event.get("username", None)
     media_name = event.get("media_name", None)
