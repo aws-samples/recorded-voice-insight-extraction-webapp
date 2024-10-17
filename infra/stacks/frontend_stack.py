@@ -14,26 +14,24 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-from aws_cdk import aws_cognito as cognito
-
-import boto3
-from aws_cdk import Duration, RemovalPolicy, CfnOutput, Stack
-from aws_cdk import aws_ec2 as ec2
-
 import os
 from pathlib import Path
-from aws_cdk import aws_ecs as ecs
-from aws_cdk import aws_elasticloadbalancingv2 as elbv2
-from aws_cdk import aws_iam as iam
+
+import boto3
+import cdk_nag
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as cfo
-
+from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_ec2 as ec2
+from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_ecs_patterns as ecs_patterns
-import cdk_nag
+from aws_cdk import aws_elasticloadbalancingv2 as elbv2
+from aws_cdk import aws_iam as iam
 
 
 class ReVIEWFrontendStack(Stack):
-    def __init__(self, scope, props: dict, **kwargs):
+    def __init__(self, scope, props: dict, api_url: str, **kwargs):
         self.props = props
         construct_id = props["stack_name_base"] + "-frontend"
         super().__init__(scope, construct_id, **kwargs)
@@ -45,8 +43,8 @@ class ReVIEWFrontendStack(Stack):
         # construct_id here is "review-prod-streamlit"
         self.fe_stack_name = construct_id
 
-        # TODO: this will be replaced with API Gateway
-        self.ddb_handler_lambda = props["ddb_handler_lambda"]
+        # This will be exported as an env variable in the frontend, for it to call API Gateway
+        self.backend_api_url = api_url
 
         self.setup_cognito()
         self.create_frontend_app_execution_role()
@@ -102,6 +100,7 @@ class ReVIEWFrontendStack(Stack):
                 environment={
                     "COGNITO_CLIENT_ID": self.cognito_user_pool_client.user_pool_client_id,
                     "COGNITO_POOL_ID": self.cognito_user_pool_id,
+                    "BACKEND_API_URL": self.backend_api_url,
                     # Export all string props as environment variables in the frontend
                     **{k: v for k, v in self.props.items() if isinstance(v, str)},
                 },
@@ -143,31 +142,20 @@ class ReVIEWFrontendStack(Stack):
             f"{self.fe_stack_name}-frontendAppExecutionRole",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
         )
-        # TODO: is this necessary?
-        self.app_execution_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "AmazonAPIGatewayInvokeFullAccess"
-            )
-        )
         # Frontend UI needs read/write access to s3
         self.app_execution_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
-        )
-        # Frontend UI needs to be able to invoke several lambda functions
-        # This will be replaced with API Gateway soon
-        self.app_execution_role.add_to_policy(
-            statement=iam.PolicyStatement(
-                actions=["lambda:InvokeFunction"],
-                resources=["*"],
-            )
         )
         # Frontend UI needs to access cognito to check logins
         self.app_execution_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name("AmazonCognitoReadOnly")
         )
-        # Frontend UI needs to call bedrock
+        # Frontend needs access to API gateway
+        # TODO: limit this to just the API gateway of our backend
         self.app_execution_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess")
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "AmazonAPIGatewayInvokeFullAccess"
+            )
         )
 
     def setup_cognito(self):

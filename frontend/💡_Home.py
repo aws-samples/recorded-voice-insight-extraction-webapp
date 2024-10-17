@@ -33,7 +33,6 @@ def main():
     Main app function
     """
 
-    # input_col, output_col = st.columns([0.5, 0.5], gap="medium")
     st.title("ReVIEW: Recorded Voice Insight Extraction Webapp")
     if not st.session_state.get("auth_username", None):
         st.info("Please login to continue.")

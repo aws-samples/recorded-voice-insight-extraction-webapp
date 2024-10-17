@@ -16,40 +16,39 @@
 
 """Utilities related to accessing dynamoDB"""
 
-import boto3
 import pandas as pd
 import json
+import os
+import requests
 
-# Create a Lambda client
-lambda_client = boto3.client("lambda")
+from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
 
-
-# TODO: replace with API gateway
-def invoke_ddb_lambda(action, params):
-    lambda_params = {
-        "FunctionName": "review-dev-339712833620-DDBHandlerLambda",  # API gateway knows this
-        "InvocationType": "RequestResponse",
-        "Payload": json.dumps({"action": action, **params}),
-    }
-
-    try:
-        response = lambda_client.invoke(**lambda_params)
-        result = json.loads(response["Payload"].read().decode("utf-8"))
-        return json.loads(result["body"]) if result.get("body") else None
-    except Exception as e:
-        print(f"Error invoking Lambda: {str(e)}")
-        raise
+BACKEND_API_URL = os.environ["BACKEND_API_URL"]
+backend_api_auth = BotoAWSRequestsAuth(
+    aws_host=BACKEND_API_URL + "/ddb",
+    aws_region="us-east-1",
+    aws_service="execute-api",
+)
 
 
 def retrieve_all_items(username, max_rows=None) -> pd.DataFrame:
     """Query dynamodb table for rows from this username and return
     specific columns w/ optional max # of rows"""
 
-    lambda_results = invoke_ddb_lambda(
-        "retrieve_all_items", {"username": username, "max_rows": max_rows}
+    json_body = {
+        "action": "retrieve_all_items",
+        "username": username,
+        "max_rows": max_rows,
+    }
+    response = requests.post(
+        BACKEND_API_URL + "/ddb",
+        json=json_body,
+        auth=backend_api_auth,
     )
+    result = json.loads(response.text)
+
     # Lambda returns json, convert to dataframe for UI
-    if not lambda_results:
+    if not result:
         # If no results at all in the DB (user hasn't uploaded anything yet),
         # return an empty dataframe with the right columns so user at least sees
         # what they should expect
@@ -58,7 +57,7 @@ def retrieve_all_items(username, max_rows=None) -> pd.DataFrame:
         )
 
     result_df = (
-        pd.DataFrame.from_records(lambda_results)
+        pd.DataFrame.from_records(result)
         .sort_values("job_creation_time", ascending=False)
         .reset_index(drop=True)
     )
@@ -72,10 +71,19 @@ def retrieve_analysis_by_jobid(
     """Retrieve analysis from dynamodb table by job_id
     (if analysis is cached, else none)"""
 
-    return invoke_ddb_lambda(
-        "retrieve_analysis_by_jobid",
-        {"job_id": job_id, "username": username, "template_id": int(template_id)},
+    json_body = {
+        "action": "retrieve_analysis_by_jobid",
+        "job_id": job_id,
+        "username": username,
+        "template_id": int(template_id),
+    }
+    response = requests.post(
+        BACKEND_API_URL + "/ddb",
+        json=json_body,
+        auth=backend_api_auth,
     )
+    result = json.loads(response.text)
+    return result
 
 
 def store_analysis_result(
@@ -83,12 +91,17 @@ def store_analysis_result(
 ) -> str | None:
     """Store completed analysis in dynamodb table"""
 
-    return invoke_ddb_lambda(
-        "store_analysis_result",
-        {
-            "job_id": job_id,
-            "username": username,
-            "template_id": int(template_id),
-            "analysis_result": analysis_result,
-        },
+    json_body = {
+        "action": "store_analysis_result",
+        "job_id": job_id,
+        "username": username,
+        "template_id": int(template_id),
+        "analysis_result": analysis_result,
+    }
+    response = requests.post(
+        BACKEND_API_URL + "/ddb",
+        json=json_body,
+        auth=backend_api_auth,
     )
+    result = json.loads(response.text)
+    return result

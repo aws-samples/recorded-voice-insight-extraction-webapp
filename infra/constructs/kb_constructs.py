@@ -15,8 +15,6 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-# Heavy inspo from here:
-# https://github.com/aws-samples/amazon-bedrock-samples/tree/main/knowledge-bases/features-examples/04-infrastructure/e2e_rag_using_bedrock_kb_cdk
 import aws_cdk.aws_logs as logs
 import aws_cdk.aws_s3 as s3
 
@@ -289,7 +287,10 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
 
 
 class ReVIEWKnowledgeBaseSyncConstruct(Construct):
-    """Construct to handle syncing of knowledge base (w/ polling for status)"""
+    """Construct to handle syncing of knowledge base (w/ polling for status)
+    ddb_lambda is provided because KB sync step functions invoke a lambda to store
+            job status in a dynamo table
+    """
 
     def __init__(
         self,
@@ -298,13 +299,14 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         knowledge_base: CfnKnowledgeBase,
         data_source: CfnDataSource,
         source_bucket: s3.Bucket,
+        ddb_lambda: _lambda.Function,
         **kwargs,
     ):
         self.props = props
         construct_id = props["stack_name_base"] + "-kbsyncconstruct"
         super().__init__(scope, construct_id, **kwargs)
 
-        self.ddb_handler_lambda = props["ddb_handler_lambda"]
+        self.ddb_handler_lambda = ddb_lambda
 
         # Create ingest lambda
         self.ingest_lambda = self.create_ingest_lambda(knowledge_base, data_source)

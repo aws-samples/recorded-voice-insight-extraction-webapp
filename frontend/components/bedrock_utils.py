@@ -19,8 +19,10 @@
 import json
 import os
 import sys
+import requests
 
-import boto3
+from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
+
 import pandas as pd
 
 # Add frontend dir to system path to import FullQAnswer
@@ -32,38 +34,20 @@ sys.path.append(
 
 from schemas.qa_response import FullQAnswer
 
-# Create a Lambda client
-lambda_client = boto3.client("lambda")
+BACKEND_API_URL = os.environ["BACKEND_API_URL"]
 
+backend_api_auth = BotoAWSRequestsAuth(
+    aws_host=BACKEND_API_URL + "/llm",
+    aws_region="us-east-1",
+    aws_service="execute-api",
+)
 
-# TODO: replace with API gateway
-def invoke_llm_lambda(params):
-    lambda_params = {
-        "FunctionName": "review-dev-339712833620-LLMHandlerLambda",  # API gateway knows this
-        "InvocationType": "RequestResponse",
-        "Payload": json.dumps({**params}),
-    }
-    try:
-        response = lambda_client.invoke(**lambda_params)
-        return json.loads(response["Payload"].read().decode("utf-8"))
-    except Exception as e:
-        print(f"Error invoking Lambda: {str(e)}")
-        raise
-
-
-# TODO: replace with API gateway
-def invoke_kb_lambda(params):
-    lambda_params = {
-        "FunctionName": "review-dev-339712833620-KBQueryLambda",  # API gateway knows this
-        "InvocationType": "RequestResponse",
-        "Payload": json.dumps({**params}),
-    }
-    try:
-        response = lambda_client.invoke(**lambda_params)
-        return json.loads(response["Payload"].read().decode("utf-8"))
-    except Exception as e:
-        print(f"Error invoking Lambda: {str(e)}")
-        raise
+# TODO can we just use base host?
+backend_kb_api_auth = BotoAWSRequestsAuth(
+    aws_host=BACKEND_API_URL + "/kb",
+    aws_region="us-east-1",
+    aws_service="execute-api",
+)
 
 
 def get_analysis_templates() -> pd.DataFrame:
@@ -87,31 +71,43 @@ def run_analysis(analysis_id: int, transcript: str):
     ana_prompt = ana_template.format(transcript=transcript)
     ana_kwargs = json.loads(ana_series["bedrock_kwargs"])
     ana_model_id = ana_series["model_id"]
+
     # Inference LLM & return result
-    return invoke_llm_lambda(
-        {
-            "foundation_model_id": ana_model_id,
-            "system_prompt": system_prompt,
-            "main_prompt": ana_prompt,
-            "bedrock_kwargs": ana_kwargs,
-        }
+    json_body = {
+        "foundation_model_id": ana_model_id,
+        "system_prompt": system_prompt,
+        "main_prompt": ana_prompt,
+        "bedrock_kwargs": ana_kwargs,
+    }
+    response = requests.post(
+        BACKEND_API_URL + "/llm",
+        json=json_body,
+        auth=backend_api_auth,
     )
+    result = json.loads(response.text)
+
+    return result
 
 
 def retrieve_and_generate_answer(query: str, username: str) -> FullQAnswer:
     """Query knowledge base and generate an answer. Only filter applied is
     the username (so each user can only query their own files)"""
 
-    lambda_response = invoke_kb_lambda(
-        {
-            "query": query,
-            "username": username,
-        }
+    json_body = {
+        "query": query,
+        "username": username,
+    }
+    response = requests.post(
+        BACKEND_API_URL + "/kb",
+        json=json_body,
+        auth=backend_kb_api_auth,
     )
+    result = json.loads(response.text)
+
     try:
-        return FullQAnswer(**lambda_response)
+        return FullQAnswer(**result)
     except Exception as e:
-        print(f"Error parsing KB response: {str(e)}")
+        print(f"Error parsing KB result: {str(e)}")
         raise
 
 
@@ -124,16 +120,20 @@ def generate_answer_no_chunking(
     the LLM-generated citations. KB lambda is used for convenience, as it has all of
     the prompt engineering / output parsing required to form FullQAnswer objects."""
 
-    lambda_response = invoke_kb_lambda(
-        {
-            "query": query,
-            "full_transcript": full_transcript,
-            "media_name": media_name,
-        }
+    json_body = {
+        "query": query,
+        "full_transcript": full_transcript,
+        "media_name": media_name,
+    }
+    response = requests.post(
+        BACKEND_API_URL + "/kb",
+        json=json_body,
+        auth=backend_kb_api_auth,
     )
+    result = json.loads(response.text)
 
     try:
-        return FullQAnswer(**lambda_response)
+        return FullQAnswer(**result)
     except Exception as e:
-        print(f"Error parsing LLM response: {str(e)}")
+        print(f"Error parsing LLM result: {str(e)}")
         raise

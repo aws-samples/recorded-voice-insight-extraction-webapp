@@ -14,11 +14,9 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-# Heavy inspo from here:
-# https://github.com/aws-samples/amazon-bedrock-samples/tree/main/knowledge-bases/features-examples/04-infrastructure/e2e_rag_using_bedrock_kb_cdk
 from aws_cdk import Stack
 import aws_cdk.aws_s3 as s3
+import aws_cdk.aws_lambda as _lambda
 from infra.constructs.kb_constructs import (
     ReVIEWKnowledgeBaseConstruct,
     ReVIEWKnowledgeBaseRole,
@@ -30,8 +28,10 @@ from infra.constructs.oss_constructs import ReVIEWOSSConstruct
 class ReVIEWRAGStack(Stack):
     """Stack to deploy both knowledge base and opensearch serverless"""
 
-    def __init__(self, scope, props: dict, **kwargs):
-        """source_bucket is the s3 bucket from which KB will grab text files to index"""
+    def __init__(self, scope, props: dict, ddb_lambda: _lambda.Function, **kwargs):
+        """source_bucket is the s3 bucket from which KB will grab text files to index
+        ddb_lambda is provided because KB sync step functions invoke a lambda to store
+        job status in a dynamo table"""
         self.props = props
         construct_id = props["stack_name_base"] + "-rag"
         super().__init__(scope, construct_id, **kwargs)
@@ -71,5 +71,6 @@ class ReVIEWRAGStack(Stack):
             props=props,
             knowledge_base=self.kb_construct.knowledge_base,
             data_source=self.kb_construct.data_source,
+            ddb_lambda=ddb_lambda,
             source_bucket=source_bucket,
         )

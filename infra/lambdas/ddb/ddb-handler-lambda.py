@@ -20,6 +20,10 @@ import boto3
 import ddb.ddb_utils as ddb_utils
 from schemas.job_status import JobStatus
 import os
+import logging
+
+logger = logging.getLogger()
+logger.setLevel("DEBUG")
 
 TABLE_NAME = os.environ["DYNAMO_TABLE_NAME"]
 dyn_resource = boto3.resource("dynamodb")
@@ -28,6 +32,15 @@ table = dyn_resource.Table(name=TABLE_NAME)
 
 def lambda_handler(event, context):
     """Call appropriate ddb_utils function based on 'action' field of event input"""
+    # When this lambda is called by the frontend via API gateway, the event
+    # has a 'body' key. When this lambda is called by other lambdas, this is
+    # unnecessary
+
+    logger.debug(f"{event=}")
+
+    if "body" in event:
+        event = json.loads(event["body"])
+
     action = event["action"]
 
     if action == "retrieve_all_items":

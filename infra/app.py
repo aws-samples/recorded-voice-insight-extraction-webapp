@@ -10,6 +10,7 @@ import aws_cdk as cdk
 from stacks.backend_stack import ReVIEWBackendStack
 from stacks.frontend_stack import ReVIEWFrontendStack
 from stacks.rag_stack import ReVIEWRAGStack
+from stacks.api_stack import ReVIEWAPIStack
 from utils.config_manager import ConfigManager
 
 config_manager = ConfigManager("config.yaml")
@@ -35,25 +36,27 @@ backend_stack = ReVIEWBackendStack(
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
 )
 
-# Downstream stacks need access to the dynamodb handling lambda function
-# (e.g. those stacks will deploy lambda functions which need scoped permission
-# to invoke the dynamodb handling lambda
-props["ddb_handler_lambda"] = backend_stack.ddb_handler_lambda
-
 # RAG stack (OSS + Bedrock KB)
-rag_stack = ReVIEWRAGStack(app, props)
+# DynamoDB handler lambda provided because the knowledge base ingest/sync
+# functions use it to update job statuses in a dynamoDB table
+rag_stack = ReVIEWRAGStack(app, props, ddb_lambda=backend_stack.ddb_handler_lambda)
 
-# Add knowledge base ID to props for frontend to use
-props["KNOWLEDGE_BASE_ID"] = (
-    rag_stack.kb_construct.knowledge_base.attr_knowledge_base_id
+# API stack for frontend to communicate with backend
+api_stack = ReVIEWAPIStack(
+    app,
+    props,
+    llm_lambda=backend_stack.llm_lambda,
+    ddb_lambda=backend_stack.ddb_handler_lambda,
+    kb_query_lambda=rag_stack.kb_construct.query_lambda,
 )
 
 # Frontend stack
-frontend_stack = ReVIEWFrontendStack(app, props)
+frontend_stack = ReVIEWFrontendStack(app, props, api_url=api_stack.api.url)
+
 
 # Enforce ordering of stacks via dependency
-# because backend stack needs to create s3 buckets that are used by rag_stack
 rag_stack.add_dependency(backend_stack)
 frontend_stack.add_dependency(rag_stack)
+frontend_stack.add_dependency(api_stack)
 
 app.synth()

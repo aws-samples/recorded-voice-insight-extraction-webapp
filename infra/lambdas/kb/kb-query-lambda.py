@@ -19,7 +19,7 @@
 import os
 from kb.kb_utils import KBQARAG
 import logging
-
+import json
 
 KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
 AWS_REGION = os.environ["AWS_REGION"]
@@ -73,4 +73,4 @@ def lambda_handler(event, context):
             media_name=media_name,
             full_transcript=full_transcript,
         )
-    return full_answer
+    return {"statusCode": 200, "body": json.dumps(full_answer)}

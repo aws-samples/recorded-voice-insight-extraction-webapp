@@ -3,3 +3,4 @@ streamlit-scrollable-textbox==0.0.3
 streamlit-cognito-auth==1.3.1
 pandas==2.2.1
 boto3==1.35.32
+aws-requests-auth==0.4.3 # for frontend to use IAM auth to access API Gateway
