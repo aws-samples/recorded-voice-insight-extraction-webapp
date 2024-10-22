@@ -41,7 +41,7 @@ Here is an overview of the architecture for the solution.
 
 Here is a screenshot of the chat functionality. Here, the user asked whether any new products were announced in a collection of uploaded videos of public AWS presentations. Since several videos mentioned the announcement of SageMaker HyperPods, three buttons appear which auto play the cited videos at the relevant timestamp when the announcements occurred. This is the critical user experience that allows the users to verify accuracy of LLM-generated answers for themselves.
 <p align="center">
-    <img src=diagram/ReVIEW-chat-screenshot-20241022.png alt="chat_screenshot" width="70%">
+    <img src=diagram/ReVIEW-chat-screenshot-20241022.png alt="chat_screenshot" width="90%">
 </p>
 
 # Architecture
