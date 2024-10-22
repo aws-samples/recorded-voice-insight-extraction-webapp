@@ -52,11 +52,14 @@ def lambda_handler(event, context):
     bedrock_kwargs = event["bedrock_kwargs"]
 
     # Inference LLM & return result
-    generation = llm.generate(
-        model_id=foundation_model_id,
-        system_prompt=system_prompt,
-        prompt=main_prompt,
-        kwargs=bedrock_kwargs,
-    )
+    try:
+        generation = llm.generate(
+            model_id=foundation_model_id,
+            system_prompt=system_prompt,
+            prompt=main_prompt,
+            kwargs=bedrock_kwargs,
+        )
+    except Exception as e:
+        return {"statusCode": 500, "body": f"Internal server error: {e}"}
 
     return {"statusCode": 200, "body": json.dumps(generation)}

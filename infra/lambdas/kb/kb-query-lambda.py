@@ -68,20 +68,26 @@ def lambda_handler(event, context):
 
     # If no specific media file is selected, use RAG over all files
     if not media_name:
-        full_answer: dict = kbqarag.retrieve_and_generate_answer(
-            query=query,
-            username=username,
-            media_name=None,
-        )
+        try:
+            full_answer: dict = kbqarag.retrieve_and_generate_answer(
+                query=query,
+                username=username,
+                media_name=None,
+            )
+        except Exception as e:
+            return {"statusCode": 500, "body": f"Internal server error: {e}"}
+
     # If one file was selected, no knowledge base or retrieval is needed,
     # pass the full transcript in to an LLM for generation
     # Media name is provided for use in the LLM-generated citations
     else:
-        full_answer: dict = kbqarag.generate_answer_no_chunking(
-            query=query,
-            media_name=media_name,
-            full_transcript=full_transcript,
-        )
+        try:
+            full_answer: dict = kbqarag.generate_answer_no_chunking(
+                query=query,
+                media_name=media_name,
+                full_transcript=full_transcript,
+            )
+        except Exception as e:
+            return {"statusCode": 500, "body": f"Internal server error: {e}"}
 
-    # TODO: Add error handling, e.g. if Bedrock throttles requests
     return {"statusCode": 200, "body": json.dumps(full_answer)}

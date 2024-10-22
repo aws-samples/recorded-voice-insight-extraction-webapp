@@ -61,7 +61,7 @@ def run_analysis(analysis_id: int, transcript: str, api_auth_token: str):
         headers={"Authorization": api_auth_token},
     )
     if response.status_code != 200:
-        raise Exception(f"Non 200 response from API gateway: {response.reason}")
+        raise Exception(f"Non 200 response from API gateway: {response.text}")
 
     result = json.loads(response.text)
 
@@ -84,7 +84,7 @@ def retrieve_and_generate_answer(
         headers={"Authorization": api_auth_token},
     )
     if response.status_code != 200:
-        raise Exception(f"Non 200 response from API gateway: {response.reason}")
+        raise Exception(f"Non 200 response from API gateway: {response.text}")
 
     result = json.loads(response.text)
 
@@ -115,7 +115,7 @@ def generate_answer_no_chunking(
         headers={"Authorization": api_auth_token},
     )
     if response.status_code != 200:
-        raise Exception(f"Non 200 response from API gateway: {response.reason}")
+        raise Exception(f"Non 200 response from API gateway: {response.text}")
 
     result = json.loads(response.text)
 
