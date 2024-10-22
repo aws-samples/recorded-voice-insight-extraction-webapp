@@ -16,13 +16,14 @@
 
 """Helper utilities for working with Amazon Cognito"""
 
+import streamlit as st
 from streamlit_cognito_auth import CognitoAuthenticator
 import os
 
 
 def login():
     """Display cognito login screen, on success set "auth_username" session state variable
-    (and a bunch of other session variables not explicitly used elsewhere)
+    and "auth_id_token", and a bunch of other session variables not explicitly used elsewhere.
     """
 
     # This sets "auth_username" session state variable if successful, otherwise it's ""

@@ -74,10 +74,10 @@ def draw_or_redraw_citation_buttons(full_answer=None):
                     buttons.append(st.button(f"[{i}]", key=f"citation_button_{i}"))
 
 
-def display_video_at_timestamp(media_bytes, timestamp):
+def display_video_at_timestamp(media_url, timestamp):
     if timestamp >= 0:
         # Note: this works for audio files, too.
         _video = st.video(
-            data=media_bytes,
+            data=media_url,
             start_time=timestamp,
         )

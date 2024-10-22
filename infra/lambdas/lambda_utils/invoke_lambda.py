@@ -14,22 +14,23 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""Helper utilities for parsing LLM responses"""
 
-import re
+import json
 
 
-def extract_timestamp_and_answer(input_string: str) -> tuple[str, int]:
-    """
-    Extract timestamp and answer strings from LLM response
-    and return (answer_string, media_timestamp_in_seconds)
-    """
-    pattern = re.compile(r"<timestamp>(.*?)</timestamp>", re.DOTALL)
-    match = pattern.search(input_string.replace("[", "").replace("]", ""))
-    timestamp_int = int(match.group(1))
+def invoke_lambda(lambda_client, lambda_function_name: str, action: str, params: dict):
+    """Generic function to use a boto3 lambda client to invoke a lambda function
+    Note: params must be json serializable"""
+    lambda_params = {
+        "FunctionName": lambda_function_name,
+        "InvocationType": "RequestResponse",
+        "Payload": json.dumps({"action": action, **params}),
+    }
 
-    pattern = re.compile(r"<answer>(.*?)</answer>", re.DOTALL)
-    match = pattern.search(input_string)
-    answer_str = match.group(1)
-
-    return (answer_str, timestamp_int)
+    try:
+        response = lambda_client.invoke(**lambda_params)
+        result = json.loads(response["Payload"].read().decode("utf-8"))
+        return json.loads(result["body"]) if result.get("body") else None
+    except Exception as e:
+        print(f"Error invoking Lambda: {str(e)}")
+        raise

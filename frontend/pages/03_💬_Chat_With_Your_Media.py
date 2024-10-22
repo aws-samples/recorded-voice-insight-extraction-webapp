@@ -13,18 +13,20 @@
 # HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-import os
-import streamlit as st
 
-from components.bedrock_utils import KBQARAG
-from components.db_utils import retrieve_all_items
-from components.s3_utils import retrieve_media_bytes, retrieve_transcript_by_jobid
+import streamlit as st
+from components.bedrock_utils import (
+    generate_answer_no_chunking,
+    retrieve_and_generate_answer,
+)
 from components.cognito_utils import login
+from components.db_utils import retrieve_all_items
+from components.s3_utils import retrieve_media_url, retrieve_transcript_by_jobid
 from components.streamlit_utils import (
     display_sidebar,
-    reset_citation_session_state,
-    draw_or_redraw_citation_buttons,
     display_video_at_timestamp,
+    draw_or_redraw_citation_buttons,
+    reset_citation_session_state,
 )
 
 # Initialize chat history
@@ -46,26 +48,14 @@ if not st.session_state.get("auth_username", None):
     st.stop()
 
 username = st.session_state["auth_username"]
-
-kbqarag_args = {
-    "knowledge_base_id": os.environ["KNOWLEDGE_BASE_ID"],
-    "foundation_model": os.environ["llm_model_id"],
-    "region_name": os.environ["region_name"],
-    "num_chunks": 5,
-}
+api_auth_token = st.session_state["auth_id_token"]
 
 st.subheader("Pick media file to analyze:")
 display_sidebar()
 
-
-@st.cache_resource
-def get_KBQARAG(**kwargs):
-    return KBQARAG(**kwargs)
-
-
-kbqarag = get_KBQARAG(**kbqarag_args)
-
-job_df = retrieve_all_items(username=username)
+job_df = retrieve_all_items(
+    username=username, max_rows=None, api_auth_token=api_auth_token
+)
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
 CHAT_WITH_ALL_STRING = "Chat with all media files"
@@ -102,11 +92,11 @@ if st.session_state.get("n_buttons", 0):
                 f"citation_timestamp_{clicked_citation_index}"
             ]
             # Display the appropriate video
-            clicked_media_bytes = retrieve_media_bytes(
-                clicked_citation_media, username=username
+            clicked_media_url = retrieve_media_url(
+                clicked_citation_media, username=username, api_auth_token=api_auth_token
             )
 
-            display_video_at_timestamp(clicked_media_bytes, clicked_citation_timestamp)
+            display_video_at_timestamp(clicked_media_url, clicked_citation_timestamp)
             # Redraw the buttons
             draw_or_redraw_citation_buttons()
 
@@ -129,10 +119,10 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
         with st.spinner("Thinking..."):
             # If no specific media file is selected, use RAG over all files
             if not selected_media_name:
-                full_answer = kbqarag.retrieve_and_generate_answer(
+                full_answer = retrieve_and_generate_answer(
                     query=user_message,
                     username=username,
-                    media_name=None,
+                    api_auth_token=api_auth_token,
                 )
             # If one file was selected, no retrieval is needed
             else:
@@ -140,21 +130,26 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
                     "UUID"
                 ].values[0]
                 full_transcript = retrieve_transcript_by_jobid(
-                    job_id=selected_job_id, username=username
+                    job_id=selected_job_id,
+                    username=username,
+                    api_auth_token=api_auth_token,
                 )
-                full_answer = kbqarag.generate_answer_no_chunking(
+                full_answer = generate_answer_no_chunking(
                     query=user_message,
                     media_name=selected_media_name,
                     full_transcript=full_transcript,
+                    api_auth_token=api_auth_token,
                 )
 
     # If answer has any citations, automatically queue up the media to the first citation
     first_citation = None
     try:
         first_citation = full_answer.get_first_citation()
-        media_bytes = retrieve_media_bytes(first_citation.media_name, username=username)
+        media_url = retrieve_media_url(
+            first_citation.media_name, username=username, api_auth_token=api_auth_token
+        )
         display_video_at_timestamp(
-            media_bytes,
+            media_url,
             first_citation.timestamp,
         )
     except ValueError:

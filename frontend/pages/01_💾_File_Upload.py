@@ -17,7 +17,7 @@
 import streamlit as st
 from components.cognito_utils import login
 from components.streamlit_utils import display_sidebar
-from components.s3_utils import uploadToS3
+from components.s3_utils import upload_to_s3
 from components.io_utils import check_valid_file_extension
 
 st.set_page_config(
@@ -35,6 +35,9 @@ if not st.session_state.get("auth_username", None):
     login()
     st.stop()
 
+username = st.session_state["auth_username"]
+api_auth_token = st.session_state["auth_id_token"]
+
 display_sidebar()
 
 uploaded_file = st.file_uploader("Upload a video or audio recording.")
@@ -46,8 +49,11 @@ if uploaded_file is not None:
         st.stop()
 
     st.info(f"Uploading file {uploaded_file.name}...")
-    upload_successful = uploadToS3(
-        uploaded_file, username=st.session_state["auth_username"]
+    upload_successful = upload_to_s3(
+        uploaded_file,
+        filename=uploaded_file.name,
+        username=username,
+        api_auth_token=api_auth_token,
     )
     if upload_successful:
         st.success(

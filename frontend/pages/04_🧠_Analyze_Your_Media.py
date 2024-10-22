@@ -16,14 +16,15 @@
 
 import streamlit as st
 import streamlit_scrollable_textbox as stx
-from components.bedrock_utils import LLM, get_analysis_templates, run_analysis
+from components.bedrock_utils import run_analysis
+from components.cognito_utils import login
 from components.db_utils import (
     retrieve_all_items,
     retrieve_analysis_by_jobid,
     store_analysis_result,
 )
+from components.io_utils import get_analysis_templates
 from components.s3_utils import retrieve_transcript_by_jobid
-from components.cognito_utils import login
 from components.streamlit_utils import display_sidebar
 
 st.set_page_config(
@@ -41,15 +42,14 @@ if not st.session_state.get("auth_username", None):
 st.subheader("Pick a media file to analyze:")
 display_sidebar()
 
+username = st.session_state["auth_username"]
+api_auth_token = st.session_state["auth_id_token"]
 
-@st.cache_resource
-def get_LLM():
-    return LLM()
-
-
-llm = get_LLM()
-
-job_df = retrieve_all_items(username=st.session_state["auth_username"])
+job_df = retrieve_all_items(
+    username=username,
+    max_rows=None,
+    api_auth_token=api_auth_token,
+)
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
 selected_media_name = st.selectbox(
@@ -77,9 +77,9 @@ if selected_media_name and selected_analysis_name:
 if button_clicked:
     st.subheader("Analysis Results:")
 
-    # Todo: make this better... fails e.g. if there are duplicate media names
+    # TODO: this fails e.g. if there are duplicate media names
     selected_job_id = job_df[job_df.media_name == selected_media_name]["UUID"].values[0]
-    # Todo: make this better... fails e.g. if there are duplicate short analysis names
+    # TODO: this fails e.g. if there are duplicate short analysis names
     selected_analysis_id = template_df[
         template_df.template_short_name == selected_analysis_name
     ].template_id.values[0]
@@ -87,8 +87,9 @@ if button_clicked:
     # If this analysis has already been run and the result is in dynamo, display it
     cached_results = retrieve_analysis_by_jobid(
         job_id=selected_job_id,
-        username=st.session_state["auth_username"],
+        username=username,
         template_id=selected_analysis_id,
+        api_auth_token=api_auth_token,
     )
     if cached_results:
         st.info("Displaying cached analysis result:")
@@ -96,19 +97,21 @@ if button_clicked:
     # Otherwise run the analysis and store the results in dynamo
     else:
         st.info("Analysis results will be displayed here when complete:")
-        username = st.session_state["auth_username"]
-        print(f"retrieving {selected_job_id=} {username=}")
+
         transcript = retrieve_transcript_by_jobid(
-            job_id=selected_job_id, username=st.session_state["auth_username"]
+            job_id=selected_job_id, username=username, api_auth_token=api_auth_token
         )
         analysis_result = run_analysis(
-            analysis_id=selected_analysis_id, transcript=transcript, llm=llm
+            analysis_id=selected_analysis_id,
+            transcript=transcript,
+            api_auth_token=api_auth_token,
         )
         store_analysis_result(
             job_id=selected_job_id,
-            username=st.session_state["auth_username"],
+            username=username,
             template_id=selected_analysis_id,
             analysis_result=analysis_result,
+            api_auth_token=api_auth_token,
         )
 
     stx.scrollableTextbox(

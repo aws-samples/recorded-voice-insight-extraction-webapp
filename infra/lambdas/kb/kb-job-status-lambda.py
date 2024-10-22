@@ -17,16 +17,17 @@
 import os
 import logging
 import boto3
-from ddb.ddb_utils import batch_update_job_statuses, JobStatus
+from schemas.job_status import JobStatus
+from lambda_utils.invoke_lambda import invoke_lambda
 
 KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
-DYNAMO_TABLE_NAME = os.environ["DYNAMO_TABLE_NAME"]
+DDB_LAMBDA_NAME = os.environ.get("DDB_LAMBDA_NAME")
 AWS_REGION = os.environ["AWS_REGION"]
 DATA_SOURCE_ID = os.environ["DATA_SOURCE_ID"]
 
 bedrock_agent_client = boto3.client("bedrock-agent", region_name=AWS_REGION)
-dynamodb = boto3.resource("dynamodb")
-table = dynamodb.Table(DYNAMO_TABLE_NAME)
+# Create a Lambda client so this lambda can invoke other lambdas
+lambda_client = boto3.client("lambda")
 
 logger = logging.getLogger()
 logger.setLevel("DEBUG")
@@ -37,13 +38,13 @@ def lambda_handler(event, context):
     ingestion_job_id = event["ingestion_job_id"]
 
     try:
-        response = bedrock_agent_client.get_ingestion_job(
+        ingest_status_response = bedrock_agent_client.get_ingestion_job(
             knowledgeBaseId=KNOWLEDGE_BASE_ID,
             dataSourceId=DATA_SOURCE_ID,
             ingestionJobId=ingestion_job_id,
         )
 
-        job_status = response["ingestionJob"]["status"]
+        job_status = ingest_status_response["ingestionJob"]["status"]
         logger.debug(f"Ingestion job status: {job_status}")
 
         # Possible Bedrock knowledge base sync job statuses:
@@ -51,9 +52,25 @@ def lambda_handler(event, context):
 
         # If job is complete or failed, update dynamoDB
         if job_status == "COMPLETE":
-            batch_update_job_statuses(table, ingestion_job_id, JobStatus.COMPLETED)
+            response = invoke_lambda(
+                lambda_client=lambda_client,
+                lambda_function_name=DDB_LAMBDA_NAME,
+                action="batch_update_job_statuses",
+                params={
+                    "ingestion_job_id": ingestion_job_id,
+                    "new_status": JobStatus.COMPLETED.value,
+                },
+            )
         elif job_status == "FAILED":
-            batch_update_job_statuses(table, ingestion_job_id, JobStatus.FAILED)
+            response = invoke_lambda(
+                lambda_client=lambda_client,
+                lambda_function_name=DDB_LAMBDA_NAME,
+                action="batch_update_job_statuses",
+                params={
+                    "ingestion_job_id": ingestion_job_id,
+                    "new_status": JobStatus.FAILED.value,
+                },
+            )
         # Return the job status regardless
         # how does this response get used by the state machine with "$.Payload"
         return {"status": job_status, "ingestion_job_id": ingestion_job_id}

@@ -17,6 +17,7 @@
 """Utilities related to accessing I/O"""
 
 import os
+import pandas as pd
 
 
 def check_valid_file_extension(filename: str) -> bool:
@@ -25,3 +26,12 @@ def check_valid_file_extension(filename: str) -> bool:
     _, extension = os.path.splitext(filename)
     media_format = extension[1:].lower()  # Drop the leading "." in extension
     return media_format in {"mp3", "mp4", "wav", "flac", "ogg", "amr", "webm", "m4a"}
+
+
+def get_analysis_templates() -> pd.DataFrame:
+    """Read analysis templates from csv and return df"""
+    dirname = os.path.dirname(__file__)  # Location of this python file
+    analysis_templates_file_fullpath = os.path.join(
+        dirname, "../assets/analysis_templates.csv"
+    )
+    return pd.read_csv(analysis_templates_file_fullpath)

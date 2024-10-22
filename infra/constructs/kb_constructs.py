@@ -15,8 +15,6 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-# Heavy inspo from here:
-# https://github.com/aws-samples/amazon-bedrock-samples/tree/main/knowledge-bases/features-examples/04-infrastructure/e2e_rag_using_bedrock_kb_cdk
 import aws_cdk.aws_logs as logs
 import aws_cdk.aws_s3 as s3
 
@@ -140,14 +138,14 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
         super().__init__(scope, construct_id, **kwargs)
 
         self.source_bucket = source_bucket
-        #   Create Knowledgebase
+        # Create Knowledgebase
         self.knowledge_base = self.create_knowledge_base(
             kb_principal_role, oss_collection_arn
         )
         self.data_source = self.create_data_source(self.knowledge_base)
 
-        # TODO: implement query lambda. For now, putting it in frontend to avoid scope creep on this PR.
-        # self.query_lambda = self.create_query_lambda(self.knowledge_base)
+        # Create lambda to query knowledge base
+        self.query_lambda = self.create_query_lambda(self.knowledge_base)
 
     def create_knowledge_base(
         self, kb_principal_role: iam.Role, oss_collection_arn: str
@@ -221,60 +219,60 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             vector_ingestion_configuration=vector_ingestion_config_variable,
         )
 
-    def create_query_lambda(self, knowledge_base: CfnKnowledgeBase) -> _lambda:
-        # Create a role that allows lambda to query knowledge base
-        self.queryLambdaRole = iam.Role(
+    def create_query_lambda_role(self, knowledge_base: CfnKnowledgeBase) -> iam.Role:
+        """Create a role that allows lambda query Bedrock KB"""
+        query_lambda_role = iam.Role(
             self,
-            f"{self.stack_name_lower}-ReVIEWqueryLambdaRole",
+            f"{self.props['stack_name_base']}-KBQueryLambdaRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "AmazonBedrockFullAccess"
-                )
+                    "CloudWatchLogsFullAccess"
+                ),
             ],
         )
+        query_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:RetrieveAndGenerate",
+                    "bedrock:Retrieve",
+                    "bedrock:InvokeModel",
+                ],
+                resources=["*"],  # Needs access to all LLMs
+            )
+        )
 
-        self.queryLambdaRole.apply_removal_policy(RemovalPolicy.DESTROY)
+        query_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
+        return query_lambda_role
+
+    def create_query_lambda(self, knowledge_base: CfnKnowledgeBase) -> _lambda:
+        # Create a role that allows lambda to query knowledge base
 
         query_lambda = _lambda.Function(
             self,
             self.props["stack_name_base"] + "-KBQueryLambda",
+            function_name=f"{self.props['unique_stack_name']}-KBQueryLambda",
             description="Function for ReVIEW to query Knowledge Base",
             runtime=_lambda.Runtime.PYTHON_3_10,
-            handler="kb.kb-query-lambda.handler",
+            handler="kb.kb-query-lambda.lambda_handler",
             code=_lambda.Code.from_asset("lambdas"),
             timeout=Duration.minutes(5),
             environment={
                 "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
-                "LLM_ARN": self.backend_props["llmModelArn"],
+                "FOUNDATION_MODEL_ID": self.props["llm_model_id"],
+                "NUM_CHUNKS": self.props["kb_num_chunks"],
             },
-            role=self.queryLambdaRole,
+            role=self.create_query_lambda_role(knowledge_base=knowledge_base),
         )
-        # _fn_url = query_lambda.add_function_url(
-        #     auth_type=_lambda.FunctionUrlAuthType.NONE,
-        #     invoke_mode=_lambda.InvokeMode.BUFFERED,
-        #     cors={
-        #         "allowed_origins": ["*"],
-        #         "allowed_methods": [_lambda.HttpMethod.POST],
-        #     },
-        # )
-
-        # query_lambda.add_to_role_policy(
-        #     iam.PolicyStatement(
-        #         actions=[
-        #             "bedrock:RetrieveAndGenerate",
-        #             "bedrock:Retrieve",
-        #             "bedrock:InvokeModel",
-        #         ],
-        #         resources=["*"],
-        #     )
-        # )
 
         return query_lambda
 
 
 class ReVIEWKnowledgeBaseSyncConstruct(Construct):
-    """Construct to handle syncing of knowledge base (w/ polling for status)"""
+    """Construct to handle syncing of knowledge base (w/ polling for status)
+    ddb_lambda is provided because KB sync step functions invoke a lambda to store
+            job status in a dynamo table
+    """
 
     def __init__(
         self,
@@ -283,11 +281,14 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         knowledge_base: CfnKnowledgeBase,
         data_source: CfnDataSource,
         source_bucket: s3.Bucket,
+        ddb_lambda: _lambda.Function,
         **kwargs,
     ):
         self.props = props
         construct_id = props["stack_name_base"] + "-kbsyncconstruct"
         super().__init__(scope, construct_id, **kwargs)
+
+        self.ddb_handler_lambda = ddb_lambda
 
         # Create ingest lambda
         self.ingest_lambda = self.create_ingest_lambda(knowledge_base, data_source)
@@ -315,12 +316,6 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "CloudWatchLogsFullAccess"
                 ),
-                # TODO: custom access to
-                # arn:aws:dynamodb:us-east-1:339712833620:table/kazu-dev-app-table
-                # DDB access needed because this lambda updates job statuses
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "AmazonDynamoDBFullAccess"
-                ),
             ],
         )
         ingest_lambda_role.add_to_policy(
@@ -329,6 +324,13 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
                     "bedrock:StartIngestionJob",
                 ],
                 resources=[knowledge_base.attr_knowledge_base_arn],
+            )
+        )
+        # Allow lambda to invoke the dynamodb handling lambda for job status updates etc
+        ingest_lambda_role.add_to_policy(
+            statement=iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.ddb_handler_lambda.function_arn],
             )
         )
 
@@ -358,7 +360,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
             environment=dict(
                 KNOWLEDGE_BASE_ID=knowledge_base.attr_knowledge_base_id,
                 DATA_SOURCE_ID=data_source.attr_data_source_id,
-                DYNAMO_TABLE_NAME=self.props["ddb_table_name"],
+                DDB_LAMBDA_NAME=self.ddb_handler_lambda.function_name,
             ),
             role=self.create_ingest_lambda_role(knowledge_base),
         )
@@ -392,6 +394,14 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
             )
         )
 
+        # Allow lambda to invoke the dynamodb handling lambda for job status updates etc
+        job_status_lambda_role.add_to_policy(
+            statement=iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.ddb_handler_lambda.function_arn],
+            )
+        )
+
         job_status_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
         return job_status_lambda_role
 
@@ -410,7 +420,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
             timeout=Duration.minutes(1),
             environment={
                 "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
-                "DYNAMO_TABLE_NAME": self.props["ddb_table_name"],
+                "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
                 "DATA_SOURCE_ID": data_source.attr_data_source_id,
             },
             role=self.create_job_status_lambda_role(knowledge_base),
@@ -465,6 +475,8 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
             self,
             f"{self.props['unique_stack_name']}-SyncStateMachine",
             definition_body=sfn.DefinitionBody.from_chainable(chain),
+            # Adding lambda versions into state machine name will trigger re-deploying state machine if lambda code changes
+            state_machine_name=f"{self.props['unique_stack_name']}-SyncStateMachine-{ingest_lambda.current_version.version}-{job_status_lambda.current_version.version}",
             timeout=Duration.hours(1),  # TODO: timeout should update ddb status
         )
 

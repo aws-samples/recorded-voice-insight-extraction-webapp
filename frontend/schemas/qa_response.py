@@ -18,16 +18,20 @@
 
 from pydantic import BaseModel
 from typing import List
-import re
-import json
+# import re
+# import json
 
 
 class Citation(BaseModel):
+    """A single citation from a transcript"""
+
     media_name: str
     timestamp: int
 
 
 class PartialQAnswer(BaseModel):
+    """Part of a complete answer, to be concatenated with other partial answers"""
+
     partial_answer: str
     citations: List[Citation]
 
@@ -36,29 +40,9 @@ class PartialQAnswer(BaseModel):
 
 
 class FullQAnswer(BaseModel):
+    """Full user query response including citations and one or more partial answers"""
+
     answer: List[PartialQAnswer]
-
-    @classmethod
-    def from_LLM_response(cls, generation_response: str) -> "FullQAnswer":
-        """
-        Create a FullQAnswer instance from an LLM response string containing JSON data.
-
-        The JSON data should be enclosed between <json> and </json> tags.
-        """
-        print(f"generation_response={generation_response}")
-        pattern = r"<json>\s*(.*?)\s*</json>"
-        matches = re.findall(pattern, generation_response, re.DOTALL)
-        if not matches:
-            raise ValueError("No JSON data found between <json> and </json> tags")
-
-        match = matches[0].strip("\n")
-        try:
-            data = json.loads(match)
-            return cls(**data)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON data: {e}")
-        except ValueError as e:
-            raise ValueError(f"Error creating FullQAnswer instance: {e}")
 
     def get_first_citation(self):
         """Return the first citation from any partial answers (utility fn for UI)"""
@@ -68,7 +52,8 @@ class FullQAnswer(BaseModel):
         raise ValueError("No citations found in any partial answers")
 
     def pprint(self) -> str:
-        """Format the FullQAnswer to a string for display by a chatbot"""
+        """Format the FullQAnswer to a string for display by a chatbot
+        (namely by concatenating partial answers)"""
         result = ""
         citation_counter = 1
 

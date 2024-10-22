@@ -14,37 +14,15 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import streamlit as st
-from components.db_utils import retrieve_all_items
-from components.cognito_utils import login
-from components.streamlit_utils import display_sidebar
+"""Schemas used by lambda functions"""
 
-st.set_page_config(
-    page_title="Job Status",
-    page_icon=":stopwatch:",
-    layout="centered",
-    initial_sidebar_state="expanded",
-)
+from enum import Enum
 
 
-st.title("Your Transcription Jobs")
-if not st.session_state.get("auth_username", None):
-    st.error("Please login to continue.")
-    login()
-    st.stop()
-display_sidebar()
-
-
-username = st.session_state["auth_username"]
-api_auth_token = st.session_state["auth_id_token"]
-
-st.dataframe(
-    retrieve_all_items(username=username, max_rows=None, api_auth_token=api_auth_token),
-    hide_index=True,
-    column_order=("media_name", "job_creation_time", "job_status"),
-)
-
-button_clicked = st.button("Refresh Table")
-if button_clicked:
-    # Refresh entire page on button click, just to reload the table
-    st.rerun()
+class JobStatus(Enum):
+    TRANSCRIBING = "Transcribing"
+    INDEXING = "Indexing"
+    TRANSCRIPTION_COMPLETE = "Transcription Complete"
+    COMPLETED = "Completed"
+    FAILED = "Failed"
+    IN_TRANSCRIPTION_QUEUE = "In Transcription Queue"
