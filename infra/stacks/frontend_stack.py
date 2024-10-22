@@ -166,16 +166,9 @@ class ReVIEWFrontendStack(Stack):
         self.app_execution_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
         )
-        # Frontend UI needs to access cognito to check logins
+        # Frontend UI needs to access cognito to create API auth tokens
         self.app_execution_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name("AmazonCognitoReadOnly")
-        )
-        # Frontend needs access to API gateway
-        # TODO: limit this to just the API gateway of our backend
-        self.app_execution_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "AmazonAPIGatewayInvokeFullAccess"
-            )
         )
 
     def create_cloudfront_distribution(self):
