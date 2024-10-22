@@ -6,7 +6,7 @@
 - [Recorded Voice Insight Extraction Webapp (ReVIEW)](#recorded-voice-insight-extraction-webapp-review)
 - [Contents](#contents)
 - [Overview](#overview)
-    - [Key Features](#key-features)
+  - [Key Features](#key-features)
 - [Architecture](#architecture)
 - [Deployment](#deployment)
     - [*Clone the Repository*](#clone-the-repository)
@@ -22,31 +22,38 @@
 
 # Overview
 
-The Recorded Voice Insight Extraction Webapp (ReVIEW) is a cdk-deployed application built on AWS and Bedrock that boosts productivity by allowing users to upload recordings containing speech and leverage generative AI to answer questions based on the transcripts, create custom summaries, draft custom readout documents, identify topics discussed, and more. 
+The Recorded Voice Insight Extraction Webapp (ReVIEW) is a cdk-deployed, robust, and scalable application built on AWS and Bedrock that boosts productivity by allowing users to upload recordings containing speech and leverage generative AI to answer questions based on the recordings. The AI assistant chatbot functionality will answer specific questions about a recording (or recordings) **and queue up the parent media to specific timestamps for users to validate the answers themselves** This is the critical workflow that allows the users to verify accuracy of LLM-generated answers for themselves.
 
-This application also includes a chat functionality with an AI assistant who can answer specific questions and queue up the parent recording to specific timestamps for users to validate the answers themselves.
+Additionally, this application includes the capability to use an LLM to analyze the transcripts with custom templates including generating summaries, draft custom readout documents, identify topics discussed, and more. 
 
-A 4 minute video demonstrating the features as of May 28, 2024 [can be viewed here](https://amazon.awsapps.com/workdocs-preview/index.html#/document/4e6f1bcfcd420cd4e650e7008a946a6d1214d735336d2b3c40784ba2af1b0ed2). Note this video demonstrates a version of the application before the knowledge base / RAG component was integrated to allow chatting with multiple media sources.
+A 4 minute video demonstrating the features as of May 28, 2024 [can be viewed here](https://amazon.awsapps.com/workdocs-preview/index.html#/document/4e6f1bcfcd420cd4e650e7008a946a6d1214d735336d2b3c40784ba2af1b0ed2). Note this video demonstrates a version of the application before the knowledge base / RAG component was integrated to allow chatting with multiple media sources, and before the API Gateway was added.
 
-### Key Features
+## Key Features
 
+- User authentication is provided by Amazon Cognito.
 - Upload any audio or video recording file through a user friendly frontend.
 - Files automatically get transcribed, with status that can be viewed in the frontend.
-- Interactive chat-with-your-media function provides an AI assistant who will answer specific questions about one media file or a collection of multiple media files, and **will identify the timestamp in the media when the answer was provided. The media automatically gets played back starting at that timestamp.**
+- Interactive chat-with-your-media function provides an AI assistant who will answer specific questions about one media file or a collection of multiple media files, and **will identify timestamps in the media files when the answer was provided. The media automatically gets played back starting at that timestamp, with clickable citations if multiple sources are relevant to the answer.**
 - Provided analysis templates allow for easy GenAI summarization, document generation, next-steps and blockers identifications, and more.
+- Complete frontend/backend separation via API Gateway to enable users to replace Streamlit if desired.
+Here is an overview of the architecture for the solution.
 
+Here is a screenshot of the chat functionality. Here, the user asked whether any new products were announced in a collection of uploaded videos of public AWS presentations. Since several videos mentioned the announcement of SageMaker HyperPods, three buttons appear which auto play the cited videos at the relevant timestamp when the announcements occurred. This is the critical user experience that allows the users to verify accuracy of LLM-generated answers for themselves.
+<p align="center">
+    <img src=diagram/ReVIEW-chat-screenshot-20241022.png alt="chat_screenshot" width="70%">
+</p>
 
 # Architecture
 Here is an overview of the architecture for the solution.
 <p align="center">
-    <img src=diagram/ReVIEW-architecture-20241009.png alt="architecture" width="90%">
+    <img src=diagram/ReVIEW-architecture-20241022.png alt="architecture" width="90%">
 </p>
 
 * **(1)** Users connect to a CloudFront distribution which forwards traffic to the application load balancer via HTTPS with a custom header. 
-* **(2)** The containerized Streamlit application running in ECS connects to Amazon Cognito to authenticate users. 
-* **(3)** Users upload media files to an S3 bucket, which are then transcribed with a lambda function. Once transcripts are created in s3, an EventBridge notification triggers an AWS Step Functions workflow to (asynchronously) sync the transcripts (and track the sync job status) with a Bedrock Knowledge Base, which handles chunking, embedding, and later retrieval. 
-* **(4)** The application functionality leverages Large Language Models in Bedrock to analyze transcripts (or chunks of transcripts retrieved from the knowledge base **(5)**) and identify timestamps at which to replay media to the users. 
-* **(6)** DynamoDB is used to track job processing statuses and cache previous LLM responses.
+* **(2)** The containerized Streamlit application running in ECS connects to Amazon Cognito to authenticate users and to get a bearer token for API Gateway authentication.
+* **(3 and 4)** Users upload media files to an S3 bucket by first requesting a presigned URL and then POSTing the file to it. The media files then automatically transcribed. Once transcripts are created in s3, an EventBridge notification triggers an AWS Step Functions workflow to asynchronously sync the transcripts (and track the sync job status) with a Bedrock Knowledge Base. The Knowledge Base handles chunking, embedding, and later retrieval. 
+* **(5)** The application functionality leverages Large Language Models in Bedrock to analyze transcripts (or chunks of transcripts retrieved from the knowledge base **(6)**) and identify timestamps at which to replay media to the users. 
+* **(7)** DynamoDB is used to track job processing statuses and cache previous LLM responses.
 
 Here are the details of the [AWS Step Functions](https://aws.amazon.com/step-functions/) workflow for knowledge base sync and checking sync status, which gets triggered initially via [Amazon Event Bridge](https://aws.amazon.com/eventbridge/) by a transcript appearing in s3:
 <p align="center">
@@ -56,10 +63,11 @@ The workflow is triggered by an Event Bridge notifications
 
 # Deployment
 
-The code base behind the solution consists of three stacks:
+The code base behind the solution consists of four stacks:
 1) A backend which handles transcribing uploaded media and tracking job statuses, 
-2) A RAG stack which handles setting up OpenSearch and Bedrock Knowledge bases, and 
-3) A frontend stack which consists of a containerized streamlit application running as a load balanced service in an ECS cluster in a VPC, a cloudfront distribution connected to the load balancer, and a cognito user pool for user authentication.
+2) A RAG stack which handles setting up OpenSearch and Bedrock Knowledge bases, 
+3) An API stack which stands up a Cognito-authorized REST API and various lambda functions to logically separate the frontend from the backend, and
+4) A frontend stack which consists of a containerized streamlit application running as a load balanced service in an ECS cluster in a VPC, with a cloudfront distribution connected to the load balancer.
 
 ### *Clone the Repository*
 Fork the repository, and clone it to the location of your choice. For example:
@@ -99,6 +107,7 @@ To optionally deploy one stack at a time, you can do
 ```{bash}
 $ cdk deploy [stack_name_base]-backend
 $ cdk deploy [stack_name_base]-rag
+$ cdk deploy [stack_name_base]-api
 $ cdk deploy [stack_name_base]-frontend
 ```
 
@@ -136,7 +145,7 @@ This will destroy all three ReVIEW stacks and remove all components from your AW
 - diagram/ - Architecture diagrams of the solution used in READMEs
 
 ## Pending Updates
-See the [issues board](https://gitlab.aws.dev/genaiic-reusable-assets/demo-artifacts/ReVIEW/-/issues) for a list of all pending updates.
+See the [issues board](https://gitlab.aws.dev/genaiic-reusable-assets/demo-artifacts/ReVIEW/-/issues) for a list of all pending updates
 
 ## Additional Resources
 * [AWS APG Pattern for ReVIEW](https://apg-library.amazonaws.com/content-viewer/author/3642bafc-3b2e-4bc4-8725-a492823db860) (pre knowledge base integration)
