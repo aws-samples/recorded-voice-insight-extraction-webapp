@@ -21,7 +21,7 @@ from components.bedrock_utils import (
 )
 from components.cognito_utils import login
 from components.db_utils import retrieve_all_items
-from components.s3_utils import retrieve_media_bytes, retrieve_transcript_by_jobid
+from components.s3_utils import retrieve_media_url, retrieve_transcript_by_jobid
 from components.streamlit_utils import (
     display_sidebar,
     display_video_at_timestamp,
@@ -92,11 +92,11 @@ if st.session_state.get("n_buttons", 0):
                 f"citation_timestamp_{clicked_citation_index}"
             ]
             # Display the appropriate video
-            clicked_media_bytes = retrieve_media_bytes(
-                clicked_citation_media, username=username
+            clicked_media_url = retrieve_media_url(
+                clicked_citation_media, username=username, api_auth_token=api_auth_token
             )
 
-            display_video_at_timestamp(clicked_media_bytes, clicked_citation_timestamp)
+            display_video_at_timestamp(clicked_media_url, clicked_citation_timestamp)
             # Redraw the buttons
             draw_or_redraw_citation_buttons()
 
@@ -130,7 +130,9 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
                     "UUID"
                 ].values[0]
                 full_transcript = retrieve_transcript_by_jobid(
-                    job_id=selected_job_id, username=username
+                    job_id=selected_job_id,
+                    username=username,
+                    api_auth_token=api_auth_token,
                 )
                 full_answer = generate_answer_no_chunking(
                     query=user_message,
@@ -143,9 +145,11 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
     first_citation = None
     try:
         first_citation = full_answer.get_first_citation()
-        media_bytes = retrieve_media_bytes(first_citation.media_name, username=username)
+        media_url = retrieve_media_url(
+            first_citation.media_name, username=username, api_auth_token=api_auth_token
+        )
         display_video_at_timestamp(
-            media_bytes,
+            media_url,
             first_citation.timestamp,
         )
     except ValueError:

@@ -15,12 +15,9 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import boto3
-from aws_cdk import CfnOutput, RemovalPolicy, Stack, Duration
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
 from aws_cdk import aws_apigateway as apigw
 from aws_cdk import aws_cognito as cognito
-from aws_cdk import (
-    aws_iam as iam,
-)
 from aws_cdk import (
     aws_lambda as _lambda,
 )
@@ -38,6 +35,7 @@ class ReVIEWAPIStack(Stack):
         llm_lambda: _lambda.Function,
         ddb_lambda: _lambda.Function,
         kb_query_lambda: _lambda.Function,
+        presigned_url_lambda: _lambda.Function,
         **kwargs,
     ):
         self.props = props
@@ -49,6 +47,7 @@ class ReVIEWAPIStack(Stack):
         self.associate_lambda_with_gateway(llm_lambda, "llm")
         self.associate_lambda_with_gateway(ddb_lambda, "ddb")
         self.associate_lambda_with_gateway(kb_query_lambda, "kb")
+        self.associate_lambda_with_gateway(presigned_url_lambda, "s3-presigned")
 
         # Output the API URL and API Key
         CfnOutput(self, "ApiUrl", value=self.api.url)
@@ -72,7 +71,7 @@ class ReVIEWAPIStack(Stack):
             "deletion_protection": True,
         }
 
-        # Check if a user pool with this name already exists
+        # Check if a user pool with this name already exists, else create one
         # Unfortunately there is no way to do this w/ constructs
         # (only search by ID, which I don't have a priori)
         cognito_client = boto3.client("cognito-idp", "us-east-1")
@@ -133,40 +132,3 @@ class ReVIEWAPIStack(Stack):
             authorizer=self.authorizer,
             authorization_type=apigw.AuthorizationType.COGNITO,
         )
-
-    def grant_API_access(self, backend_api: apigw.RestApi):
-        """Modify the backend API policies to allow access from the frontend IAM role"""
-
-        # Create an IAM policy to allow frontend access to the API,
-        # and block all other access to the API
-        allow_frontend_policy = iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=["execute-api:Invoke"],
-            resources=[backend_api.arn_for_execute_api()],
-            principals=[iam.ArnPrincipal(self.app_execution_role.role_arn)],
-        )
-        deny_policy = iam.PolicyStatement(
-            effect=iam.Effect.DENY,
-            principals=[iam.AnyPrincipal()],
-            actions=["execute-api:Invoke"],
-            resources=[backend_api.arn_for_execute_api()],
-            conditions={
-                "StringNotEquals": {
-                    "aws:PrincipalArn": self.app_execution_role.role_arn
-                }
-            },
-        )
-
-        # Create a resource policy for the API
-        resource_policy = iam.PolicyDocument(
-            statements=[allow_frontend_policy, deny_policy]
-        )
-
-        # Apply the resource policy to the API
-        backend_api.policy = resource_policy
-        # TODO:
-        """
-        Remember to update your frontend application code to sign the API requests with AWS Signature Version 4 using the IAM credentials. This is typically done using the AWS SDK for the language your frontend is written in.
-
-        Maybe adjust the CORS settings to be more restrictive, specifying only the origins that your frontend application will be served from, instead of allowing all origins.
-        """

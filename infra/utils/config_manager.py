@@ -38,6 +38,8 @@ class ConfigManager:
             return yaml.safe_load(config_file)
 
     def get_props(self) -> Dict[str, str]:
+        """Map what is in the config file to variable names used by the stacks"""
+
         unique_stack_name = (
             self.config["stack_name_base"].lower() + "-" + self.config["account_id"]
         )

@@ -74,7 +74,6 @@ class ReVIEWBackendStack(Stack):
 
     def setup_roles(self):
         # AWS transcribe access, s3 access, etc
-        # TODO: break into separate roles for each lambda w/ narrower scopes
         self.backend_lambda_execution_role = iam.Role(
             self,
             f"{self.props['unique_stack_name']}-ReVIEWLambdaExecutionRole",
@@ -161,6 +160,28 @@ class ReVIEWBackendStack(Stack):
         )
 
         self.llm_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
+
+        # Role for lambda that generates presigned urls
+        self.presigned_url_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-PresignedURLLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                )
+            ],
+            inline_policies={
+                "S3PresignedUrl": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
+                            resources=[f"arn:aws:s3:::{self.props['s3_bucket_name']}*"],
+                        )
+                    ]
+                ),
+            },
+        )
 
     def setup_buckets(self):
         self.loggingBucket = s3.Bucket(
@@ -280,7 +301,7 @@ class ReVIEWBackendStack(Stack):
                 "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
             },
             timeout=Duration.seconds(15),
-            role=self.backend_lambda_execution_role,  # Reuse existing lambda role
+            role=self.backend_lambda_execution_role,
         )
 
         self.postprocess_transcript_lambda.add_permission(
@@ -310,6 +331,24 @@ class ReVIEWBackendStack(Stack):
             code=_lambda.Code.from_asset("lambdas"),
             timeout=Duration.minutes(5),
             role=self.llm_lambda_role,
+        )
+
+        # Lambda to generate presigned URLs for the frontend
+        self.presigned_url_lambda = _lambda.Function(
+            self,
+            self.props["stack_name_base"] + "-PresignedURLLambda",
+            function_name=f"{self.props['unique_stack_name']}-PresignedURLLambda",
+            description="Function for ReVIEW backend to generate presigned URLs",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="s3.presigned-url-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            environment={
+                "S3_BUCKET": self.props["s3_bucket_name"],
+                "RECORDINGS_PREFIX": self.props["s3_recordings_prefix"],
+                "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
+            },
+            timeout=Duration.seconds(30),
+            role=self.presigned_url_lambda_role,
         )
 
     def setup_events(self):

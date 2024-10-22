@@ -82,4 +82,6 @@ def lambda_handler(event, context):
             media_name=media_name,
             full_transcript=full_transcript,
         )
+
+    # TODO: Add error handling, e.g. if Bedrock throttles requests
     return {"statusCode": 200, "body": json.dumps(full_answer)}

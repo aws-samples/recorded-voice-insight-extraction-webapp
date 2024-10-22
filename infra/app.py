@@ -48,6 +48,7 @@ api_stack = ReVIEWAPIStack(
     llm_lambda=backend_stack.llm_lambda,
     ddb_lambda=backend_stack.ddb_handler_lambda,
     kb_query_lambda=rag_stack.kb_construct.query_lambda,
+    presigned_url_lambda=backend_stack.presigned_url_lambda,
 )
 
 # Frontend stack

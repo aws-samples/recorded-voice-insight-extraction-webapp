@@ -247,16 +247,6 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
 
     def create_query_lambda(self, knowledge_base: CfnKnowledgeBase) -> _lambda:
         # Create a role that allows lambda to query knowledge base
-        # self.queryLambdaRole = iam.Role(
-        #     self,
-        #     f"{self.stack_name_lower}-ReVIEWqueryLambdaRole",
-        #     assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-        #     managed_policies=[
-        #         iam.ManagedPolicy.from_aws_managed_policy_name(
-        #             "AmazonBedrockFullAccess"
-        #         )
-        #     ],
-        # )
 
         query_lambda = _lambda.Function(
             self,
@@ -274,14 +264,6 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             },
             role=self.create_query_lambda_role(knowledge_base=knowledge_base),
         )
-        # _fn_url = query_lambda.add_function_url(
-        #     auth_type=_lambda.FunctionUrlAuthType.NONE,
-        #     invoke_mode=_lambda.InvokeMode.BUFFERED,
-        #     cors={
-        #         "allowed_origins": ["*"],
-        #         "allowed_methods": [_lambda.HttpMethod.POST],
-        #     },
-        # )
 
         return query_lambda
 

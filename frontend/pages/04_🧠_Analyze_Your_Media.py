@@ -17,14 +17,14 @@
 import streamlit as st
 import streamlit_scrollable_textbox as stx
 from components.bedrock_utils import run_analysis
-from components.io_utils import get_analysis_templates
+from components.cognito_utils import login
 from components.db_utils import (
     retrieve_all_items,
     retrieve_analysis_by_jobid,
     store_analysis_result,
 )
+from components.io_utils import get_analysis_templates
 from components.s3_utils import retrieve_transcript_by_jobid
-from components.cognito_utils import login
 from components.streamlit_utils import display_sidebar
 
 st.set_page_config(
@@ -77,9 +77,9 @@ if selected_media_name and selected_analysis_name:
 if button_clicked:
     st.subheader("Analysis Results:")
 
-    # Todo: make this better... fails e.g. if there are duplicate media names
+    # TODO: this fails e.g. if there are duplicate media names
     selected_job_id = job_df[job_df.media_name == selected_media_name]["UUID"].values[0]
-    # Todo: make this better... fails e.g. if there are duplicate short analysis names
+    # TODO: this fails e.g. if there are duplicate short analysis names
     selected_analysis_id = template_df[
         template_df.template_short_name == selected_analysis_name
     ].template_id.values[0]
@@ -99,7 +99,7 @@ if button_clicked:
         st.info("Analysis results will be displayed here when complete:")
 
         transcript = retrieve_transcript_by_jobid(
-            job_id=selected_job_id, username=username
+            job_id=selected_job_id, username=username, api_auth_token=api_auth_token
         )
         analysis_result = run_analysis(
             analysis_id=selected_analysis_id,

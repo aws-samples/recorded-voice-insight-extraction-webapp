@@ -16,11 +16,12 @@
 
 
 import json
+import logging
+import os
+
 import boto3
 import ddb.ddb_utils as ddb_utils
 from schemas.job_status import JobStatus
-import os
-import logging
 
 logger = logging.getLogger()
 logger.setLevel("DEBUG")
