@@ -16,7 +16,8 @@
 
 import streamlit as st
 import streamlit_scrollable_textbox as stx
-from components.bedrock_utils import get_analysis_templates, run_analysis
+from components.bedrock_utils import run_analysis
+from components.io_utils import get_analysis_templates
 from components.db_utils import (
     retrieve_all_items,
     retrieve_analysis_by_jobid,
@@ -41,8 +42,14 @@ if not st.session_state.get("auth_username", None):
 st.subheader("Pick a media file to analyze:")
 display_sidebar()
 
+username = st.session_state["auth_username"]
+api_auth_token = st.session_state["auth_id_token"]
 
-job_df = retrieve_all_items(username=st.session_state["auth_username"])
+job_df = retrieve_all_items(
+    username=username,
+    max_rows=None,
+    api_auth_token=api_auth_token,
+)
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
 selected_media_name = st.selectbox(
@@ -80,8 +87,9 @@ if button_clicked:
     # If this analysis has already been run and the result is in dynamo, display it
     cached_results = retrieve_analysis_by_jobid(
         job_id=selected_job_id,
-        username=st.session_state["auth_username"],
+        username=username,
         template_id=selected_analysis_id,
+        api_auth_token=api_auth_token,
     )
     if cached_results:
         st.info("Displaying cached analysis result:")
@@ -89,19 +97,21 @@ if button_clicked:
     # Otherwise run the analysis and store the results in dynamo
     else:
         st.info("Analysis results will be displayed here when complete:")
-        username = st.session_state["auth_username"]
 
         transcript = retrieve_transcript_by_jobid(
-            job_id=selected_job_id, username=st.session_state["auth_username"]
+            job_id=selected_job_id, username=username
         )
         analysis_result = run_analysis(
-            analysis_id=selected_analysis_id, transcript=transcript
+            analysis_id=selected_analysis_id,
+            transcript=transcript,
+            api_auth_token=api_auth_token,
         )
         store_analysis_result(
             job_id=selected_job_id,
-            username=st.session_state["auth_username"],
+            username=username,
             template_id=selected_analysis_id,
             analysis_result=analysis_result,
+            api_auth_token=api_auth_token,
         )
 
     stx.scrollableTextbox(

@@ -21,17 +21,12 @@ import json
 import os
 import requests
 
-from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
-
 BACKEND_API_URL = os.environ["BACKEND_API_URL"]
-backend_api_auth = BotoAWSRequestsAuth(
-    aws_host=BACKEND_API_URL + "/ddb",
-    aws_region="us-east-1",
-    aws_service="execute-api",
-)
 
 
-def retrieve_all_items(username, max_rows=None) -> pd.DataFrame:
+def retrieve_all_items(
+    username: str, max_rows: int | None, api_auth_token: str
+) -> pd.DataFrame:
     """Query dynamodb table for rows from this username and return
     specific columns w/ optional max # of rows"""
 
@@ -43,8 +38,11 @@ def retrieve_all_items(username, max_rows=None) -> pd.DataFrame:
     response = requests.post(
         BACKEND_API_URL + "/ddb",
         json=json_body,
-        auth=backend_api_auth,
+        headers={"Authorization": api_auth_token},
     )
+    if response.status_code != 200:
+        raise Exception(f"Non 200 response from API gateway: {response.reason}")
+
     result = json.loads(response.text)
 
     # Lambda returns json, convert to dataframe for UI
@@ -66,7 +64,7 @@ def retrieve_all_items(username, max_rows=None) -> pd.DataFrame:
 
 
 def retrieve_analysis_by_jobid(
-    job_id: str, username: str, template_id: int
+    job_id: str, username: str, template_id: int, api_auth_token: str
 ) -> str | None:
     """Retrieve analysis from dynamodb table by job_id
     (if analysis is cached, else none)"""
@@ -80,14 +78,21 @@ def retrieve_analysis_by_jobid(
     response = requests.post(
         BACKEND_API_URL + "/ddb",
         json=json_body,
-        auth=backend_api_auth,
+        headers={"Authorization": api_auth_token},
     )
+    if response.status_code != 200:
+        raise Exception(f"Non 200 response from API gateway: {response.reason}")
+
     result = json.loads(response.text)
     return result
 
 
 def store_analysis_result(
-    job_id: str, username: str, template_id: int, analysis_result: str
+    job_id: str,
+    username: str,
+    template_id: int,
+    analysis_result: str,
+    api_auth_token: str,
 ) -> str | None:
     """Store completed analysis in dynamodb table"""
 
@@ -101,7 +106,10 @@ def store_analysis_result(
     response = requests.post(
         BACKEND_API_URL + "/ddb",
         json=json_body,
-        auth=backend_api_auth,
+        headers={"Authorization": api_auth_token},
     )
+    if response.status_code != 200:
+        raise Exception(f"Non 200 response from API gateway: {response.reason}")
+
     result = json.loads(response.text)
     return result

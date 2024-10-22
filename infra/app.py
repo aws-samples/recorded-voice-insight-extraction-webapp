@@ -51,7 +51,12 @@ api_stack = ReVIEWAPIStack(
 )
 
 # Frontend stack
-frontend_stack = ReVIEWFrontendStack(app, props, api_url=api_stack.api.url)
+frontend_stack = ReVIEWFrontendStack(
+    app,
+    props,
+    backend_api_url=api_stack.api.url,
+    cognito_pool=api_stack.cognito_user_pool,
+)
 
 
 # Enforce ordering of stacks via dependency

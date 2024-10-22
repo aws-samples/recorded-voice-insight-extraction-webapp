@@ -13,21 +13,20 @@
 # HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-import os
-import streamlit as st
 
+import streamlit as st
 from components.bedrock_utils import (
-    retrieve_and_generate_answer,
     generate_answer_no_chunking,
+    retrieve_and_generate_answer,
 )
+from components.cognito_utils import login
 from components.db_utils import retrieve_all_items
 from components.s3_utils import retrieve_media_bytes, retrieve_transcript_by_jobid
-from components.cognito_utils import login
 from components.streamlit_utils import (
     display_sidebar,
-    reset_citation_session_state,
-    draw_or_redraw_citation_buttons,
     display_video_at_timestamp,
+    draw_or_redraw_citation_buttons,
+    reset_citation_session_state,
 )
 
 # Initialize chat history
@@ -49,11 +48,14 @@ if not st.session_state.get("auth_username", None):
     st.stop()
 
 username = st.session_state["auth_username"]
+api_auth_token = st.session_state["auth_id_token"]
 
 st.subheader("Pick media file to analyze:")
 display_sidebar()
 
-job_df = retrieve_all_items(username=username)
+job_df = retrieve_all_items(
+    username=username, max_rows=None, api_auth_token=api_auth_token
+)
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
 CHAT_WITH_ALL_STRING = "Chat with all media files"
@@ -118,7 +120,9 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
             # If no specific media file is selected, use RAG over all files
             if not selected_media_name:
                 full_answer = retrieve_and_generate_answer(
-                    query=user_message, username=username
+                    query=user_message,
+                    username=username,
+                    api_auth_token=api_auth_token,
                 )
             # If one file was selected, no retrieval is needed
             else:
@@ -132,6 +136,7 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
                     query=user_message,
                     media_name=selected_media_name,
                     full_transcript=full_transcript,
+                    api_auth_token=api_auth_token,
                 )
 
     # If answer has any citations, automatically queue up the media to the first citation

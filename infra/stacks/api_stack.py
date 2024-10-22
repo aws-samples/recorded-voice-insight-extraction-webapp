@@ -14,24 +14,22 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-from aws_cdk import Stack
-
+import boto3
+from aws_cdk import CfnOutput, RemovalPolicy, Stack, Duration
+from aws_cdk import aws_apigateway as apigw
+from aws_cdk import aws_cognito as cognito
 from aws_cdk import (
     aws_iam as iam,
 )
 from aws_cdk import (
     aws_lambda as _lambda,
 )
-from aws_cdk import RemovalPolicy
-from aws_cdk import aws_apigateway as apigw
-
-from aws_cdk import CfnOutput
 
 
 class ReVIEWAPIStack(Stack):
-    """Construct for API Gateway separating frontend and backend
-    REST endpoints associated with lambdas are provided for the frontend.
-    Only the frontend_execution_role will have access to the API"""
+    """Construct for API Gateway separating frontend and backend.
+    REST endpoints associated with backend lambdas are provided for the frontend.
+    Cognito is used for API auth."""
 
     def __init__(
         self,
@@ -46,6 +44,7 @@ class ReVIEWAPIStack(Stack):
         construct_id = props["stack_name_base"] + "-api"
         super().__init__(scope, construct_id, **kwargs)
 
+        self.setup_cognito_pool()
         self.create_gateway()
         self.associate_lambda_with_gateway(llm_lambda, "llm")
         self.associate_lambda_with_gateway(ddb_lambda, "ddb")
@@ -54,43 +53,69 @@ class ReVIEWAPIStack(Stack):
         # Output the API URL and API Key
         CfnOutput(self, "ApiUrl", value=self.api.url)
 
+    def setup_cognito_pool(self):
+        # Cognito User Pool (stored as self.cognito_user_pool)
+        user_pool_common_config = {
+            "id": "review-app-cognito-user-pool-id",
+            "user_pool_name": self.props["cognito_pool_name"],
+            "auto_verify": cognito.AutoVerifiedAttrs(email=True),
+            "removal_policy": RemovalPolicy.RETAIN,
+            "password_policy": cognito.PasswordPolicy(
+                min_length=8,
+                require_digits=False,
+                require_lowercase=False,
+                require_uppercase=False,
+                require_symbols=False,
+            ),
+            "account_recovery": cognito.AccountRecovery.EMAIL_ONLY,
+            "advanced_security_mode": cognito.AdvancedSecurityMode.ENFORCED,
+            "deletion_protection": True,
+        }
+
+        # Check if a user pool with this name already exists
+        # Unfortunately there is no way to do this w/ constructs
+        # (only search by ID, which I don't have a priori)
+        cognito_client = boto3.client("cognito-idp", "us-east-1")
+        existing_pools = cognito_client.list_user_pools(MaxResults=10)["UserPools"]
+        found_existing_pool = False
+        for pool in existing_pools:
+            if pool["Name"] == self.props["cognito_pool_name"]:
+                self.cognito_user_pool = cognito.UserPool.from_user_pool_id(
+                    self, "review-app-cognito-user-pool", user_pool_id=pool["Id"]
+                )
+                found_existing_pool = True
+                break
+
+        if not found_existing_pool:
+            # Create a new user pool
+            self.cognito_user_pool = cognito.UserPool(self, **user_pool_common_config)
+
     def create_gateway(self):
-        # Create API Gateway which allows access from within this same AWS account
+        # Create API Gateway and Cognito authorizer
 
-        # TODO: get some form of auth working...
-
-        # this_account_id = Stack.of(self).account
-        # same_account_policy_document = iam.PolicyDocument(
-        #     statements=[
-        #         iam.PolicyStatement(
-        #             effect=iam.Effect.ALLOW,
-        #             actions=["execute-api:Invoke"],
-        #             principals=[iam.AnyPrincipal()],
-        #             resources=["execute-api:/*"],
-        #             # https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html
-        #             conditions={"StringEquals": {"aws:SourceAccount": this_account_id}},
-        #         )
-        #     ]
-        # )
         self.api = apigw.RestApi(
             self,
             f"{self.props['unique_stack_name']}-api",
             rest_api_name=f"{self.props['unique_stack_name']}-api",
             description="API for ReVIEW application",
-            # default_method_options=apigw.MethodOptions(
-            #     authorization_type=apigw.AuthorizationType.IAM
-            # ),
-            # policy=same_account_policy_document,
             default_cors_preflight_options=apigw.CorsOptions(
-                allow_origins=apigw.Cors.ALL_ORIGINS,  # TODO: limit to frontend
-                allow_methods=apigw.Cors.ALL_METHODS,  # TODO: limit to frontend
+                allow_origins=apigw.Cors.ALL_ORIGINS,  # All origins allowed
+                allow_methods=apigw.Cors.ALL_METHODS,  # All methods have an authorizer
             ),
+            deploy=True,
         )
 
-        # Enable IAM authentication for the API
-        self.api.root.add_method("ANY", authorization_type=apigw.AuthorizationType.IAM)
-
         self.api.apply_removal_policy(RemovalPolicy.DESTROY)
+
+        self.authorizer = apigw.CognitoUserPoolsAuthorizer(
+            self,
+            "ReVIEWAPIAuthorizer",
+            cognito_user_pools=[self.cognito_user_pool],
+            identity_source=apigw.IdentitySource.header(
+                "Authorization"
+            ),  # This is the header expression which includes the bearer token
+            results_cache_ttl=Duration.seconds(0),  # Disable caching
+        )
 
     def associate_lambda_with_gateway(
         self, my_lambda: _lambda.Function, resource_name: str
@@ -101,8 +126,13 @@ class ReVIEWAPIStack(Stack):
         # Integrate Lambda function with API Gateway
         integration = apigw.LambdaIntegration(my_lambda)
 
-        # Add POST method to resource
-        resource.add_method("POST", integration)
+        # Add POST method to resource, with Cognito authorizer
+        resource.add_method(
+            "POST",
+            integration,
+            authorizer=self.authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO,
+        )
 
     def grant_API_access(self, backend_api: apigw.RestApi):
         """Modify the backend API policies to allow access from the frontend IAM role"""

@@ -17,21 +17,27 @@
 import os
 from pathlib import Path
 
-import boto3
 import cdk_nag
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, Stack, Duration
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as cfo
-from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_ecs_patterns as ecs_patterns
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_cognito as cognito
 
 
 class ReVIEWFrontendStack(Stack):
-    def __init__(self, scope, props: dict, api_url: str, **kwargs):
+    def __init__(
+        self,
+        scope,
+        props: dict,
+        backend_api_url: str,
+        cognito_pool: cognito.UserPool,
+        **kwargs,
+    ):
         self.props = props
         construct_id = props["stack_name_base"] + "-frontend"
         super().__init__(scope, construct_id, **kwargs)
@@ -44,9 +50,12 @@ class ReVIEWFrontendStack(Stack):
         self.fe_stack_name = construct_id
 
         # This will be exported as an env variable in the frontend, for it to call API Gateway
-        self.backend_api_url = api_url
+        self.backend_api_url = backend_api_url
 
-        self.setup_cognito()
+        self.cognito_user_pool_id = cognito_pool.user_pool_id
+        # Frontend needs a cognito client associated with the user pool created in API stack
+        self.setup_cognito_pool_client(cognito_pool)
+
         self.create_frontend_app_execution_role()
         self.deploy_fargate_service()
         self.custom_header_name = f"{self.fe_stack_name}-custom-header"
@@ -68,6 +77,17 @@ class ReVIEWFrontendStack(Stack):
                 {"id": "AwsSolutions-IAM5", "reason": "Wildcard ok"},
             ],
         )
+
+    def setup_cognito_pool_client(self, cognito_pool: cognito.UserPool):
+        self.cognito_user_pool_client = cognito_pool.add_client(
+            "review-app-cognito-client",
+            user_pool_client_name="review-app-cognito-client",
+            generate_secret=False,
+            access_token_validity=Duration.minutes(30),
+            auth_flows=cognito.AuthFlow(user_srp=True),
+        )
+
+        self.cognito_client_id = self.cognito_user_pool_client.user_pool_client_id
 
     def deploy_fargate_service(self):
         """Deploy VPC, cluster, app image into fargate"""
@@ -157,54 +177,6 @@ class ReVIEWFrontendStack(Stack):
                 "AmazonAPIGatewayInvokeFullAccess"
             )
         )
-
-    def setup_cognito(self):
-        # Cognito User Pool
-        user_pool_common_config = {
-            "id": "review-app-cognito-user-pool-id",
-            "user_pool_name": self.props["cognito_pool_name"],
-            "auto_verify": cognito.AutoVerifiedAttrs(email=True),
-            "removal_policy": RemovalPolicy.RETAIN,
-            "password_policy": cognito.PasswordPolicy(
-                min_length=8,
-                require_digits=False,
-                require_lowercase=False,
-                require_uppercase=False,
-                require_symbols=False,
-            ),
-            "account_recovery": cognito.AccountRecovery.EMAIL_ONLY,
-            "advanced_security_mode": cognito.AdvancedSecurityMode.ENFORCED,
-            "deletion_protection": True,
-        }
-
-        # Check if a user pool with this name already exists
-        # Unfortunately there is no way to do this w/ constructs
-        # (only search by ID, which I don't have a priori)
-        cognito_client = boto3.client("cognito-idp", "us-east-1")
-        existing_pools = cognito_client.list_user_pools(MaxResults=10)["UserPools"]
-        found_existing_pool = False
-        for pool in existing_pools:
-            if pool["Name"] == self.props["cognito_pool_name"]:
-                self.cognito_user_pool = cognito.UserPool.from_user_pool_id(
-                    self, "review-app-cognito-user-pool", user_pool_id=pool["Id"]
-                )
-                found_existing_pool = True
-                break
-        if not found_existing_pool:
-            # Create a new user pool
-            self.cognito_user_pool = cognito.UserPool(self, **user_pool_common_config)
-
-        self.cognito_user_pool_id = self.cognito_user_pool.user_pool_id
-
-        self.cognito_user_pool_client = self.cognito_user_pool.add_client(
-            "review-app-cognito-client",
-            user_pool_client_name="review-app-cognito-client",
-            generate_secret=False,
-            access_token_validity=Duration.minutes(30),
-            auth_flows=cognito.AuthFlow(user_srp=True),
-        )
-
-        self.cognito_client_id = self.cognito_user_pool_client.user_pool_client_id
 
     def create_cloudfront_distribution(self):
         self.cfn_distribution = cloudfront.Distribution(

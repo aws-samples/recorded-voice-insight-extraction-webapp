@@ -34,8 +34,12 @@ if not st.session_state.get("auth_username", None):
     st.stop()
 display_sidebar()
 
+
+username = st.session_state["auth_username"]
+api_auth_token = st.session_state["auth_id_token"]
+
 st.dataframe(
-    retrieve_all_items(username=st.session_state["auth_username"]),
+    retrieve_all_items(username=username, max_rows=None, api_auth_token=api_auth_token),
     hide_index=True,
     column_order=("media_name", "job_creation_time", "job_status"),
 )
