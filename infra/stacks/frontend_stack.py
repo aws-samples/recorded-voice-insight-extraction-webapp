@@ -40,7 +40,8 @@ class ReVIEWFrontendStack(Stack):
     ):
         self.props = props
         construct_id = props["stack_name_base"] + "-frontend"
-        super().__init__(scope, construct_id, **kwargs)
+        description = "ReVIEW (uksb-7ai2e5cqbn) (tag: Frontend)"
+        super().__init__(scope, construct_id, description=description, **kwargs)
 
         # Note: all props (which have string values) are exported as env variables
         # in the streamlit docker container (backend bucket names, table names, etc)

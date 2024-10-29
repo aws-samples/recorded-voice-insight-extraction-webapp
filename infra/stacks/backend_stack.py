@@ -42,8 +42,9 @@ class ReVIEWBackendStack(Stack):
     def __init__(self, scope: Construct, props: dict, **kwargs) -> None:
         self.props = props
         construct_id = props["stack_name_base"] + "-backend"
+        description = "ReVIEW (uksb-7ai2e5cqbn) (tag: Backend)"
 
-        super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, construct_id, description=description, **kwargs)
 
         # The order of these matters, later ones refer to class variables
         # instantiated in previous
