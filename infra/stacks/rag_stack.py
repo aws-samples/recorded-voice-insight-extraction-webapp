@@ -34,7 +34,8 @@ class ReVIEWRAGStack(Stack):
         job status in a dynamo table"""
         self.props = props
         construct_id = props["stack_name_base"] + "-rag"
-        super().__init__(scope, construct_id, **kwargs)
+        description = "ReVIEW (uksb-7ai2e5cqbn) (tag: RAG)"
+        super().__init__(scope, construct_id, description=description, **kwargs)
 
         # Setup KB role, which will be available with name props.kb_role_name
         self.kb_role_construct = ReVIEWKnowledgeBaseRole(self, props=props)

@@ -40,7 +40,8 @@ class ReVIEWAPIStack(Stack):
     ):
         self.props = props
         construct_id = props["stack_name_base"] + "-api"
-        super().__init__(scope, construct_id, **kwargs)
+        description = "ReVIEW (uksb-7ai2e5cqbn) (tag: API)"
+        super().__init__(scope, construct_id, description=description, **kwargs)
 
         self.setup_cognito_pool()
         self.create_gateway()
