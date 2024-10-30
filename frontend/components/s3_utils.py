@@ -49,7 +49,7 @@ def retrieve_transcript_by_jobid(
     presigned_url = json.loads(response.text)
 
     # 2. Use requests to GET from the presigned URL the transcript txt
-    http_response = requests.get(presigned_url)
+    http_response = requests.get(presigned_url, timeout=5)
     # If successful, returns HTTP status code 200
     if http_response.status_code != 200:
         raise Exception(
@@ -74,6 +74,7 @@ def retrieve_media_url(media_name: str, username: str, api_auth_token: str) -> s
         BACKEND_API_URL + "/s3-presigned",
         json=json_body,
         headers={"Authorization": api_auth_token},
+        timeout=5,
     )
     if response.status_code != 200:
         raise Exception(
@@ -100,6 +101,7 @@ def upload_to_s3(fileobj, filename: str, username: str, api_auth_token: str) -> 
         BACKEND_API_URL + "/s3-presigned",
         json=json_body,
         headers={"Authorization": api_auth_token},
+        timeout=5,
     )
     if response.status_code != 200:
         raise Exception(
@@ -110,7 +112,10 @@ def upload_to_s3(fileobj, filename: str, username: str, api_auth_token: str) -> 
     # 2. Use requests to POST the file directly to s3 via presigned url
     files = {"file": (filename, fileobj)}
     http_response = requests.post(
-        presigned_url_details["url"], data=presigned_url_details["fields"], files=files
+        presigned_url_details["url"],
+        data=presigned_url_details["fields"],
+        files=files,
+        timeout=30,
     )
     # If successful, returns HTTP status code 204
     if http_response.status_code != 204:

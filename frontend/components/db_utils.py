@@ -39,6 +39,7 @@ def retrieve_all_items(
         BACKEND_API_URL + "/ddb",
         json=json_body,
         headers={"Authorization": api_auth_token},
+        timeout=10,
     )
     if response.status_code != 200:
         raise Exception(f"Non 200 response from API gateway: {response.reason}")
@@ -79,6 +80,7 @@ def retrieve_analysis_by_jobid(
         BACKEND_API_URL + "/ddb",
         json=json_body,
         headers={"Authorization": api_auth_token},
+        timeout=10,
     )
     if response.status_code != 200:
         raise Exception(f"Non 200 response from API gateway: {response.reason}")
@@ -107,6 +109,7 @@ def store_analysis_result(
         BACKEND_API_URL + "/ddb",
         json=json_body,
         headers={"Authorization": api_auth_token},
+        timeout=10,
     )
     if response.status_code != 200:
         raise Exception(f"Non 200 response from API gateway: {response.reason}")
