@@ -25,6 +25,10 @@ def sleep_10sec():
     return 10
 
 
+def sleep_1min():
+    return 60
+
+
 MODEL_ID_TO_INDEX_REQUEST_MAP = {
     "amazon.titan-embed-text-v1": {
         "settings": {"index": {"knn": True, "knn.algo_param.ef_search": 512}},
@@ -152,7 +156,7 @@ def delete_index_if_present(oss_http_client, index_name):
         response = oss_http_client.indices.delete(index=index_name)
         logger.info(response)
         logger.info("Deleted index {}, sleeping for 1 min".format(index_name))
-        sleep(60)
+        sleep(sleep_1min())
         return response
     except NotFoundError:
         logger.info("Index {} not found, skipping deletion".format(index_name))
