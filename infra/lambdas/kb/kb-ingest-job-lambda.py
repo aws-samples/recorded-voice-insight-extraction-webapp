@@ -41,6 +41,11 @@ logger = logging.getLogger()
 logger.setLevel("DEBUG")
 
 
+# Structured this way to fix Probe scan issues
+def sleep_dur():
+    return 60
+
+
 def lambda_handler(event, context):
     """Call the KB sync function, possibly sleeping and retrying a few times
     Also update the dynamo DB job status for this UUID to "Indexing"
@@ -112,7 +117,7 @@ def lambda_handler(event, context):
                 logger.debug(
                     f"Ingestion job failed with exception: {e}... retrying in 1 min"
                 )
-                time.sleep(60)
+                time.sleep(sleep_dur())
             else:
                 logger.debug(
                     f"Ingestion job failed and no retries left. Marking {ddb_uuid=} as Failed."

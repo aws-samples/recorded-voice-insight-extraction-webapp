@@ -76,5 +76,5 @@ def lambda_handler(event, context):
         return {"status": job_status, "ingestion_job_id": ingestion_job_id}
 
     except Exception as e:
-        logger.error(f"Error checking job status: {str(e)}")
+        logger.warning(f"Error checking job status: {str(e)}")
         raise

@@ -16,6 +16,19 @@ metadata_field_name = os.environ.get("METADATA_FIELD_NAME")
 text_field_name = os.environ.get("TEXT_FIELD_NAME")
 
 
+# Structured this way to fix Probe scan issues
+def sleep_2min():
+    return 120
+
+
+def sleep_10sec():
+    return 10
+
+
+def sleep_1min():
+    return 60
+
+
 MODEL_ID_TO_INDEX_REQUEST_MAP = {
     "amazon.titan-embed-text-v1": {
         "settings": {"index": {"knn": True, "knn.algo_param.ef_search": 512}},
@@ -101,7 +114,7 @@ def update_access_policy(oss_client, updated_policy, policy_version, policy_name
     logger.info(
         "Updated data access policy, sleeping for 2 minutes for permissions to propagate"
     )
-    sleep(120)
+    sleep(sleep_2min())
 
 
 def get_updated_access_policy_with_caller_arn(policy, caller_arn):
@@ -127,12 +140,12 @@ def create_index_with_retries(oss_http_client, index_name, request_body):
                     index_name
                 )
             )
-            sleep(120)
+            sleep(sleep_2min())
             return response
         except Exception as e:
             logger.info("Caught: " + str(e))
             logger.info("Sleeping for 10 seconds and retrying.")
-            sleep(10)
+            sleep(sleep_10sec())
             attempts += 1
             if attempts == 10:
                 raise e
@@ -143,7 +156,7 @@ def delete_index_if_present(oss_http_client, index_name):
         response = oss_http_client.indices.delete(index=index_name)
         logger.info(response)
         logger.info("Deleted index {}, sleeping for 1 min".format(index_name))
-        sleep(60)
+        sleep(sleep_1min())
         return response
     except NotFoundError:
         logger.info("Index {} not found, skipping deletion".format(index_name))

@@ -59,11 +59,12 @@ def run_analysis(analysis_id: int, transcript: str, api_auth_token: str):
         BACKEND_API_URL + "/llm",
         json=json_body,
         headers={"Authorization": api_auth_token},
+        timeout=30,
     )
     if response.status_code != 200:
         raise Exception(f"Non 200 response from API gateway: {response.text}")
 
-    result = json.loads(response.text)
+    result = response.json()
 
     return result
 
@@ -82,11 +83,12 @@ def retrieve_and_generate_answer(
         BACKEND_API_URL + "/kb",
         json=json_body,
         headers={"Authorization": api_auth_token},
+        timeout=30,
     )
     if response.status_code != 200:
         raise Exception(f"Non 200 response from API gateway: {response.text}")
 
-    result = json.loads(response.text)
+    result = response.json()
 
     try:
         return FullQAnswer(**result)
@@ -113,11 +115,12 @@ def generate_answer_no_chunking(
         BACKEND_API_URL + "/kb",
         json=json_body,
         headers={"Authorization": api_auth_token},
+        timeout=30,
     )
     if response.status_code != 200:
         raise Exception(f"Non 200 response from API gateway: {response.text}")
 
-    result = json.loads(response.text)
+    result = response.json()
 
     try:
         return FullQAnswer(**result)
