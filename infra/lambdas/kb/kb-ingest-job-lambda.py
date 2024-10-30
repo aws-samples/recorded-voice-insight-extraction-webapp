@@ -40,6 +40,8 @@ lambda_client = boto3.client("lambda")
 logger = logging.getLogger()
 logger.setLevel("DEBUG")
 
+SLEEP_DURATION = 60
+
 
 def lambda_handler(event, context):
     """Call the KB sync function, possibly sleeping and retrying a few times
@@ -112,7 +114,7 @@ def lambda_handler(event, context):
                 logger.debug(
                     f"Ingestion job failed with exception: {e}... retrying in 1 min"
                 )
-                time.sleep(60)
+                time.sleep(SLEEP_DURATION)
             else:
                 logger.debug(
                     f"Ingestion job failed and no retries left. Marking {ddb_uuid=} as Failed."
