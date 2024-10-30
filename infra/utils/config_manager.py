@@ -34,7 +34,7 @@ class ConfigManager:
         ), "Stack name must only contain numbers, letters, and/or hyphens"
 
     def _load_config(self, config_file_path: str) -> Dict[str, Any]:
-        with open(config_file_path, "r") as config_file:
+        with open(config_file_path, "r", encoding="utf-8") as config_file:
             return yaml.safe_load(config_file)
 
     def get_props(self) -> Dict[str, str]:
