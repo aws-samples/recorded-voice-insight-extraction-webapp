@@ -44,7 +44,7 @@ def retrieve_all_items(
     if response.status_code != 200:
         raise Exception(f"Non 200 response from API gateway: {response.reason}")
 
-    result = json.loads(response.text)
+    result = response.json()
 
     # Lambda returns json, convert to dataframe for UI
     if not result:
@@ -85,7 +85,7 @@ def retrieve_analysis_by_jobid(
     if response.status_code != 200:
         raise Exception(f"Non 200 response from API gateway: {response.reason}")
 
-    result = json.loads(response.text)
+    result = response.json()
     return result
 
 
@@ -114,5 +114,5 @@ def store_analysis_result(
     if response.status_code != 200:
         raise Exception(f"Non 200 response from API gateway: {response.reason}")
 
-    result = json.loads(response.text)
+    result = response.json()
     return result

@@ -46,7 +46,7 @@ def retrieve_transcript_by_jobid(
             f"Error getting presigned URL from API gateway: {response.reason}"
         )
 
-    presigned_url = json.loads(response.text)
+    presigned_url = response.json()
 
     # 2. Use requests to GET from the presigned URL the transcript txt
     http_response = requests.get(presigned_url, timeout=5)
@@ -81,7 +81,7 @@ def retrieve_media_url(media_name: str, username: str, api_auth_token: str) -> s
             f"Error getting presigned URL from API gateway: {response.reason}"
         )
 
-    presigned_url = json.loads(response.text)
+    presigned_url = response.json()
 
     # 2. Return the presigned URL directly
     return presigned_url
@@ -107,7 +107,7 @@ def upload_to_s3(fileobj, filename: str, username: str, api_auth_token: str) -> 
         raise Exception(
             f"Error getting presigned URL from API gateway: {response.reason}"
         )
-    presigned_url_details = json.loads(response.text)
+    presigned_url_details = response.json()
 
     # 2. Use requests to POST the file directly to s3 via presigned url
     files = {"file": (filename, fileobj)}
