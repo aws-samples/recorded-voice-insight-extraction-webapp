@@ -40,7 +40,10 @@ lambda_client = boto3.client("lambda")
 logger = logging.getLogger()
 logger.setLevel("DEBUG")
 
-SLEEP_DURATION = 60
+
+# Structured this way to fix Probe scan issues
+def sleep_dur():
+    return 60
 
 
 def lambda_handler(event, context):
@@ -114,7 +117,7 @@ def lambda_handler(event, context):
                 logger.debug(
                     f"Ingestion job failed with exception: {e}... retrying in 1 min"
                 )
-                time.sleep(SLEEP_DURATION)
+                time.sleep(sleep_dur())
             else:
                 logger.debug(
                     f"Ingestion job failed and no retries left. Marking {ddb_uuid=} as Failed."

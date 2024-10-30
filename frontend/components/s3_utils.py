@@ -40,6 +40,7 @@ def retrieve_transcript_by_jobid(
         BACKEND_API_URL + "/s3-presigned",
         json=json_body,
         headers={"Authorization": api_auth_token},
+        timeout=5,
     )
     if response.status_code != 200:
         raise Exception(

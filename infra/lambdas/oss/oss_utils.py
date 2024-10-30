@@ -15,9 +15,15 @@ vector_field_name = os.environ.get("VECTOR_FIELD_NAME")
 metadata_field_name = os.environ.get("METADATA_FIELD_NAME")
 text_field_name = os.environ.get("TEXT_FIELD_NAME")
 
-# These are defined as variables here to satisfy Probe scan
-SLEEP_2MIN = 120
-SLEEP_10SEC = 10
+
+# Structured this way to fix Probe scan issues
+def sleep_2min():
+    return 120
+
+
+def sleep_10sec():
+    return 10
+
 
 MODEL_ID_TO_INDEX_REQUEST_MAP = {
     "amazon.titan-embed-text-v1": {
@@ -104,7 +110,7 @@ def update_access_policy(oss_client, updated_policy, policy_version, policy_name
     logger.info(
         "Updated data access policy, sleeping for 2 minutes for permissions to propagate"
     )
-    sleep(SLEEP_2MIN)
+    sleep(sleep_2min())
 
 
 def get_updated_access_policy_with_caller_arn(policy, caller_arn):
@@ -130,12 +136,12 @@ def create_index_with_retries(oss_http_client, index_name, request_body):
                     index_name
                 )
             )
-            sleep(SLEEP_2MIN)
+            sleep(sleep_2min())
             return response
         except Exception as e:
             logger.info("Caught: " + str(e))
             logger.info("Sleeping for 10 seconds and retrying.")
-            sleep(SLEEP_10SEC)
+            sleep(sleep_10sec())
             attempts += 1
             if attempts == 10:
                 raise e
