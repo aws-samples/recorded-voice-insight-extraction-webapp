@@ -40,7 +40,7 @@ class ReVIEWFrontendStack(Stack):
     ):
         self.props = props
         construct_id = props["stack_name_base"] + "-frontend"
-        description = "ReVIEW (uksb-7ai2e5cqbn) (tag: Frontend)"
+        description = "ReVIEW Application - Frontend stack (v1.0.0)"
         super().__init__(scope, construct_id, description=description, **kwargs)
 
         # Note: all props (which have string values) are exported as env variables
