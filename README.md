@@ -17,8 +17,6 @@
     - [*Destroy the CDK stacks*](#destroy-the-cdk-stacks)
 - [Repo Structure](#repo-structure)
 - [Frontend Replacement](#frontend-replacement)
-  - [Pending Updates](#pending-updates)
-  - [Additional Resources](#additional-resources)
   - [Contributors](#contributors)
 
 # Overview
@@ -26,8 +24,6 @@
 The Recorded Voice Insight Extraction Webapp (ReVIEW) is a cdk-deployed, robust, and scalable application built on AWS and Bedrock that boosts productivity by allowing users to upload recordings containing speech and leverage generative AI to answer questions based on the recordings. The AI assistant chatbot functionality will answer specific questions about a recording (or recordings) **and queue up the parent media to specific timestamps for users to validate the answers themselves** This is the critical workflow that allows the users to verify accuracy of LLM-generated answers for themselves.
 
 Additionally, this application includes the capability to use an LLM to analyze the transcripts with custom templates including generating summaries, draft custom readout documents, identify topics discussed, and more. 
-
-A 4 minute video demonstrating the features as of May 28, 2024 [can be viewed here](https://amazon.awsapps.com/workdocs-preview/index.html#/document/4e6f1bcfcd420cd4e650e7008a946a6d1214d735336d2b3c40784ba2af1b0ed2). Note this video demonstrates a version of the application before the knowledge base / RAG component was integrated to allow chatting with multiple media sources, and before the API Gateway was added.
 
 ## Key Features
 
@@ -142,7 +138,6 @@ This will destroy all three ReVIEW stacks and remove all components from your AW
   - assets/ - Static assets used by the frontend, e.g. analysis templates that application users can select
   - schemas/ - Data models and schemas used by the frontend
   - Dockerfile - Docker file to build containerized frontend application within this directory
-- notebooks/ - Misc sandbox-style notebooks used during development
 - diagram/ - Architecture diagrams of the solution used in READMEs
 
 # Frontend Replacement
@@ -157,14 +152,5 @@ At a high level, the steps to replace the frontend are:
 
 If the new frontend is written in Python, it is recommend to re-use the `frontend/components/` which is where most of the REST API calls are made.
 
-## Pending Updates
-See the [issues board](https://gitlab.aws.dev/genaiic-reusable-assets/demo-artifacts/ReVIEW/-/issues) for a list of all pending updates
-
-## Additional Resources
-* [AWS APG Pattern for ReVIEW](https://apg-library.amazonaws.com/content-viewer/author/3642bafc-3b2e-4bc4-8725-a492823db860) (pre knowledge base integration)
-* [Instructions to access an already-deployed version of the app](https://quip-amazon.com/26b2AbDN6W8Y/ReVIEW-Application-New-User-Onboarding)
-* [Tech exchange talk recording](https://amazon.awsapps.com/workdocs-preview/index.html#/document/1af14339831b9fcfe1cb51c79e0acf38008120e8082314df5e6e23d7c2461a3a) and [associated slides](https://amazon.awsapps.com/workdocs-preview/index.html#/document/f540c23cbd61a81a7185a5a97ed08dcb0fda198df6874625eb285a2b6afea910) (pre knowledge base integration)
-* [GenAIIC Builder Forum talk recording](https://amazon.awsapps.com/workdocs-preview/index.html#/document/28a354ef105ed669b517eef50abc50da02f93f0d45590ec5cf8426bf539289d9) and [associated slides](https://amazon.awsapps.com/workdocs-preview/index.html#/document/04fafed932a0590769af6b0d78356994ef318593b2bf4f357d819b20d0703415) (pre knowledge base integration)
-
 ## Contributors
-- [David Kaleko](https://phonetool.amazon.com/users/kaleko), Senior Applied Scientist, AWS Generative AI Innovation Center
+- David Kaleko, Senior Applied Scientist, AWS Generative AI Innovation Center
