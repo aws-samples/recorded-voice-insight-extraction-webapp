@@ -16,7 +16,6 @@
 
 """Helper utilities for working with Amazon Cognito"""
 
-import streamlit as st
 from streamlit_cognito_auth import CognitoAuthenticator
 import os
 

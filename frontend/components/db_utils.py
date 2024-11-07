@@ -17,7 +17,6 @@
 """Utilities related to accessing dynamoDB"""
 
 import pandas as pd
-import json
 import os
 import requests
 

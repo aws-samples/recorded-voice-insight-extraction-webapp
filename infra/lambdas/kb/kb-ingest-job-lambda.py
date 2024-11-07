@@ -61,7 +61,7 @@ def lambda_handler(event, context):
     ddb_uuid = extract_uuid_from_s3_URI(s3_file_key)
 
     # Retry a few times
-    # TODO: handle this better with a queue or something
+    # TODO: handle this better with a queue
     response = None
     retries_left = 5
     while response is None:

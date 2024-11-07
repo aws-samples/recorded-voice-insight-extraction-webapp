@@ -34,7 +34,7 @@ class ReVIEWRAGStack(Stack):
         job status in a dynamo table"""
         self.props = props
         construct_id = props["stack_name_base"] + "-rag"
-        description = "ReVIEW (uksb-7ai2e5cqbn) (tag: RAG)"
+        description = "ReVIEW RAG Stack"
         super().__init__(scope, construct_id, description=description, **kwargs)
 
         # Setup KB role, which will be available with name props.kb_role_name
@@ -62,11 +62,10 @@ class ReVIEWRAGStack(Stack):
         )
 
         # Don't deploy kb until oss is ready (including launching
-        # lambda functions to create indices? Not sure if that works)
+        # lambda functions to create indices)
         self.kb_construct.node.add_dependency(self.oss_construct)
 
         # Construct to handle syncing of knowledge base
-        # TODO: check to make sure cdk destroy removes this
         self.kb_sync_construct = ReVIEWKnowledgeBaseSyncConstruct(
             self,
             props=props,

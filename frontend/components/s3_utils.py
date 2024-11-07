@@ -16,7 +16,6 @@
 
 """Utilities related to accessing s3"""
 
-import json
 import os
 
 import requests

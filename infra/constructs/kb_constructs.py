@@ -379,8 +379,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "CloudWatchLogsFullAccess"
                 ),
-                # TODO: custom access to
-                # arn:aws:dynamodb:us-east-1:339712833620:table/kazu-dev-app-table
+                # TODO: reduce access to only the ddb table this application uses
                 # DDB access needed because this lambda updates job statuses
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "AmazonDynamoDBFullAccess"

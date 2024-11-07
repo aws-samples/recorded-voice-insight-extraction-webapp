@@ -42,7 +42,7 @@ class ReVIEWBackendStack(Stack):
     def __init__(self, scope: Construct, props: dict, **kwargs) -> None:
         self.props = props
         construct_id = props["stack_name_base"] + "-backend"
-        description = "ReVIEW (uksb-7ai2e5cqbn) (tag: Backend)"
+        description = "ReVIEW backend stack"
 
         super().__init__(scope, construct_id, description=description, **kwargs)
 
