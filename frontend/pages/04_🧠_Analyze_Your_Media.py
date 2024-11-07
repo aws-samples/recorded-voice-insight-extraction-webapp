@@ -53,7 +53,7 @@ job_df = retrieve_all_items(
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
 selected_media_name = st.selectbox(
-    "dummy_label",
+    "kazu",
     options=completed_jobs.media_name,
     index=None,
     placeholder="Select a media file to analyze",
@@ -63,7 +63,7 @@ selected_media_name = st.selectbox(
 st.subheader("Pick an analysis type:")
 template_df = get_analysis_templates()
 selected_analysis_name = st.selectbox(
-    "dummy_label",
+    "kazu",
     options=template_df.template_short_name,
     index=None,
     placeholder="Select an analysis type",

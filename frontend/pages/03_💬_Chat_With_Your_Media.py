@@ -60,7 +60,7 @@ completed_jobs = job_df[job_df.job_status == "Completed"]
 
 CHAT_WITH_ALL_STRING = "Chat with all media files"
 selected_media_name = st.selectbox(
-    "dummy_label",
+    "kazu",
     options=[CHAT_WITH_ALL_STRING] + completed_jobs.media_name.to_list(),
     index=None,
     placeholder="Select a media file to analyze",

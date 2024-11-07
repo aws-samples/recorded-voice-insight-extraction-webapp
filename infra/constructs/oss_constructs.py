@@ -33,6 +33,7 @@ from aws_cdk.aws_opensearchserverless import (
     CfnSecurityPolicy,
 )
 from constructs import Construct
+from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
 
 
 class ReVIEWOSSConstruct(Construct):
@@ -232,10 +233,22 @@ class ReVIEWOSSConstruct(Construct):
         2. Invoke the lambda function to actually create the index (w/ custom resource stuff)
         """
         # dependency layer (includes requests, requests-aws4auth,opensearch-py, aws-lambda-powertools)
-        dependency_layer = _lambda.LayerVersion(
+        # dependency_layer = _lambda.LayerVersion(
+        #     self,
+        #     "dependency_layer",
+        #     code=_lambda.Code.from_asset("assets/oss_lambdas_dependency_layer.zip"),
+        #     compatible_runtimes=[
+        #         _lambda.Runtime.PYTHON_3_8,
+        #         _lambda.Runtime.PYTHON_3_9,
+        #         _lambda.Runtime.PYTHON_3_10,
+        #     ],
+        #     license="Apache-2.0",
+        #     description="dependency_layer including requests, requests-aws4auth, aws-lambda-powertools, opensearch-py",
+        # )
+        dependency_layer = PythonLayerVersion(
             self,
             "dependency_layer",
-            code=_lambda.Code.from_asset("assets/oss_lambdas_dependency_layer.zip"),
+            entry="assets",  # directory containing requirements.txt for lambda dependency layer
             compatible_runtimes=[
                 _lambda.Runtime.PYTHON_3_8,
                 _lambda.Runtime.PYTHON_3_9,
