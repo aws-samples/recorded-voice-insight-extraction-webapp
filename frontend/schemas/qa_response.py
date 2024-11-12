@@ -16,8 +16,8 @@
 
 """Base data models for LLM Q&A responses with timestampped citations"""
 
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 
 class Citation(BaseModel):
@@ -31,7 +31,7 @@ class PartialQAnswer(BaseModel):
     """Part of a complete answer, to be concatenated with other partial answers"""
 
     partial_answer: str
-    citations: List[Citation]
+    citations: Optional[List[Citation]] = Field(default_factory=list)
 
     def pprint(self):
         print(f"LLMAnswer:\n Answer={self.answer}\n Citations={self.citations}")
