@@ -65,7 +65,7 @@ The code base behind the solution consists of four stacks:
 ### *Clone the Repository*
 Fork the repository, and clone it to the location of your choice. For example:
 ```{bash}
-$ git@ssh.gitlab.aws.dev:genaiic-reusable-assets/demo-artifacts/ReVIEW.git
+$ git clone https://github.com/aws-samples/recorded-voice-insight-extraction-webapp.git
 ```
 
 ### *CDK Prerequisites*
