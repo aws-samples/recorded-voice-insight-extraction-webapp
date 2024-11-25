@@ -62,9 +62,8 @@ class ReVIEWKnowledgeBaseRole(Construct):
             assumed_by=iam.ServicePrincipal(
                 "bedrock.amazonaws.com",
                 conditions={
-                    "StringEquals": {"aws:SourceAccount": self.props["account_id"]},
                     "ArnLike": {
-                        "aws:SourceArn": f"arn:aws:bedrock:{self.props['region_name']}:{self.props['account_id']}:knowledge-base/*"
+                        "aws:SourceArn": f"arn:aws:bedrock:{self.props['region_name']}:*:knowledge-base/*"
                     },
                 },
             ),
@@ -88,7 +87,7 @@ class ReVIEWKnowledgeBaseRole(Construct):
                             effect=iam.Effect.ALLOW,
                             actions=["aoss:APIAccessAll"],
                             resources=[
-                                f"arn:aws:aoss:{self.props['region_name']}:{self.props['account_id']}:collection/*"
+                                f"arn:aws:aoss:{self.props['region_name']}:*:collection/*"
                             ],
                         )
                     ]

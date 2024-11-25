@@ -283,7 +283,6 @@ class ReVIEWBackendStack(Stack):
             principal=iam.ServicePrincipal("s3.amazonaws.com"),
             action="lambda:InvokeFunction",
             source_arn=self.bucket.bucket_arn,
-            source_account=self.props["account_id"],
         )
 
         self.postprocess_transcript_lambda = _lambda.Function(
@@ -310,7 +309,6 @@ class ReVIEWBackendStack(Stack):
             principal=iam.ServicePrincipal("s3.amazonaws.com"),
             action="lambda:InvokeFunction",
             source_arn=self.bucket.bucket_arn,
-            source_account=self.props["account_id"],
         )
 
         # Grant other lambda roles permission to invoke the ddb lambda

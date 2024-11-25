@@ -56,7 +56,7 @@ class ReVIEWOSSConstruct(Construct):
 
         # Create a role for lambdas that will access this OSS
         #  (allowed resources are of form
-        # "arn:aws:aoss:*:[ACCOUNT_ID]:collection/*")
+        # "arn:aws:aoss:*:[account_number]:collection/*")
         self.oss_lambda_role = self.create_oss_lambda_role()
 
         self.encryptionPolicy = self.create_encryption_policy()
@@ -210,14 +210,7 @@ class ReVIEWOSSConstruct(Construct):
                                 "logs:CreateLogStream",
                                 "logs:PutLogEvents",
                             ],
-                            resources=[
-                                ## Can't get any of these specific resources to work correctly...
-                                ## * is acceptable for a resource since actions are limited
-                                # f"arn:aws:aoss:{self.props['region_name']}:{self.props['account_id']}:collection/*",
-                                # f"arn:aws:aoss:{self.props['region_name']}:{self.props['account_id']}:index/*",
-                                # "arn:aws:logs:*:*:*",
-                                "*"
-                            ],
+                            resources=["*"],
                         )
                     ]
                 )
