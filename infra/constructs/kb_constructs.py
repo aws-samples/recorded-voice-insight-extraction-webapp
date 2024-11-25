@@ -64,7 +64,7 @@ class ReVIEWKnowledgeBaseRole(Construct):
                 "bedrock.amazonaws.com",
                 conditions={
                     "ArnLike": {
-                        "aws:SourceArn": f"arn:aws:bedrock:{self.props['region_name']}:*:knowledge-base/*"
+                        "aws:SourceArn": f"arn:aws:bedrock:*:*:knowledge-base/*"
                     },
                 },
             ),
@@ -75,9 +75,7 @@ class ReVIEWKnowledgeBaseRole(Construct):
                             sid="BedrockInvokeModelStatement",
                             effect=iam.Effect.ALLOW,
                             actions=["bedrock:InvokeModel"],
-                            resources=[
-                                f"arn:aws:bedrock:{self.props['region_name']}::foundation-model/*"
-                            ],
+                            resources=[f"arn:aws:bedrock:*::foundation-model/*"],
                         )
                     ]
                 ),
@@ -87,9 +85,7 @@ class ReVIEWKnowledgeBaseRole(Construct):
                             sid="OpenSearchServerlessAPIAccessAllStatement",
                             effect=iam.Effect.ALLOW,
                             actions=["aoss:APIAccessAll"],
-                            resources=[
-                                f"arn:aws:aoss:{self.props['region_name']}:*:collection/*"
-                            ],
+                            resources=[f"arn:aws:aoss:*:*:collection/*"],
                         )
                     ]
                 ),

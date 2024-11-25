@@ -24,6 +24,10 @@ class ConfigManager:
         self.config: Dict[str, Any] = self._load_config(config_file_path)
         self._validate_config()
 
+        self.s3_recordings_prefix = "recordings"
+        self.s3_transcripts_prefix = "transcripts"
+        self.s3_text_transcripts_prefix = "transcripts-txt"
+
     def _validate_config(self):
         # Ensure stack name is not empty
         assert self.config["stack_name_base"] != "", "Stack name cannot be empty"
@@ -42,15 +46,17 @@ class ConfigManager:
 
         stack_name_base = self.config["stack_name_base"]
 
+        dynamo_db_table_name = f"{stack_name_base}-app-table"
+        oss_collection_name = f"{stack_name_base}-collection"
+        oss_index_name = f"{stack_name_base}-idx"
         props = {
             "stack_name_base": stack_name_base,
-            "s3_recordings_prefix": self.config["s3"]["recordings_prefix"],
-            "s3_transcripts_prefix": self.config["s3"]["transcripts_prefix"],
-            "s3_text_transcripts_prefix": self.config["s3"]["text_transcripts_prefix"],
-            "ddb_table_name": self.config["dynamo_db"]["table_name"],
-            "region_name": self.config["region_name"],
-            "oss_collection_name": self.config["oss"]["collection_name"],
-            "oss_index_name": self.config["oss"]["index_name"],
+            "s3_recordings_prefix": self.s3_recordings_prefix,
+            "s3_transcripts_prefix": self.s3_transcripts_prefix,
+            "s3_text_transcripts_prefix": self.s3_text_transcripts_prefix,
+            "ddb_table_name": dynamo_db_table_name,
+            "oss_collection_name": oss_collection_name,
+            "oss_index_name": oss_index_name,
             "embedding_model_id": self.config["embedding"]["model_id"],
             "embedding_model_arn": self.config["embedding"]["model_arn"],
             "kb_chunking_strategy": self.config["kb"]["chunking_strategy"],
