@@ -40,23 +40,14 @@ class ConfigManager:
     def get_props(self) -> Dict[str, str]:
         """Map what is in the config file to variable names used by the stacks"""
 
-        unique_stack_name = (
-            self.config["stack_name_base"].lower() + "-" + self.config["account_id"]
-        )
-        s3_bucket_name = (
-            f"{unique_stack_name}-{self.config['s3']['bucket_name_suffix']}"
-        )
+        stack_name_base = self.config["stack_name_base"]
+
         props = {
-            "stack_name_base": self.config["stack_name_base"],
-            "unique_stack_name": unique_stack_name,
-            "s3_bucket_name": s3_bucket_name,
-            "s3_bucket_arn": f"arn:aws:s3:::{s3_bucket_name}",
-            "s3_logging_bucket_name": f"{unique_stack_name}-{self.config['s3']['logging_bucket_name_suffix']}",
+            "stack_name_base": stack_name_base,
             "s3_recordings_prefix": self.config["s3"]["recordings_prefix"],
             "s3_transcripts_prefix": self.config["s3"]["transcripts_prefix"],
             "s3_text_transcripts_prefix": self.config["s3"]["text_transcripts_prefix"],
             "ddb_table_name": self.config["dynamo_db"]["table_name"],
-            "account_id": self.config["account_id"],
             "region_name": self.config["region_name"],
             "oss_collection_name": self.config["oss"]["collection_name"],
             "oss_index_name": self.config["oss"]["index_name"],
@@ -65,7 +56,6 @@ class ConfigManager:
             "kb_chunking_strategy": self.config["kb"]["chunking_strategy"],
             "kb_max_tokens": self.config["kb"]["max_tokens"],
             "kb_overlap_percentage": self.config["kb"]["overlap_percentage"],
-            "kb_role_name": f"{unique_stack_name}-kb-role",
             "kb_num_chunks": self.config["kb"]["num_chunks"],
             "llm_model_id": self.config["llm"]["model_id"],
             "llm_model_arn": self.config["llm"]["model_arn"],

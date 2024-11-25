@@ -39,7 +39,14 @@ backend_stack = ReVIEWBackendStack(
 # RAG stack (OSS + Bedrock KB)
 # DynamoDB handler lambda provided because the knowledge base ingest/sync
 # functions use it to update job statuses in a dynamoDB table
-rag_stack = ReVIEWRAGStack(app, props, ddb_lambda=backend_stack.ddb_handler_lambda)
+# Source_bucket was created in the backend_stack, it's where the
+# RAG stack grabs transcripts and ingests them into a knowledge base
+rag_stack = ReVIEWRAGStack(
+    app,
+    props,
+    ddb_lambda=backend_stack.ddb_handler_lambda,
+    source_bucket=backend_stack.bucket,
+)
 
 # API stack for frontend to communicate with backend
 api_stack = ReVIEWAPIStack(

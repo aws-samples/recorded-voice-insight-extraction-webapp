@@ -28,8 +28,15 @@ from infra.constructs.oss_constructs import ReVIEWOSSConstruct
 class ReVIEWRAGStack(Stack):
     """Stack to deploy both knowledge base and opensearch serverless"""
 
-    def __init__(self, scope, props: dict, ddb_lambda: _lambda.Function, **kwargs):
-        """source_bucket is the s3 bucket from which KB will grab text files to index
+    def __init__(
+        self,
+        scope,
+        props: dict,
+        ddb_lambda: _lambda.Function,
+        source_bucket: s3.Bucket,
+        **kwargs,
+    ):
+        """source_bucket is the s3 bucket from which KB will grab text files to index, already created in backend
         ddb_lambda is provided because KB sync step functions invoke a lambda to store
         job status in a dynamo table"""
         self.props = props
@@ -37,8 +44,11 @@ class ReVIEWRAGStack(Stack):
         description = "ReVIEW Application - RAG stack (v1.0.0)"
         super().__init__(scope, construct_id, description=description, **kwargs)
 
-        # Setup KB role, which will be available with name props.kb_role_name
-        self.kb_role_construct = ReVIEWKnowledgeBaseRole(self, props=props)
+        # Setup KB role
+        # It is given the source bucket because KB has to have access to that bucket
+        self.kb_role_construct = ReVIEWKnowledgeBaseRole(
+            self, props=props, source_bucket=source_bucket
+        )
 
         # Deploy OSS collection, with data access allowed to kb_role
         self.oss_construct = ReVIEWOSSConstruct(
@@ -47,11 +57,6 @@ class ReVIEWRAGStack(Stack):
             data_access_principal_roles=[self.kb_role_construct.kb_role],
         )
 
-        # Get the source bucket created by the backend stack and provide to KB construct
-        # (this bucket is where KB grabs text files to chunk and index)
-        source_bucket = s3.Bucket.from_bucket_name(
-            self, "source_bucket", props["s3_bucket_name"]
-        )
         # Deploy KB on top of OSS collection, providing KB role and collection arn
         self.kb_construct = ReVIEWKnowledgeBaseConstruct(
             self,

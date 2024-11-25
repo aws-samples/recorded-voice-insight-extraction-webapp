@@ -45,20 +45,21 @@ from constructs import Construct
 class ReVIEWKnowledgeBaseRole(Construct):
     """Construct for Bedrock knowledge base roles"""
 
-    def __init__(self, scope, props: dict, **kwargs):
+    def __init__(self, scope, props: dict, source_bucket: s3.Bucket, **kwargs):
         self.props = props
-        construct_id = self.props["kb_role_name"]
+        construct_id = props["stack_name_base"] + "-kbrole"
         super().__init__(scope, construct_id, **kwargs)
 
+        self.role_name = props["stack_name_base"] + "-kbrole"
         # Setup KB role
-        self.setup_kb_role()
+        self.setup_kb_role(source_bucket=source_bucket)
 
-    def setup_kb_role(self):
+    def setup_kb_role(self, source_bucket: s3.Bucket):
         # Create KB Role
         self.kb_role = iam.Role(
             self,
             "KB_Role",
-            role_name=self.props["kb_role_name"],
+            role_name=self.role_name,
             assumed_by=iam.ServicePrincipal(
                 "bedrock.amazonaws.com",
                 conditions={
@@ -98,13 +99,13 @@ class ReVIEWKnowledgeBaseRole(Construct):
                             sid="S3ListBucketStatement",
                             effect=iam.Effect.ALLOW,
                             actions=["s3:ListBucket"],
-                            resources=[self.props["s3_bucket_arn"]],
+                            resources=[source_bucket.bucket_arn],
                         ),
                         iam.PolicyStatement(
                             sid="S3GetObjectStatement",
                             effect=iam.Effect.ALLOW,
                             actions=["s3:GetObject"],
-                            resources=[f"{self.props['s3_bucket_arn']}/*"],
+                            resources=[f"{source_bucket.bucket_arn}/*"],
                         ),
                     ]
                 ),
@@ -203,7 +204,7 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             self.props["stack_name_base"] + "-RagDataSource",
             data_source_configuration=CfnDataSource.DataSourceConfigurationProperty(
                 s3_configuration=CfnDataSource.S3DataSourceConfigurationProperty(
-                    bucket_arn=self.props["s3_bucket_arn"],
+                    bucket_arn=self.source_bucket.bucket_arn,
                     # Only documents under transcripts-txt are indexed into KB
                     inclusion_prefixes=[self.props["s3_text_transcripts_prefix"]],
                 ),
@@ -250,7 +251,7 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
         query_lambda = _lambda.Function(
             self,
             self.props["stack_name_base"] + "-KBQueryLambda",
-            function_name=f"{self.props['unique_stack_name']}-KBQueryLambda",
+            function_name=f"{self.props['stack_name_base']}-KBQueryLambda",
             description="Function for ReVIEW to query Knowledge Base",
             runtime=_lambda.Runtime.PYTHON_3_10,
             handler="kb.kb-query-lambda.lambda_handler",
@@ -344,13 +345,13 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         self.ingest_lambda_log_group = logs.LogGroup(
             self,
             "KBIngestLambdaLogGroup",
-            log_group_name=f"""/aws/lambda/{self.props["unique_stack_name"]}-IngestionJob""",
+            log_group_name=f"""/aws/lambda/{self.props["stack_name_base"]}-IngestionJob""",
             removal_policy=RemovalPolicy.DESTROY,
         )
         """Create a lambda function to launch knowledge base sync and save sync job ID to dynamodb"""
         ingest_lambda = _lambda.Function(
             self,
-            self.props["unique_stack_name"] + "-IngestionJob",
+            self.props["stack_name_base"] + "-IngestionJob",
             description="ReVIEW KB Ingestion Job Launch",
             runtime=_lambda.Runtime.PYTHON_3_10,
             handler="kb.kb-ingest-job-lambda.lambda_handler",
@@ -410,7 +411,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         # Create a new Lambda function to check job status
         return _lambda.Function(
             self,
-            f"{self.props['unique_stack_name']}-JobStatusChecker",
+            f"{self.props['stack_name_base']}-JobStatusChecker",
             description="ReVIEW KB Ingestion Job Status Checker",
             runtime=_lambda.Runtime.PYTHON_3_10,
             handler="kb.kb-job-status-lambda.lambda_handler",
@@ -471,10 +472,10 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
 
         return sfn.StateMachine(
             self,
-            f"{self.props['unique_stack_name']}-SyncStateMachine",
+            f"{self.props['stack_name_base']}-SyncStateMachine",
             definition_body=sfn.DefinitionBody.from_chainable(chain),
             # Adding lambda versions into state machine name will trigger re-deploying state machine if lambda code changes
-            state_machine_name=f"{self.props['unique_stack_name']}-SyncStateMachine-{ingest_lambda.current_version.version}-{job_status_lambda.current_version.version}",
+            state_machine_name=f"{self.props['stack_name_base']}-SyncStateMachine-{ingest_lambda.current_version.version}-{job_status_lambda.current_version.version}",
             timeout=Duration.hours(1),  # TODO: timeout should update ddb status
         )
 
@@ -489,7 +490,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         # Create an EventBridge rule to listen for specific EB notifications
         rule = events.Rule(
             self,
-            f"{self.props['unique_stack_name']}-S3EventRule",
+            f"{self.props['stack_name_base']}-S3EventRule",
             event_pattern=events.EventPattern(
                 source=["aws.s3"],
                 detail_type=["Object Created"],

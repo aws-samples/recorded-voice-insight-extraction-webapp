@@ -95,8 +95,8 @@ class ReVIEWAPIStack(Stack):
 
         self.api = apigw.RestApi(
             self,
-            f"{self.props['unique_stack_name']}-api",
-            rest_api_name=f"{self.props['unique_stack_name']}-api",
+            f"{self.props['stack_name_base']}-api",
+            rest_api_name=f"{self.props['stack_name_base']}-api",
             description="API for ReVIEW application",
             default_cors_preflight_options=apigw.CorsOptions(
                 allow_origins=apigw.Cors.ALL_ORIGINS,  # All origins allowed

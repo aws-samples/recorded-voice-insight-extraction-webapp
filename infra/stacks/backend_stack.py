@@ -49,9 +49,9 @@ class ReVIEWBackendStack(Stack):
         # The order of these matters, later ones refer to class variables
         # instantiated in previous
         self.setup_logging()
+        self.setup_buckets()
         self.setup_dynamodb()
         self.setup_roles()
-        self.setup_buckets()
         self.setup_lambdas()
         self.setup_events()
 
@@ -63,21 +63,77 @@ class ReVIEWBackendStack(Stack):
         self.generate_media_transcript_lambdaLogGroup = logs.LogGroup(
             self,
             "GenerateMediaTranscriptLogGroup",
-            log_group_name=f"""/aws/lambda/{self.props['unique_stack_name']}-GenerateMediaTranscript""",
+            log_group_name=f"""/aws/lambda/{self.props['stack_name_base']}-GenerateMediaTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
         )
         self.postprocess_transcript_lambdaLogGroup = logs.LogGroup(
             self,
             "PostProcessTranscriptLogGroup",
-            log_group_name=f"""/aws/lambda/{self.props['unique_stack_name']}-PostProcessTranscript""",
+            log_group_name=f"""/aws/lambda/{self.props['stack_name_base']}-PostProcessTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
+        )
+
+    def setup_buckets(self):
+        self.loggingBucket = s3.Bucket(
+            self,
+            f"{self.props['stack_name_base']}-LoggingBucket",
+            access_control=s3.BucketAccessControl.LOG_DELIVERY_WRITE,
+            public_read_access=False,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.KMS_MANAGED,
+            versioned=True,
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+        )
+
+        self.bucket = s3.Bucket(
+            self,
+            f"{self.props['stack_name_base']}-Bucket",
+            public_read_access=False,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.KMS_MANAGED,
+            versioned=True,
+            server_access_logs_bucket=self.loggingBucket,
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            event_bridge_enabled=True,  # EventBridge used to trigger some step functions
+        )
+
+        # Explicitly only allow HTTPS traffic to s3 buckets
+        self.loggingBucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="Allow HTTPS only to logging bucket",
+                actions=["s3:*"],
+                effect=iam.Effect.DENY,
+                resources=[
+                    self.loggingBucket.bucket_arn,
+                    f"{self.loggingBucket.bucket_arn}/*",
+                ],
+                conditions={"Bool": {"aws:SecureTransport": "false"}},
+                principals=[iam.AnyPrincipal()],
+            )
+        )
+
+        self.bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="Allow HTTPS only to assets bucket",
+                actions=["s3:*"],
+                effect=iam.Effect.DENY,
+                resources=[
+                    self.bucket.bucket_arn,
+                    f"{self.bucket.bucket_arn}/*",
+                ],
+                conditions={"Bool": {"aws:SecureTransport": "false"}},
+                principals=[iam.AnyPrincipal()],
+            )
         )
 
     def setup_roles(self):
         # AWS transcribe access, s3 access, etc
+        # Requires s3 bucket already created
         self.backend_lambda_execution_role = iam.Role(
             self,
-            f"{self.props['unique_stack_name']}-ReVIEWLambdaExecutionRole",
+            f"{self.props['stack_name_base']}-ReVIEWLambdaExecutionRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -96,8 +152,8 @@ class ReVIEWBackendStack(Stack):
                         iam.PolicyStatement(
                             actions=["s3:PutObject"],
                             resources=[
-                                f"arn:aws:s3:::{self.props['s3_bucket_name']}/{self.props['s3_transcripts_prefix']}/*",
-                                f"arn:aws:s3:::{self.props['s3_bucket_name']}/{self.props['s3_text_transcripts_prefix']}/*",
+                                f"{self.bucket.bucket_arn}/{self.props['s3_transcripts_prefix']}/*",
+                                f"{self.bucket.bucket_arn}/{self.props['s3_text_transcripts_prefix']}/*",
                             ],
                         )
                     ]
@@ -110,7 +166,7 @@ class ReVIEWBackendStack(Stack):
         # DDB lambda only has access to the one ddb table
         self.ddb_lambda_execution_role = iam.Role(
             self,
-            f"{self.props['unique_stack_name']}-ReVIEWDDBLambdaExecutionRole",
+            f"{self.props['stack_name_base']}-ReVIEWDDBLambdaExecutionRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -177,77 +233,20 @@ class ReVIEWBackendStack(Stack):
                     statements=[
                         iam.PolicyStatement(
                             actions=["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
-                            resources=[f"arn:aws:s3:::{self.props['s3_bucket_name']}*"],
+                            resources=[f"{self.bucket.bucket_arn}*"],
                         )
                     ]
                 ),
             },
         )
 
-    def setup_buckets(self):
-        self.loggingBucket = s3.Bucket(
-            self,
-            f"{self.props['unique_stack_name']}-LoggingBucket",
-            bucket_name=f"{self.props['s3_logging_bucket_name']}",
-            access_control=s3.BucketAccessControl.LOG_DELIVERY_WRITE,
-            public_read_access=False,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            encryption=s3.BucketEncryption.KMS_MANAGED,
-            versioned=True,
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
-        )
-
-        self.bucket = s3.Bucket(
-            self,
-            f"{self.props['unique_stack_name']}-Bucket",
-            bucket_name=self.props["s3_bucket_name"],
-            public_read_access=False,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            encryption=s3.BucketEncryption.KMS_MANAGED,
-            versioned=True,
-            server_access_logs_bucket=self.loggingBucket,
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
-            event_bridge_enabled=True,  # EventBridge used to trigger some step functions
-        )
-
-        # Explicitly only allow HTTPS traffic to s3 buckets
-        self.loggingBucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="Allow HTTPS only to logging bucket",
-                actions=["s3:*"],
-                effect=iam.Effect.DENY,
-                resources=[
-                    self.loggingBucket.bucket_arn,
-                    f"{self.loggingBucket.bucket_arn}/*",
-                ],
-                conditions={"Bool": {"aws:SecureTransport": "false"}},
-                principals=[iam.AnyPrincipal()],
-            )
-        )
-
-        self.bucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="Allow HTTPS only to assets bucket",
-                actions=["s3:*"],
-                effect=iam.Effect.DENY,
-                resources=[
-                    self.bucket.bucket_arn,
-                    f"{self.bucket.bucket_arn}/*",
-                ],
-                conditions={"Bool": {"aws:SecureTransport": "false"}},
-                principals=[iam.AnyPrincipal()],
-            )
-        )
-
     def setup_lambdas(self):
         # Create DDB handler lambda first, as other lambdas need permission to invoke this one
         self.ddb_handler_lambda = _lambda.Function(
             self,
-            f"{self.props['unique_stack_name']}-DDBHandlerLambda",
-            description=f"Stack {self.props['unique_stack_name']} Function DDBHandlerLambda",
-            function_name=f"{self.props['unique_stack_name']}-DDBHandlerLambda",
+            f"{self.props['stack_name_base']}-DDBHandlerLambda",
+            description=f"Stack {self.props['stack_name_base']} Function DDBHandlerLambda",
+            function_name=f"{self.props['stack_name_base']}-DDBHandlerLambda",
             handler="ddb.ddb-handler-lambda.lambda_handler",
             runtime=_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
@@ -261,16 +260,16 @@ class ReVIEWBackendStack(Stack):
 
         self.generate_media_transcript_lambda = _lambda.Function(
             self,
-            f"{self.props['unique_stack_name']}-GenerateMediaTranscript",
-            description=f"Stack {self.props['unique_stack_name']} Function GenerateMediaTranscript",
-            function_name=f"{self.props['unique_stack_name']}-GenerateMediaTranscript",
+            f"{self.props['stack_name_base']}-GenerateMediaTranscript",
+            description=f"Stack {self.props['stack_name_base']} Function GenerateMediaTranscript",
+            function_name=f"{self.props['stack_name_base']}-GenerateMediaTranscript",
             handler="preprocessing.generate-transcript-lambda.lambda_handler",
             runtime=_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
             code=_lambda.Code.from_asset("lambdas"),
             environment={
                 "DESTINATION_PREFIX": self.props["s3_transcripts_prefix"],
-                "S3_BUCKET": f"{self.props['s3_bucket_name']}",
+                "S3_BUCKET": self.bucket.bucket_name,
                 "SOURCE_PREFIX": self.props["s3_recordings_prefix"],
                 "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
             },
@@ -287,16 +286,16 @@ class ReVIEWBackendStack(Stack):
 
         self.postprocess_transcript_lambda = _lambda.Function(
             self,
-            f"{self.props['unique_stack_name']}-PostProcessTranscript",
-            description=f"Stack {self.props['unique_stack_name']} Function PostProcessTranscript",
-            function_name=f"{self.props['unique_stack_name']}-PostProcessTranscript",
+            f"{self.props['stack_name_base']}-PostProcessTranscript",
+            description=f"Stack {self.props['stack_name_base']} Function PostProcessTranscript",
+            function_name=f"{self.props['stack_name_base']}-PostProcessTranscript",
             handler="preprocessing.postprocess-transcript-lambda.lambda_handler",
             runtime=_lambda.Runtime.PYTHON_3_12,
             memory_size=128,
             code=_lambda.Code.from_asset("lambdas"),
             environment={
                 "DESTINATION_PREFIX": self.props["s3_text_transcripts_prefix"],
-                "S3_BUCKET": self.props["s3_bucket_name"],
+                "S3_BUCKET": self.bucket.bucket_name,
                 "SOURCE_PREFIX": self.props["s3_transcripts_prefix"],
                 "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
             },
@@ -323,7 +322,7 @@ class ReVIEWBackendStack(Stack):
         self.llm_lambda = _lambda.Function(
             self,
             self.props["stack_name_base"] + "-LLMLambda",
-            function_name=f"{self.props['unique_stack_name']}-LLMHandlerLambda",
+            function_name=f"{self.props['stack_name_base']}-LLMHandlerLambda",
             description="Function for ReVIEW to invoke Bedrock LLM models",
             runtime=_lambda.Runtime.PYTHON_3_10,
             handler="bedrock.llm-handler-lambda.lambda_handler",
@@ -336,13 +335,13 @@ class ReVIEWBackendStack(Stack):
         self.presigned_url_lambda = _lambda.Function(
             self,
             self.props["stack_name_base"] + "-PresignedURLLambda",
-            function_name=f"{self.props['unique_stack_name']}-PresignedURLLambda",
+            function_name=f"{self.props['stack_name_base']}-PresignedURLLambda",
             description="Function for ReVIEW backend to generate presigned URLs",
             runtime=_lambda.Runtime.PYTHON_3_10,
             handler="s3.presigned-url-lambda.lambda_handler",
             code=_lambda.Code.from_asset("lambdas"),
             environment={
-                "S3_BUCKET": self.props["s3_bucket_name"],
+                "S3_BUCKET": self.bucket.bucket_name,
                 "RECORDINGS_PREFIX": self.props["s3_recordings_prefix"],
                 "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
             },
@@ -378,7 +377,7 @@ class ReVIEWBackendStack(Stack):
 
         self.dynamodb_table = dynamodb.Table(
             self,
-            f"{self.props['unique_stack_name']}-DDBTable-ID",
+            f"{self.props['stack_name_base']}-DDBTable-ID",
             table_name=self.props["ddb_table_name"],
             partition_key=dynamodb.Attribute(
                 name="username", type=dynamodb.AttributeType.STRING
