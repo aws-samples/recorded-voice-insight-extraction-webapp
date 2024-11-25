@@ -1,5 +1,4 @@
 stack_name_base: "review-dev"
-account_id: "XXXYOUR-ACCOUNT-ID-HEREXXX"
 region_name: "us-east-1"
 
 s3:
@@ -24,7 +23,7 @@ kb:
   chunking_strategy: "FIXED_SIZE"
   max_tokens: "512"
   overlap_percentage: "20"
-  num_chunks: "5"
+  num_chunks: "15"
 
 llm:
   model_id: "anthropic.claude-3-5-sonnet-20240620-v1:0"
