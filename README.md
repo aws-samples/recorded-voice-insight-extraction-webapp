@@ -56,7 +56,7 @@ The workflow is triggered by an Event Bridge notifications in the transcripts s3
 
 # 🔧 Deployment
 
-The code base behind the solution consists of four stacks:
+The code base behind the solution consists of one stack defined in `infra/stacks/review_stack.py`, which deploys four [nested stacks](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.NestedStack.html):
 1) A backend which handles transcribing uploaded media and tracking job statuses, 
 2) A RAG stack which handles setting up OpenSearch and Bedrock Knowledge bases, 
 3) An API stack which stands up a Cognito-authorized REST API and various lambda functions to logically separate the frontend from the backend, and
@@ -86,7 +86,7 @@ Install required python packages into the virtual environment of your choice wit
 The minimal IAM permissions needed to bootstrap and deploy the cdk are described in `ReVIEW/infra/minimal-iam-policy.json`. Ensure the customer creates this policy and associates it with your user or role in their environment.
 
 ### *Configure the Stack*
-Edit the `infra/config.yaml` file to provide a base name for your stack (`stack_name_base`), bucket names, Bedrock model IDs, etc for your application. 
+Edit the `infra/config.yaml` file to optionally provide a descriptive base name for your stack (`stack_name_base`). This file is also where you can choose specific Bedrock embedding models and large language models, and define chunking strategies for the knowledge base which will ingest transcriptions of uploaded media files. Here is also where you can re-use an existing Cognito user pool should you want to bootstrap your application with an existing user base.
 
 ### *Configure Bedrock Model Access*
 
@@ -101,20 +101,19 @@ Edit the `infra/config.yaml` file to provide a base name for your stack (`stack_
 ```{bash}
 $ cd infra
 $ cdk bootstrap
-$ cdk deploy --all --require-approval never
+$ cdk deploy --all
 ```
 
-The above bootstrap command only needs to be done once per AWS account. The deploy command will deploy all three stacks, and the `--require-approval never` flag will bypass any y/n questions during deployment, so use at your own risk.
+The above bootstrap command only needs to be done once per AWS account. The deploy command will deploy the parent stack and all four nested stacks.
 
-To optionally deploy one stack at a time, you can do
-```{bash}
-$ cdk deploy [stack_name_base]-backend
-$ cdk deploy [stack_name_base]-rag
-$ cdk deploy [stack_name_base]-api
-$ cdk deploy [stack_name_base]-frontend
-```
+Note that the `cdk deploy` command takes approxiately 20 minutes to run.
 
-Note there are dependencies between stacks so they must be deployed in this order.
+Once the deployment is complete, a CloudFront distribution url of the form xxx.cloudfront.net will be printed to the console screen to access the application. This URL can also be found in the CloudFront service in the AWS console.
+
+### *Create a Cognito User to Access the App*
+To log in to the running application, you will have to create a Cognito user. Do this by navigating to the Cognito service in the AWS console where the application is deployed. Navigate to the recently created user pool, and then to "Users" under "User Management". Click "create user" to create a username and password to log in to the ReVIEW application deployed in the account.
+
+Note that when the application is destroyed (as described in the next section), the Cognito pool remains to preserve the user base.
 
 ### *Destroy the CDK stacks*
 
@@ -122,7 +121,10 @@ Note there are dependencies between stacks so they must be deployed in this orde
 $ cdk destroy --all --force
 ```
 
-This will destroy all three ReVIEW stacks and remove all components from your AWS account. The `--force` flag will bypass any y/n questions during deployment, so use at your own risk.
+This will destroy all four ReVIEW stacks and remove all components from your AWS account. The `--force` flag will bypass any y/n questions during deployment, so use at your own risk.
+
+The only resource not automatically removed is the Cognito user pool, to preserve the user base. The can be deleted manually in the AWS console.
+
 
 # 🏛️ Repo Structure
 - infra - Python backend code
@@ -133,8 +135,10 @@ This will destroy all three ReVIEW stacks and remove all components from your AW
   - constructs/
     - Custom Python CDK constructs separated out to make stack deployment code more modular
   - stacks/
+    - review_stack - Primary python CDK stack which serves to deploy the following four nested stacks.
     - backend_stack - Python CDK containing the backend stack definition
     - rag_stack - Python CDK containing the OpenSearch and Knowledge Base setup
+    - api_stack - Python CDK containing the AWS API Gateway stack connecting the frontend to the backend
     - frontend_stack - Python CDK containing the frontend stack definition
   - utils - Utility functions related to infra, like configuration managers
 - frontend - Python streamlit application code for the frontend
