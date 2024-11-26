@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 
 import cdk_nag
-from aws_cdk import CfnOutput, Stack, Duration
+from aws_cdk import CfnOutput, NestedStack, Duration
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as cfo
 from aws_cdk import aws_ec2 as ec2
@@ -29,7 +29,7 @@ from aws_cdk import aws_iam as iam
 from aws_cdk import aws_cognito as cognito
 
 
-class ReVIEWFrontendStack(Stack):
+class ReVIEWFrontendStack(NestedStack):
     def __init__(
         self,
         scope,

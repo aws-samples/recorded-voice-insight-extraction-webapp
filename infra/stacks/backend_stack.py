@@ -20,7 +20,7 @@ import aws_cdk.aws_lambda as _lambda
 import aws_cdk.aws_logs as logs
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_s3_notifications as s3n
-from aws_cdk import Duration, RemovalPolicy, Stack, Aspects
+from aws_cdk import Duration, RemovalPolicy, NestedStack, Aspects
 from constructs import Construct
 
 import cdk_nag
@@ -30,7 +30,7 @@ ReVIEW Backend CFN Stack Definition
 """
 
 
-class ReVIEWBackendStack(Stack):
+class ReVIEWBackendStack(NestedStack):
     """Backend of ReVIEW Application, including:
         transcription, s3 buckets, dynamodb, lambdas
 

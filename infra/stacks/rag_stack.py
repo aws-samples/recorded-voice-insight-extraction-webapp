@@ -14,7 +14,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-from aws_cdk import Stack
+from aws_cdk import NestedStack
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_lambda as _lambda
 from infra.constructs.kb_constructs import (
@@ -25,7 +25,7 @@ from infra.constructs.kb_constructs import (
 from infra.constructs.oss_constructs import ReVIEWOSSConstruct
 
 
-class ReVIEWRAGStack(Stack):
+class ReVIEWRAGStack(NestedStack):
     """Stack to deploy both knowledge base and opensearch serverless"""
 
     def __init__(
