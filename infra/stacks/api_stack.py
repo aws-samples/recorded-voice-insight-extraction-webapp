@@ -15,7 +15,7 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import boto3
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, NestedStack
 from aws_cdk import aws_apigateway as apigw
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import (
@@ -23,7 +23,7 @@ from aws_cdk import (
 )
 
 
-class ReVIEWAPIStack(Stack):
+class ReVIEWAPIStack(NestedStack):
     """Construct for API Gateway separating frontend and backend.
     REST endpoints associated with backend lambdas are provided for the frontend.
     Cognito is used for API auth."""
