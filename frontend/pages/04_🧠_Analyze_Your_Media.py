@@ -25,7 +25,7 @@ from components.db_utils import (
 )
 from components.io_utils import get_analysis_templates
 from components.s3_utils import retrieve_transcript_by_jobid
-from components.streamlit_utils import display_sidebar
+from components.streamlit_utils import display_sidebar, show_cover
 
 st.set_page_config(
     page_title="Media Analyzer",
@@ -33,8 +33,8 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded",
 )
+show_cover(title="ReVIEW", description="Analyze Your Media")
 
-st.title("Analyze Your Media")
 if not st.session_state.get("auth_username", None):
     st.error("Please login to continue.")
     login()

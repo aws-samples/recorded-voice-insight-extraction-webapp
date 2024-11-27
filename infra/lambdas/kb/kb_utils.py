@@ -20,6 +20,7 @@
 import json
 import logging
 import re
+
 from bedrock.bedrock_utils import get_bedrock_client
 from kb.kb_qa_prompt import KB_QA_MESSAGE_TEMPLATE, KB_QA_SYSTEM_PROMPT
 
@@ -37,7 +38,7 @@ class KBQARAG:
         num_chunks: int = 5,
         foundation_model: str = "anthropic.claude-3-5-sonnet-20240620-v1:0",
         temperature=0,
-        max_tokens=5000,
+        max_tokens=4096,
     ):
         self.FOUNDATION_MODEL = foundation_model
         self.REGION_NAME = region_name
@@ -104,10 +105,10 @@ class KBQARAG:
         return chunks_string
 
     @staticmethod
-    def _postprocess_generation(generation_response: str) -> str:
+    def _postprocess_generation(generation_response_string: str) -> str:
         """Extract json content so response can be parsed into FullQAnswer object"""
         pattern = r"<json>\s*(.*?)\s*</json>"
-        matches = re.findall(pattern, generation_response, re.DOTALL)
+        matches = re.findall(pattern, generation_response_string, re.DOTALL)
         if not matches:
             raise ValueError("No JSON data found between <json> and </json> tags")
 
@@ -120,49 +121,74 @@ class KBQARAG:
         except ValueError as e:
             raise ValueError(f"Error creating FullQAnswer instance: {e}")
 
-    def _generate(self, query, retrieval_response, **kwargs) -> str:
-        """Generate string from LLM"""
+    def _build_conversation_context(self, messages) -> str:
+        """Dump messages to nice format ofr LLM to parse"""
+        conversation_context = ""
+        for message in messages:
+            conversation_context += (
+                f"{message['role']}: {message['content'][0]['text']}\n"
+            )
+        return conversation_context
+
+    def _generate(self, messages, retrieval_response, **kwargs) -> str:
+        """Generate string from LLM
+        messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
+        This function will extract the user query (last message), build a prompt around it augmented with
+        retrieved transcript chunks, send all the messages to the converse API, and return the string
+        from the AI response."""
+
         chunks_str = self._build_chunks_string(retrieval_response)
+        conversation_context = self._build_conversation_context(messages)
+        # Build a full prompt based on the last message (the user query)
+        message_content = KB_QA_MESSAGE_TEMPLATE.format(
+            query=messages[-1]["content"][0]["text"],
+            chunks=chunks_str,
+            conversation_context=conversation_context,
+        )
 
-        message_content = KB_QA_MESSAGE_TEMPLATE.format(query=query, chunks=chunks_str)
-
-        body = {
-            "system": KB_QA_SYSTEM_PROMPT,
-            "messages": [{"role": "user", "content": message_content}],
-            "anthropic_version": "",
-            "temperature": self.TEMPERATURE,
-            "max_tokens": self.MAX_TOKENS,
+        converse_kwargs = {
+            "system": [{"text": KB_QA_SYSTEM_PROMPT}],
+            "modelId": self.FOUNDATION_MODEL,
+            # Full messages list, minus the latest user message, replaced by the full prompt
+            "messages": messages[:-1]
+            + [{"role": "user", "content": [{"text": message_content}]}],
+            "inferenceConfig": {
+                "temperature": self.TEMPERATURE,
+                "maxTokens": self.MAX_TOKENS,
+            },
             **kwargs,
         }
-        response = self.bedrock_client.invoke_model(
-            modelId=self.FOUNDATION_MODEL, body=json.dumps(body)
-        )
+        response = self.bedrock_client.converse(**converse_kwargs)
 
-        response = json.loads(response["body"].read().decode("utf-8"))["content"][0][
-            "text"
-        ]
-
-        return response
+        return response["output"]["message"]["content"]
 
     def retrieve_and_generate_answer(
-        self, query: str, username: str, media_name: str = None
+        self, messages: list, username: str, media_name: str = None
     ) -> dict:
-        """Retrieve from KB and generate json that can be parsed into FullQAnswer object"""
+        """Retrieve from KB and generate json that can be parsed into FullQAnswer object
+        messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}]"""
+
+        query = messages[-1]["content"][0]["text"]
         retrieval_response = self._retrieve(query, username, media_name)
         generation_response = self._generate(
-            query=query,
+            messages=messages,
             retrieval_response=retrieval_response,
         )
-        postprocessed_response = self._postprocess_generation(generation_response)
+        generation_response_string = generation_response[0]["text"]
+        postprocessed_response = self._postprocess_generation(
+            generation_response_string
+        )
         # This is how frontend will parse this response into a FullQAnswer object
         # answer: FullQAnswer = FullQAnswer(**postprocessed_response)
         return postprocessed_response
 
     def generate_answer_no_chunking(
-        self, query: str, media_name: str, full_transcript: str
+        self, messages: list, media_name: str, full_transcript: str
     ) -> dict:
         """Bypass chunking by providing entire transcript as a single chunk to the prompt,
-        return json which can be parsed into a FullQAnswer object"""
+        return json which can be parsed into a FullQAnswer object
+        messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}]
+        """
 
         mock_retrieval_response = {
             "retrievalResults": [
@@ -173,10 +199,13 @@ class KBQARAG:
             ]
         }
         generation_response = self._generate(
-            query=query,
+            messages=messages,
             retrieval_response=mock_retrieval_response,
         )
-        postprocessed_response = self._postprocess_generation(generation_response)
+        generation_response_string = generation_response[0]["text"]
+        postprocessed_response = self._postprocess_generation(
+            generation_response_string
+        )
         # This is how frontend will parse this response into a FullQAnswer object
         # answer: FullQAnswer = FullQAnswer(**postprocessed_response)
         return postprocessed_response

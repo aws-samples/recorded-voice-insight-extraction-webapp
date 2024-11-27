@@ -16,7 +16,7 @@
 
 import streamlit as st
 from components.cognito_utils import login
-from components.streamlit_utils import display_sidebar
+from components.streamlit_utils import display_sidebar, show_cover
 from components.s3_utils import upload_to_s3
 from components.io_utils import check_valid_file_extension
 
@@ -27,8 +27,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-st.title("File Uploader")
+show_cover(title="ReVIEW", description="Upload a video or audio recording")
 
 if not st.session_state.get("auth_username", None):
     st.error("Please login to continue.")
@@ -40,7 +39,7 @@ api_auth_token = st.session_state["auth_id_token"]
 
 display_sidebar()
 
-uploaded_file = st.file_uploader("Upload a video or audio recording.")
+uploaded_file = st.file_uploader("File Uploader", label_visibility="hidden")
 if uploaded_file is not None:
     if not check_valid_file_extension(uploaded_file.name):
         st.error(
