@@ -59,18 +59,18 @@ def lambda_handler(event, context):
     if "body" in event:
         event = json.loads(event["body"])
 
-    query = event["query"]
+    messages = json.loads(event["messages"])
     username = event.get("username", None)
     media_name = event.get("media_name", None)
     full_transcript = event.get("full_transcript", None)
 
-    assert (query and username) or (query and media_name and full_transcript)
+    assert (messages and username) or (messages and media_name and full_transcript)
 
     # If no specific media file is selected, use RAG over all files
     if not media_name:
         try:
             full_answer: dict = kbqarag.retrieve_and_generate_answer(
-                query=query,
+                messages=messages,
                 username=username,
                 media_name=None,
             )
@@ -83,7 +83,7 @@ def lambda_handler(event, context):
     else:
         try:
             full_answer: dict = kbqarag.generate_answer_no_chunking(
-                query=query,
+                messages=messages,
                 media_name=media_name,
                 full_transcript=full_transcript,
             )
