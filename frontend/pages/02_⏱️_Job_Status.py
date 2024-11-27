@@ -17,7 +17,7 @@
 import streamlit as st
 from components.db_utils import retrieve_all_items
 from components.cognito_utils import login
-from components.streamlit_utils import display_sidebar
+from components.streamlit_utils import display_sidebar, show_cover
 
 st.set_page_config(
     page_title="Job Status",
@@ -26,8 +26,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+show_cover(title="ReVIEW", description="Check Transcription Job Status")
 
-st.title("Your Transcription Jobs")
 if not st.session_state.get("auth_username", None):
     st.error("Please login to continue.")
     login()

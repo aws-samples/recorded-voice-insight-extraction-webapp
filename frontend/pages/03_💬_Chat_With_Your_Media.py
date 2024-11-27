@@ -27,7 +27,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.title("Chat with Your Media")
+stu.show_cover(title="ReVIEW", description="Chat with Your Media")
+
 if not st.session_state.get("auth_username", None):
     st.error("Please login to continue.")
     login()

@@ -197,3 +197,41 @@ def generate_full_answer(
             api_auth_token=api_auth_token,
         )
     return full_answer
+
+
+def show_cover(
+    title: str,
+    description: str = "",
+    image_url: str = "https://d1.awsstatic.com/AWS-ImgHeader_Amazon-Kendra%20(1).b1032a8675c305031dcbde588933d212ee021ac5.png",
+    max_width: str = "100%",
+    text_color: str = "#FFFFFF",
+) -> None:
+    """
+    Display cover image with title & description
+
+    Parameters
+    ----------
+    title : str
+        Title to display over the image (upper part)
+    description : str
+        Description to display over the image (lower part)
+    image_url : str
+        URL to the cover image
+    max_width : str
+        Maximum width of the cover image
+    text_color : str
+        Code of the title & description font color
+    """
+
+    html_code = f"""
+    <div class="container" align="center">
+    <img src={image_url} alt="Cover" style="max-width:{max_width};">
+    <div style="position: absolute; top: 8px; left: 32px; font-size: 3rem; font-weight: bold; color: {text_color}" align="center">{title}</div>
+    <div style="position: absolute; bottom: 8px; left: 32px; font-size: 1.5rem; color: {text_color}" align="center">{description}</div>
+    </div>
+    """  # noqa: E501
+
+    st.markdown(
+        html_code,
+        unsafe_allow_html=True,
+    )

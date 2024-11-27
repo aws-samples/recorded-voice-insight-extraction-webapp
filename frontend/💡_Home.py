@@ -16,7 +16,7 @@
 
 import streamlit as st
 from components.cognito_utils import login
-from components.streamlit_utils import display_sidebar
+from components.streamlit_utils import display_sidebar, show_cover
 
 logger = st.logger.get_logger(__name__)
 
@@ -33,25 +33,15 @@ def main():
     Main app function
     """
 
-    st.title("ReVIEW: Recorded Voice Insight Extraction Webapp")
+    show_cover(title="ReVIEW", description="Recorded Voice Insight Extraction Webapp")
+
     if not st.session_state.get("auth_username", None):
         st.info("Please login to continue.")
         login()
         st.stop()
+    st.write("\n\n")
     st.markdown(
-        """
-        This application allows you to upload audio or video recordings containing speech 
-        and automatically generate different types of summaries or documents from
-        transcripts of the recordings. 
-        
-        For example, you can generate a summary
-        of an arbitrary recorded presentation, generate a discovery readout document from the recording of
-        a discovery workshop, and more. 
-        
-        You can also "chat with your media"
-        to ask arbitrary questions like _what did the speaker say about Sagemaker?_
-        
-        """
+        "_Upload audio or video recordings containing speech and review them in an accelerated manner, either by running customized analyses on them, or by chatting with them directly._"
     )
     st.subheader("Click  💾 File Upload  on the left to get started.")
     display_sidebar()
