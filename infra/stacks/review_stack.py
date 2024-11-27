@@ -14,14 +14,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-import aws_cdk.aws_dynamodb as dynamodb
-import aws_cdk.aws_iam as iam
-import aws_cdk.aws_lambda as _lambda
-import aws_cdk.aws_logs as logs
-import aws_cdk.aws_s3 as s3
-import aws_cdk.aws_s3_notifications as s3n
-from aws_cdk import Duration, RemovalPolicy, Stack, Aspects
+from aws_cdk import Stack
 from constructs import Construct
 from .backend_stack import ReVIEWBackendStack
 from .rag_stack import ReVIEWRAGStack
@@ -40,7 +33,7 @@ class ReVIEWStack(Stack):
 
     def __init__(self, scope: Construct, props: dict, **kwargs) -> None:
         construct_id = props["stack_name_base"]
-        description = "ReVIEW Application - Parent stack (v1.0.0)"
+        description = "ReVIEW Application - Parent stack (v1.0.0) - a2F6dQ=="
 
         super().__init__(scope, construct_id, description=description, **kwargs)
 

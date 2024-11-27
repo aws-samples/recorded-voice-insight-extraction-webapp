@@ -36,9 +36,6 @@ if not st.session_state.get("auth_username", None):
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "bedrock_session_id" not in st.session_state:
-    st.session_state.bedrock_session_id = None
-
 
 username = st.session_state["auth_username"]
 api_auth_token = st.session_state["auth_id_token"]
@@ -69,7 +66,7 @@ if selected_media_name == CHAT_WITH_ALL_STRING:
 for message_counter, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         if message["role"] == "user":
-            st.markdown(message["content"])
+            st.markdown(message["content"][0]["text"])
         else:  # AI messages
             media_name = None
             start_timestamp = None
@@ -86,9 +83,6 @@ for message_counter, message in enumerate(st.session_state.messages):
                     clicked_citation_timestamp = st.session_state[
                         f"citation_timestamp_{clicked_citation_index}"
                     ]
-                    st.toast(
-                        f"  BUTTON WAS CLICKED!!  {clicked_citation_index=}, {clicked_citation_timestamp=}"
-                    )
                     # Display the appropriate video at the appropriate timestamp
                     media_name = clicked_citation_media
                     start_timestamp = clicked_citation_timestamp
@@ -112,16 +106,17 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
     with st.chat_message("user"):
         st.write(user_message)
     # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": user_message})
+    st.session_state.messages.append(
+        {"role": "user", "content": [{"text": user_message}]}
+    )
     # Display assistant response in chat message container
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             full_answer = stu.generate_full_answer(
-                query=user_message,
+                messages=st.session_state.messages,
                 username=username,
                 api_auth_token=api_auth_token,
                 selected_media_name=selected_media_name,
-                bedrock_session_id=st.session_state.bedrock_session_id,
                 job_df=job_df,
             )
             stu.display_full_ai_response(

@@ -69,16 +69,34 @@ def run_analysis(analysis_id: int, transcript: str, api_auth_token: str):
     return result
 
 
+def clean_messages(messages, max_number_of_messages=10):
+    """Ensure messages list only has elements like {"role":"user", "cotent":[{"text":"blah}]},
+    Also make sure <= max_number_of_messages latest messages are sent"""
+    cleaned_messages = []
+    for message in messages:
+        cleaned_message = {
+            "role": message.get("role"),
+            "content": message.get("content"),
+        }
+        cleaned_messages.append(cleaned_message)
+    return cleaned_messages[-max_number_of_messages:]
+
+
 def retrieve_and_generate_answer(
-    query: str, username: str, api_auth_token: str
+    messages: list, username: str, api_auth_token: str
 ) -> FullQAnswer:
     """Query knowledge base and generate an answer. Only filter applied is
-    the username (so each user can only query their own files)"""
+    the username (so each user can only query their own files)
+    messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
+    """
 
+    # Make sure only "role" and "content" fields are kept from the messages ... UI logic sometimes
+    # adds other things in there to make the UI code more convenient
     json_body = {
-        "query": query,
+        "messages": json.dumps(clean_messages(messages)),
         "username": username,
     }
+
     response = requests.post(
         BACKEND_API_URL + "/kb",
         json=json_body,
@@ -98,16 +116,18 @@ def retrieve_and_generate_answer(
 
 
 def generate_answer_no_chunking(
-    query: str, media_name: str, full_transcript: str, api_auth_token: str
+    messages: list, media_name: str, full_transcript: str, api_auth_token: str
 ) -> FullQAnswer:
     """Bypass the knowledge base, impute the full transcript into the prompt and have
     an LLM generate the answer. This function is used when user asks a question about
     one media file. Media name is provided only because it is included in
     the LLM-generated citations. KB lambda is used for convenience, as it has all of
-    the prompt engineering / output parsing required to form FullQAnswer objects."""
+    the prompt engineering / output parsing required to form FullQAnswer objects.
+    messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
+    """
 
     json_body = {
-        "query": query,
+        "messages": json.dumps(clean_messages(messages)),
         "full_transcript": full_transcript,
         "media_name": media_name,
     }

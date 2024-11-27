@@ -38,8 +38,6 @@ def display_sidebar(current_page: str | None = None):
         if sidebar.button("Clear Conversation"):
             # Clear all messages
             st.session_state.messages = []
-            # Reset Bedrock state
-            st.session_state.bedrock_session_id = None
             # Reset citation state
             reset_citation_session_state()
             st.rerun()
@@ -76,8 +74,7 @@ def draw_or_redraw_citation_buttons(full_answer, message_index: int):
     ]
 
     n_buttons = len(all_citations)
-    # citation_counter_offset = st.session_state.get("n_buttons", 0)
-    # st.session_state["n_buttons"] = citation_counter_offset + n_buttons
+
     # Only draw buttons if there are any citations
     if n_buttons:
         cols = st.columns(n_buttons)
@@ -93,16 +90,6 @@ def draw_or_redraw_citation_buttons(full_answer, message_index: int):
                 st.session_state[f"citation_timestamp_{message_index}-{i}"] = (
                     citation.timestamp
                 )
-    # # If no full_answer was provided, use session state to draw buttons
-    # else:
-    #     n_buttons = st.session_state["n_buttons"]
-    #     # Only draw buttons if there are any citations
-    #     if n_buttons:
-    #         cols = st.columns(n_buttons)
-    #         buttons = []
-    #         for i, col in enumerate(cols, 1):
-    #             with col:
-    #                 buttons.append(st.button(f"[{i}]", key=f"citation_button_{i}"))
 
 
 def display_video_at_timestamp(media_url, timestamp):
@@ -165,18 +152,17 @@ def display_full_ai_response(
         st.session_state.messages.append(
             {
                 "role": "assistant",
-                "content": assistant_message,
+                "content": [{"text": assistant_message}],
                 "full_answer": full_answer,
             }
         )
 
 
 def generate_full_answer(
-    query: str,
+    messages: list,
     username: str,
     api_auth_token: str,
     selected_media_name: str | None = None,
-    bedrock_session_id: str | None = None,
     job_df: pd.DataFrame | None = None,
 ):
     """Given a user query, use GenAI to generate an answer.
@@ -185,13 +171,12 @@ def generate_full_answer(
     to find the UUID for the transcription job to get the transcript).
     If selected media_name is not provided, do RAG over all transcripts using the
     knowledge base.
-    If bedrock_session_id is provided, it is passed back to Bedrock, which manages
-    conversation state. Else, Bedrock assumes this is the first message in a conversation
+    messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
     """
     # If no specific media file is selected, use RAG over all files
     if not selected_media_name:
         full_answer = retrieve_and_generate_answer(
-            query=query,
+            messages=messages,
             username=username,
             api_auth_token=api_auth_token,
         )
@@ -206,7 +191,7 @@ def generate_full_answer(
             api_auth_token=api_auth_token,
         )
         full_answer = generate_answer_no_chunking(
-            query=query,
+            messages=messages,
             media_name=selected_media_name,
             full_transcript=full_transcript,
             api_auth_token=api_auth_token,
