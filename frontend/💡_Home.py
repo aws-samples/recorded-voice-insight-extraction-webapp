@@ -40,10 +40,18 @@ def main():
         login()
         st.stop()
     st.write("\n\n")
-    st.markdown(
-        "_Upload audio or video recordings containing speech and review them in an accelerated manner, either by running customized analyses on them, or by chatting with them directly._"
-    )
-    st.subheader("Click  💾 File Upload  on the left to get started.")
+
+    html_string = """
+    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 200px;">
+        <p style="font-style: italic; font-size: 22px; text-align: center;">
+            Upload audio or video recordings containing speech and review them in an accelerated manner, either by running customized analyses on them, or by chatting with them directly.
+        </p>
+        <p style="font-weight: bold; font-size: 26px; text-align: center; margin-top: 20px;">
+            Click  💾 File Upload  on the left to get started.
+        </p>
+    </div>
+    """
+    st.markdown(html_string, unsafe_allow_html=True)
     display_sidebar()
 
 

@@ -37,7 +37,7 @@ display_sidebar()
 
 username = st.session_state["auth_username"]
 api_auth_token = st.session_state["auth_id_token"]
-
+st.write("\n\n")
 st.dataframe(
     retrieve_all_items(username=username, max_rows=None, api_auth_token=api_auth_token),
     hide_index=True,
