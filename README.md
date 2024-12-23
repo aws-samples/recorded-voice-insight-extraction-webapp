@@ -39,7 +39,7 @@ Below is a screenshot of the chat functionality. Here, the user asked whether an
 # 🏗️ Architecture
 Here is an overview of the architecture for the solution.
 <p align="center">
-    <img src=diagram/ReVIEW-architecture-20241022.png alt="architecture" width="90%">
+    <img src=diagram/ReVIEW-architecture-20241223.png alt="architecture" width="90%">
 </p>
 
 * **(1)** Users connect to a CloudFront distribution which forwards traffic to the application load balancer via HTTPS with a custom header. 
@@ -70,13 +70,8 @@ $ git clone https://github.com/aws-samples/recorded-voice-insight-extraction-web
 
 ### *CDK Prerequisites*
 
-The following tools should be installed, as well as access to the target AWS account:
-
-- [AWS CLI](https://cdkworkshop.com/15-prerequisites/100-awscli.html)
-- [AWS Account](https://cdkworkshop.com/15-prerequisites/200-account.html)
-- [Node.js](https://cdkworkshop.com/15-prerequisites/300-nodejs.html)
-- [AWS CDK Toolkit](https://cdkworkshop.com/15-prerequisites/500-toolkit.html)
-- [Python](https://cdkworkshop.com/15-prerequisites/600-python.html)
+The tools described in [Working with the AWS CDK in Python](https://docs.aws.amazon.com/cdk/v2/guide/work-with-cdk-python.html) need to be installed, as well as
+- Access to the target AWS account:
 - [Docker](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/create-container-image.html#create-container-image-install-docker)
 
 Install required python packages into the virtual environment of your choice with `pip install -r infra/requirements.txt`.
