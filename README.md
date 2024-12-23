@@ -101,7 +101,7 @@ $ cdk deploy --all
 
 The above bootstrap command only needs to be done once per AWS account. The deploy command will deploy the parent stack and all four nested stacks.
 
-Note that the `cdk deploy` command takes approxiately 20 minutes to run.
+Note that the `cdk deploy --all` command takes approxiately 20 minutes to run.
 
 Once the deployment is complete, a CloudFront distribution url of the form xxx.cloudfront.net will be printed to the console screen to access the application. This URL can also be found in the CloudFront service in the AWS console.
 
