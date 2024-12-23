@@ -14,13 +14,13 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-from aws_cdk import Stack
+from aws_cdk import Stack, CfnOutput
 from constructs import Construct
 from .backend_stack import ReVIEWBackendStack
 from .rag_stack import ReVIEWRAGStack
 from .api_stack import ReVIEWAPIStack
 from .frontend_stack import ReVIEWFrontendStack
-import cdk_nag
+
 
 """
 ReVIEW Parent Stack Definition
@@ -70,4 +70,11 @@ class ReVIEWStack(Stack):
             props=props,
             backend_api_url=self.api_stack.api.url,
             cognito_pool=self.api_stack.cognito_user_pool,
+        )
+
+        # Save cfn distribution domain name as output, for convenience
+        CfnOutput(
+            self,
+            "ReVIEW Frontend URL",
+            value=self.frontend_stack.cfn_distribution.domain_name,
         )

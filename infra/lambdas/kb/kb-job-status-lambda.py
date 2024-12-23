@@ -52,7 +52,7 @@ def lambda_handler(event, context):
 
         # If job is complete or failed, update dynamoDB
         if job_status == "COMPLETE":
-            response = invoke_lambda(
+            _ = invoke_lambda(
                 lambda_client=lambda_client,
                 lambda_function_name=DDB_LAMBDA_NAME,
                 action="batch_update_job_statuses",
@@ -62,7 +62,7 @@ def lambda_handler(event, context):
                 },
             )
         elif job_status == "FAILED":
-            response = invoke_lambda(
+            _ = invoke_lambda(
                 lambda_client=lambda_client,
                 lambda_function_name=DDB_LAMBDA_NAME,
                 action="batch_update_job_statuses",
