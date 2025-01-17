@@ -114,7 +114,8 @@ class ReVIEWFrontendStack(NestedStack):
             cluster=self.cluster,
             cpu=1024,
             desired_count=1,  # Possibly increase this to handle more concurrent requests
-            idle_timeout=600,  # 10 min timeout to allow large file uploads, else AxiosError
+            # 10 min timeout to allow large file uploads, else AxiosError
+            idle_timeout=Duration.minutes(10),
             task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
                 image=self.app_image,
                 container_port=8501,

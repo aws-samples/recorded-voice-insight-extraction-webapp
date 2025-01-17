@@ -176,6 +176,10 @@ def generate_full_answer(
     knowledge base.
     messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
     """
+    # If last message was from AI, insert empty AI message (this happens when exceptions are thrown in the UI)
+    if messages[-1]["role"] == "assistant":
+        messages.append({"role": "assistant", "content": [{"text": ""}]})
+
     # If no specific media file is selected, use RAG over all files
     if not selected_media_name:
         full_answer = retrieve_and_generate_answer(

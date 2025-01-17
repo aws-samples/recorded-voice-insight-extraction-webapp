@@ -60,5 +60,6 @@ class FullQAnswer(BaseModel):
             for _citation in partial.citations:
                 result += f"[{citation_counter}]"
                 citation_counter += 1
-            result += "\n"
+            # result += "\n" # This works better for Claude 3
+            result += "\n\n"  # This works better for Nova Pro
         return result
