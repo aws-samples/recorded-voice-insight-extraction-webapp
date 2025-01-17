@@ -93,7 +93,7 @@ class ReVIEWOSSConstruct(Construct):
             self,
             "EncryptionSecurityPolicy",
             policy=encryption_security_policy,
-            name=f"{self.collection_name}-enc-pol",
+            name=f"{self.collection_name}-enc-pol"[-31:],
             type="encryption",
         )
         pol.apply_removal_policy(RemovalPolicy.DESTROY)
@@ -123,7 +123,7 @@ class ReVIEWOSSConstruct(Construct):
             self,
             "NetworkSecurityPolicy",
             policy=network_security_policy,
-            name=f"{self.collection_name}-ntw-pol",
+            name=f"{self.collection_name}-ntw-pol"[-31:],
             type="network",
         )
         pol.apply_removal_policy(RemovalPolicy.DESTROY)
@@ -186,7 +186,7 @@ class ReVIEWOSSConstruct(Construct):
         pol = CfnAccessPolicy(
             self,
             "ReVIEWOSSDataAccessPolicy",
-            name=f"{self.collection_name}",
+            name=f"{self.collection_name}"[-31:],
             description="ReVIEW OSS data access policy",
             type="data",
             policy=data_access_policy,
