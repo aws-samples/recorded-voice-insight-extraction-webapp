@@ -12,6 +12,7 @@
 - [🏛️ Repo Structure](#️-repo-structure)
 - [🚪 Frontend Replacement](#-frontend-replacement)
 - [🔒️ Security](#️-security)
+- [🤔 Common Issues](#-common-issues)
 - [👥 Authors](#-authors)
 - [📝 License](#-license)
 
@@ -187,6 +188,10 @@ The following are some security best practices one should keep in mind when usin
   - Monitor and audit access via CloudTrail logging and/or CloudWatch alarms.
   - Regularly review access keys and IAM roles, and rotate credentials.
 
+# 🤔 Common Issues
+1. API gateway "Endpoint request timed out" issue: This is caused when lambda functions connected to API Gateways take more than 29 seconds to execute. This 29 seconds quota [can now be increased at the account level](https://aws.amazon.com/about-aws/whats-new/2024/06/amazon-api-gateway-integration-timeout-limit-29-seconds/), under API Gateway quotas named "Maximum integration timeout in milliseconds". Recommended increase from 29000 to 60000 to fix this issue.
+   
+   
 # 👥 Authors
 <div style="display: flex; align-items: center;">
   <img src="diagram/kaleko_headshot_cropped_resized.png" alt="David Kaleko" width="25%" style="margin-right: 20px;margin-left: 10px">
