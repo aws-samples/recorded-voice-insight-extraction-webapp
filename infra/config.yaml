@@ -1,4 +1,4 @@
-stack_name_base: "review-dev"
+stack_name_base: "review-app"
 
 embedding:
   model_id: "amazon.titan-embed-text-v2:0"
@@ -11,8 +11,8 @@ kb:
   num_chunks: "15"
 
 llm:
-  model_id: "anthropic.claude-3-5-sonnet-20240620-v1:0"
-  model_arn: "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0"
+  model_id: "us.amazon.nova-pro-v1:0"
+  model_arn: "arn:aws:bedrock:us-east-1::foundation-model/us.amazon.nova-pro-v1:0"
 
 frontend:
   cognito_pool_name: "review-app-cognito-user-pool"
