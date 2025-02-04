@@ -27,7 +27,7 @@ from aws_cdk import aws_ecs_patterns as ecs_patterns
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_cognito as cognito
-from aws_cdk import aws_ecr_assets as ecr_assets
+from aws_cdk import aws_ecr_assets as ecr_assets  # noqa
 
 
 class ReVIEWFrontendStack(NestedStack):
