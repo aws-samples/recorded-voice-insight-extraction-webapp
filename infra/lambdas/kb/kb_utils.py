@@ -24,6 +24,8 @@ import re
 from bedrock.bedrock_utils import get_bedrock_client
 from kb.kb_qa_prompt import KB_QA_MESSAGE_TEMPLATE, KB_QA_SYSTEM_PROMPT
 
+from typing import Generator, Dict, Any
+
 logger = logging.getLogger()
 logger.setLevel("DEBUG")
 
@@ -101,7 +103,7 @@ class KBQARAG:
 
         chunks_string = ""
         for i, chunk in enumerate(retrieve_response["retrievalResults"]):
-            chunks_string += f"<chunk_{i+1}>\n<media_name>\n{chunk['metadata']['media_name']}\n</media_name>\n<transcript>\n{chunk['content']['text']}\n</transcript>\n</chunk_{i+1}>\n\n"
+            chunks_string += f"<chunk_{i + 1}>\n<media_name>\n{chunk['metadata']['media_name']}\n</media_name>\n<transcript>\n{chunk['content']['text']}\n</transcript>\n</chunk_{i + 1}>\n\n"
         return chunks_string
 
     @staticmethod
@@ -160,7 +162,7 @@ class KBQARAG:
         }
         response = self.bedrock_client.converse(**converse_kwargs)
 
-        return response["output"]["message"]["content"]
+        return response["output"]["message"]["content"][0]["text"]
 
     def retrieve_and_generate_answer(
         self, messages: list, username: str, media_name: str = None
@@ -174,9 +176,25 @@ class KBQARAG:
             messages=messages,
             retrieval_response=retrieval_response,
         )
-        generation_response_string = generation_response[0]["text"]
-        postprocessed_response = self._postprocess_generation(
-            generation_response_string
+        postprocessed_response = self._postprocess_generation(generation_response)
+        # This is how frontend will parse this response into a FullQAnswer object
+        # answer: FullQAnswer = FullQAnswer(**postprocessed_response)
+        return postprocessed_response
+
+    def retrieve_and_generate_answer_stream(
+        self, messages: list, username: str, media_name: str = None
+    ) -> dict:
+        """Retrieve from KB and generate json that can be parsed into FullQAnswer object
+        messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}]"""
+
+        query = messages[-1]["content"][0]["text"]
+        retrieval_response = self._retrieve(query, username, media_name)
+        generation_response = self._generate_stream(
+            messages=messages,
+            retrieval_response=retrieval_response,
+        )
+        postprocessed_response = self._postprocess_generation_stream(
+            generation_response
         )
         # This is how frontend will parse this response into a FullQAnswer object
         # answer: FullQAnswer = FullQAnswer(**postprocessed_response)
@@ -202,10 +220,125 @@ class KBQARAG:
             messages=messages,
             retrieval_response=mock_retrieval_response,
         )
-        generation_response_string = generation_response[0]["text"]
-        postprocessed_response = self._postprocess_generation(
-            generation_response_string
+        postprocessed_response = self._postprocess_generation(generation_response)
+        # This is how frontend will parse this response into a FullQAnswer object
+        # answer: FullQAnswer = FullQAnswer(**postprocessed_response)
+        return postprocessed_response
+
+    def generate_answer_no_chunking_stream(
+        self, messages: list, media_name: str, full_transcript: str
+    ) -> dict:
+        """Bypass chunking by providing entire transcript as a single chunk to the prompt,
+        return json which can be parsed into a FullQAnswer object
+        messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}]
+        """
+
+        mock_retrieval_response = {
+            "retrievalResults": [
+                {
+                    "metadata": {"media_name": media_name},
+                    "content": {"text": full_transcript},
+                }
+            ]
+        }
+        generation_response = self._generate_stream(
+            messages=messages,
+            retrieval_response=mock_retrieval_response,
+        )
+        postprocessed_response = self._postprocess_generation_stream(
+            generation_response
         )
         # This is how frontend will parse this response into a FullQAnswer object
         # answer: FullQAnswer = FullQAnswer(**postprocessed_response)
         return postprocessed_response
+
+    def _generate_stream(self, messages, retrieval_response, **kwargs) -> str:
+        """Generate streaming string from LLM
+        messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
+        This function will extract the user query (last message), build a prompt around it augmented with
+        retrieved transcript chunks, send all the messages to the converse API, and return the string
+        from the AI response."""
+
+        chunks_str = self._build_chunks_string(retrieval_response)
+        conversation_context = self._build_conversation_context(messages)
+        # Build a full prompt based on the last message (the user query)
+        message_content = KB_QA_MESSAGE_TEMPLATE.format(
+            query=messages[-1]["content"][0]["text"],
+            chunks=chunks_str,
+            conversation_context=conversation_context,
+        )
+
+        converse_kwargs = {
+            "system": [{"text": KB_QA_SYSTEM_PROMPT}],
+            "modelId": self.FOUNDATION_MODEL,
+            # Full messages list, minus the latest user message, replaced by the full prompt
+            "messages": messages[:-1]
+            + [{"role": "user", "content": [{"text": message_content}]}],
+            "inferenceConfig": {
+                "temperature": self.TEMPERATURE,
+                "maxTokens": self.MAX_TOKENS,
+            },
+            **kwargs,
+        }
+        response = self.bedrock_client.converse_stream(**converse_kwargs)
+
+        # return response["output"]["message"]["content"][0]["text"]
+        return response.get("stream")
+
+    @staticmethod
+    def _postprocess_generation_stream(
+        stream: Generator[Dict[str, Any], None, None],
+    ) -> Generator[dict, None, None]:
+        """Process streaming response, yield a dict that is always
+        parsable as a FullQObject"""
+        full_json_string = ""
+        current_answer = {"answer": []}
+        partial_answer_text = ""
+
+        for event in stream:
+            if "contentBlockDelta" in event:
+                delta = event["contentBlockDelta"]["delta"].get("text", "")
+                full_json_string += delta
+
+                # Check for partial_answer content
+                partial_answer_match = re.search(
+                    r'"partial_answer":\s*"([^"]*)', full_json_string
+                )
+                if partial_answer_match:
+                    new_partial_answer = partial_answer_match.group(1)
+                    if new_partial_answer != partial_answer_text:
+                        partial_answer_text = new_partial_answer
+                        current_answer["answer"] = [
+                            {"partial_answer": partial_answer_text, "citations": []}
+                        ]
+
+                # Try to parse citations if they exist
+                citations_match = re.search(
+                    r'"citations":\s*(\[.*?\])', full_json_string, re.DOTALL
+                )
+                if citations_match:
+                    try:
+                        citations_json = citations_match.group(1)
+                        citations = json.loads(citations_json)
+                        if current_answer["answer"]:
+                            current_answer["answer"][-1]["citations"] = citations
+                    except json.JSONDecodeError:
+                        # If parsing fails, continue with the current citations
+                        pass
+
+                # Try to parse the full JSON if it's complete
+                if full_json_string.strip().endswith("</json>"):
+                    try:
+                        json_content = full_json_string.split("<json>\n")[1].split(
+                            "</json>"
+                        )[0]
+                        current_answer = json.loads(json_content)
+                    except (json.JSONDecodeError, IndexError):
+                        # If parsing fails, continue with the current state
+                        pass
+
+            # Yield the current state of the answer after each event
+            yield current_answer
+
+        # Final yield after the stream ends
+        yield current_answer
