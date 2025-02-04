@@ -27,6 +27,7 @@ from aws_cdk import aws_ecs_patterns as ecs_patterns
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_ecr_assets as ecr_assets
 
 
 class ReVIEWFrontendStack(NestedStack):
@@ -105,7 +106,7 @@ class ReVIEWFrontendStack(NestedStack):
         # Docker build the frontend UI image
         self.app_image = ecs.ContainerImage.from_asset(
             os.path.join(Path(__file__).parent.parent.parent, "frontend"),
-            # platform = Platform.LINUX_AMD64 ## Use this if Docker building on a mac OS
+            # platform = ecr_assets.Platform.LINUX_AMD64 ## Use this if Docker building on a mac OS
         )
         # Deploy the frontend UI image into a load balanced fargate service in the cluster
         self.service = ecs_patterns.ApplicationLoadBalancedFargateService(
