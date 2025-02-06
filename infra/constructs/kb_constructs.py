@@ -140,9 +140,6 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
         )
         self.data_source = self.create_data_source(self.knowledge_base)
 
-        # Create lambda to query knowledge base
-        self.query_lambda = self.create_query_lambda(self.knowledge_base)
-
     def create_knowledge_base(
         self, kb_principal_role: iam.Role, oss_collection_arn: str
     ) -> CfnKnowledgeBase:
@@ -214,54 +211,6 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
             description=self.props["stack_name_base"] + " RAG DataSource",
             vector_ingestion_configuration=vector_ingestion_config_variable,
         )
-
-    def create_query_lambda_role(self, knowledge_base: CfnKnowledgeBase) -> iam.Role:
-        """Create a role that allows lambda query Bedrock KB"""
-        query_lambda_role = iam.Role(
-            self,
-            f"{self.props['stack_name_base']}-KBQueryLambdaRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "CloudWatchLogsFullAccess"
-                ),
-            ],
-        )
-        query_lambda_role.add_to_policy(
-            iam.PolicyStatement(
-                actions=[
-                    "bedrock:RetrieveAndGenerate",
-                    "bedrock:Retrieve",
-                    "bedrock:InvokeModel",
-                ],
-                resources=["*"],  # Needs access to all LLMs
-            )
-        )
-
-        query_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
-        return query_lambda_role
-
-    def create_query_lambda(self, knowledge_base: CfnKnowledgeBase) -> _lambda:
-        # Create a role that allows lambda to query knowledge base
-
-        query_lambda = _lambda.Function(
-            self,
-            self.props["stack_name_base"] + "-KBQueryLambda",
-            function_name=f"{self.props['stack_name_base']}-KBQueryLambda",
-            description="Function for ReVIEW to query Knowledge Base",
-            runtime=_lambda.Runtime.PYTHON_3_10,
-            handler="kb.kb-query-lambda.lambda_handler",
-            code=_lambda.Code.from_asset("lambdas"),
-            timeout=Duration.minutes(5),
-            environment={
-                "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
-                "FOUNDATION_MODEL_ID": self.props["llm_model_id"],
-                "NUM_CHUNKS": self.props["kb_num_chunks"],
-            },
-            role=self.create_query_lambda_role(knowledge_base=knowledge_base),
-        )
-
-        return query_lambda
 
 
 class ReVIEWKnowledgeBaseSyncConstruct(Construct):

@@ -59,7 +59,7 @@ class ReVIEWStack(Stack):
             props=props,
             llm_lambda=self.backend_stack.llm_lambda,
             ddb_lambda=self.backend_stack.ddb_handler_lambda,
-            kb_query_lambda=self.rag_stack.kb_construct.query_lambda,
+            knowledge_base=self.rag_stack.kb_construct.knowledge_base,
             presigned_url_lambda=self.backend_stack.presigned_url_lambda,
         )
 
