@@ -69,9 +69,7 @@ class ReVIEWStack(Stack):
             self,
             props=props,
             backend_api_url=self.api_stack.api.url,
-            websocket_api_url=self.api_stack.web_socket_api_stage.url.replace(
-                "https://", "wss://"
-            ),
+            websocket_api_url=self.api_stack.web_socket_api_stage.url,
             cognito_pool=self.api_stack.cognito_user_pool,
         )
 

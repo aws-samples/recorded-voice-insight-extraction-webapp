@@ -57,8 +57,10 @@ class ReVIEWAPIStack(NestedStack):
 
         # Add WS GW URL to KB lambda as env variable
         # Lambda needs https://* url
+        # self.web_socket_api_stage.url is wss://*
+        # self.web_socket_api_stage.callback_url is https://
         self.kb_query_lambda.add_environment(
-            "WS_API_URL", self.web_socket_api_stage.url
+            "WS_API_URL", self.web_socket_api_stage.callback_url
         )
 
         # Output the API URLs
