@@ -137,15 +137,12 @@ def stream_lambda_handler(event, context):
                 media_name=None,
             )
             for generation_event in generation_stream:
-                api_client.post_to_connection(
-                    Data=generation_event, ConnectionId=connection_id
-                )
+                # Serialize the dictionary to a JSON string and encode to bytes
+                data = json.dumps(generation_event).encode("utf-8")
+                api_client.post_to_connection(Data=data, ConnectionId=connection_id)
         except Exception as e:
             return {"statusCode": 500, "body": f"Internal server error: {e}"}
 
-    # If one file was selected, no knowledge base or retrieval is needed,
-    # pass the full transcript in to an LLM for generation
-    # Media name is provided for use in the LLM-generated citations
     else:
         try:
             generation_stream = kbqarag.generate_answer_no_chunking_stream(
@@ -154,9 +151,9 @@ def stream_lambda_handler(event, context):
                 full_transcript=full_transcript,
             )
             for generation_event in generation_stream:
-                api_client.post_to_connection(
-                    Data=generation_event, ConnectionId=connection_id
-                )
+                # Serialize the dictionary to a JSON string and encode to bytes
+                data = json.dumps(generation_event).encode("utf-8")
+                api_client.post_to_connection(Data=data, ConnectionId=connection_id)
         except Exception as e:
             return {"statusCode": 500, "body": f"Internal server error: {e}"}
 

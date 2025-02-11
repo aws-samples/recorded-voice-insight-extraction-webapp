@@ -18,19 +18,19 @@ import json
 import logging
 
 logger = logging.getLogger()
-logger.setLevel("INFO")
+logger.setLevel("DEBUG")
 
 
 def lambda_handler(event, context):
+    logging.debug(f"{event=}")
     connectId = event["requestContext"]["connectionId"]
     domainName = event["requestContext"]["domainName"]
     stageName = event["requestContext"]["stage"]
-    qs = event["queryStringParameters"]
     connectionInfo = {
         "Connection ID": connectId,
         "Domain Name": domainName,
         "Stage Name": stageName,
-        "Query Strings": qs,
     }
     logging.info(connectionInfo)
+
     return {"statusCode": 200}

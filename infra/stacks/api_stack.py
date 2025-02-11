@@ -13,16 +13,15 @@
 # HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 import boto3
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, NestedStack
+from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy, aws_logs
 from aws_cdk import aws_apigateway as apigw
 from aws_cdk import aws_apigatewayv2 as apigwv2
 from aws_cdk import aws_apigatewayv2_integrations as integrations
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk.aws_bedrock import CfnKnowledgeBase
-from aws_cdk import aws_iam as iam
 
 
 class ReVIEWAPIStack(NestedStack):
@@ -150,7 +149,13 @@ class ReVIEWAPIStack(NestedStack):
         self.web_socket_api = apigwv2.WebSocketApi(
             self, "web_socket_api", route_selection_expression="$request.body.action"
         )
-
+        # Create a log group for WebSocket API access logs
+        log_group = aws_logs.LogGroup(
+            self,
+            "ReVIEWWebSocketApiLogs",
+            retention=aws_logs.RetentionDays.ONE_WEEK,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
         self.web_socket_api_stage = apigwv2.WebSocketStage(
             self,
             "web_socket_api_stage",
@@ -158,6 +163,21 @@ class ReVIEWAPIStack(NestedStack):
             stage_name="dev",
             auto_deploy=True,
         )
+
+        # Cast to CfnStage to configure logging
+        cfn_stage = self.web_socket_api_stage.node.default_child
+        cfn_stage.access_log_settings = {
+            "destinationArn": log_group.log_group_arn,
+            "format": '$context.identity.sourceIp - - [$context.requestTime] "$context.routeKey $context.connectionId" $context.status $context.responseLength $context.requestId',
+        }
+
+        # Add default route settings including throttling
+        cfn_stage.default_route_settings = {
+            "throttling_burst_limit": 500,
+            "throttling_rate_limit": 1000,
+            "data_trace_enabled": True,
+            "logging_level": "INFO",
+        }
 
         disconnect_lambda = _lambda.Function(
             self,
@@ -177,6 +197,7 @@ class ReVIEWAPIStack(NestedStack):
             role=kb_query_lambda.role,  # Re-use kb query lambda role for connect lambda (TODO)
             timeout=Duration.seconds(600),
         )
+
         # Default route is kb query streaming response
         self.web_socket_api.add_route(
             "$default",
@@ -225,6 +246,7 @@ class ReVIEWAPIStack(NestedStack):
                     "bedrock:RetrieveAndGenerate",
                     "bedrock:Retrieve",
                     "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
                 ],
                 resources=["*"],  # Needs access to all LLMs
             )

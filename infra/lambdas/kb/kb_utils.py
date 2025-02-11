@@ -204,17 +204,23 @@ class ResponseProcessor:
 
 
 class RetrievalStrategy:
-    def get_retrieval_response(self, retriever, query, username, media_name):
+    def get_retrieval_response(
+        self, retriever, query, username, media_name, full_transcript=None
+    ):
         raise NotImplementedError
 
 
 class ChunkingStrategy(RetrievalStrategy):
-    def get_retrieval_response(self, retriever, query, username, media_name):
+    def get_retrieval_response(
+        self, retriever, query, username, media_name, full_transcript=None
+    ):
         return retriever.retrieve(query, username, media_name)
 
 
 class NoChunkingStrategy(RetrievalStrategy):
-    def get_retrieval_response(self, full_transcript, media_name):
+    def get_retrieval_response(
+        self, retriever, query, username, media_name, full_transcript=None
+    ):
         return {
             "retrievalResults": [
                 {
@@ -248,10 +254,11 @@ class KBQARAG:
         username: str,
         media_name: str = None,
         strategy: RetrievalStrategy = ChunkingStrategy(),
+        full_transcript: str = None,
     ) -> dict:
         query = messages[-1]["content"][0]["text"]
         retrieval_response = strategy.get_retrieval_response(
-            self.retriever, query, username, media_name
+            self.retriever, query, username, media_name, full_transcript
         )
         generation_response = self.generator.generate(
             messages, retrieval_response, self.prompt_builder
@@ -264,10 +271,11 @@ class KBQARAG:
         username: str,
         media_name: str = None,
         strategy: RetrievalStrategy = ChunkingStrategy(),
+        full_transcript: str = None,
     ) -> Generator[dict, None, None]:
         query = messages[-1]["content"][0]["text"]
         retrieval_response = strategy.get_retrieval_response(
-            self.retriever, query, username, media_name
+            self.retriever, query, username, media_name, full_transcript
         )
         generation_response = self.generator.generate_stream(
             messages, retrieval_response, self.prompt_builder
@@ -281,7 +289,7 @@ class KBQARAG:
     ) -> dict:
         strategy = NoChunkingStrategy()
         return self.retrieve_and_generate_answer(
-            messages, "", media_name, strategy=strategy
+            messages, "", media_name, strategy=strategy, full_transcript=full_transcript
         )
 
     def generate_answer_no_chunking_stream(
@@ -289,5 +297,5 @@ class KBQARAG:
     ) -> Generator[dict, None, None]:
         strategy = NoChunkingStrategy()
         return self.retrieve_and_generate_answer_stream(
-            messages, "", media_name, strategy=strategy
+            messages, "", media_name, strategy=strategy, full_transcript=full_transcript
         )

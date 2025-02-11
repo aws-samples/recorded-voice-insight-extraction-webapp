@@ -24,6 +24,6 @@ logger.setLevel("INFO")
 def lambda_handler(event, context):
     connection_id = event["requestContext"]["connectionId"]
     # Perform any cleanup or actions on disconnect here
-    print(f"Connection {connection_id} disconnected.")
+    logger.info(f"Connection {connection_id} disconnected.")
 
     return {"statusCode": 200}
