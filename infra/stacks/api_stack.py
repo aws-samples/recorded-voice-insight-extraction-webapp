@@ -56,13 +56,14 @@ class ReVIEWAPIStack(NestedStack):
         self.create_WS_gateway(self.kb_query_lambda)
 
         # Add WS GW URL to KB lambda as env variable
+        # Lambda needs https://* url
         self.kb_query_lambda.add_environment(
-            "WS_API_URL", self.web_socket_api_stage.callback_url
+            "WS_API_URL", self.web_socket_api_stage.url
         )
 
         # Output the API URLs
         CfnOutput(self, "RESTApiUrl", value=self.api.url)
-        CfnOutput(self, "WSApiUrl", value=self.web_socket_api_stage.callback_url)
+        CfnOutput(self, "WSApiUrl", value=self.web_socket_api_stage.url)
 
     def setup_cognito_pool(self):
         # Cognito User Pool (stored as self.cognito_user_pool)
