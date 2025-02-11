@@ -51,7 +51,7 @@ class KBRetriever:
 
         retrieval_config = {
             "vectorSearchConfiguration": {
-                "numberOfResults": self.num_chunks,
+                "numberOfResults": int(self.num_chunks),
                 "filter": retrieval_filter,
             },
         }

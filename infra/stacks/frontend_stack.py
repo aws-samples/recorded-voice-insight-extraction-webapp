@@ -36,6 +36,7 @@ class ReVIEWFrontendStack(NestedStack):
         scope,
         props: dict,
         backend_api_url: str,
+        websocket_api_url: str,
         cognito_pool: cognito.UserPool,
         **kwargs,
     ):
@@ -53,6 +54,7 @@ class ReVIEWFrontendStack(NestedStack):
 
         # This will be exported as an env variable in the frontend, for it to call API Gateway
         self.backend_api_url = backend_api_url
+        self.websocket_api_url = websocket_api_url
 
         self.cognito_user_pool_id = cognito_pool.user_pool_id
         # Frontend needs a cognito client associated with the user pool created in API stack
@@ -125,6 +127,7 @@ class ReVIEWFrontendStack(NestedStack):
                     "COGNITO_CLIENT_ID": self.cognito_user_pool_client.user_pool_client_id,
                     "COGNITO_POOL_ID": self.cognito_user_pool_id,
                     "BACKEND_API_URL": self.backend_api_url,
+                    "WS_API_URL": self.websocket_api_url,
                     # Export all string props as environment variables in the frontend
                     **{k: v for k, v in self.props.items() if isinstance(v, str)},
                 },

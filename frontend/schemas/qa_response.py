@@ -63,3 +63,12 @@ class FullQAnswer(BaseModel):
             # result += "\n" # This works better for Claude 3
             result += "\n\n"  # This works better for Nova Pro
         return result
+
+    def markdown(self) -> str:
+        """Format the FullQAnswer to markdown excluding citations
+        (used when streaming responses)"""
+        result = ""
+        for partial in self.answer:
+            result += partial.partial_answer
+            result += "\n\n"
+        return result

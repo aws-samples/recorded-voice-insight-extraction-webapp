@@ -19,7 +19,9 @@
 import json
 import os
 import sys
-import requests
+import requests  # for REST API
+import websocket  # for streaming WS API
+from typing import Generator
 
 # Add frontend dir to system path to import FullQAnswer
 sys.path.append(
@@ -32,6 +34,7 @@ from schemas.qa_response import FullQAnswer
 from components.io_utils import get_analysis_templates
 
 BACKEND_API_URL = os.environ["BACKEND_API_URL"]
+WS_API_URL = os.environ["WS_API_URL"]
 
 
 def run_analysis(analysis_id: int, transcript: str, api_auth_token: str):
@@ -85,7 +88,7 @@ def clean_messages(messages, max_number_of_messages=10):
 def retrieve_and_generate_answer(
     messages: list, username: str, api_auth_token: str
 ) -> FullQAnswer:
-    """Query knowledge base and generate an answer. Only filter applied is
+    """Query knowledge base and generate an answer (REST API). Only filter applied is
     the username (so each user can only query their own files)
     messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
     """
@@ -113,6 +116,21 @@ def retrieve_and_generate_answer(
     except Exception as e:
         print(f"Error parsing KB result: {str(e)}")
         raise
+
+
+def retrieve_and_generate_answer_stream(
+    messages: list, username: str
+) -> Generator[FullQAnswer, None, None]:
+    """Query knowledge base and generate an answer (streaming WS API). Only filter applied is
+    the username (so each user can only query their own files)
+    messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
+    """
+    json_body = {
+        "action": "$default",
+        "messages": json.dumps(clean_messages(messages)),
+        "username": username,
+    }
+    yield from websocket_stream(json_body)
 
 
 def generate_answer_no_chunking(
@@ -147,3 +165,50 @@ def generate_answer_no_chunking(
     except Exception as e:
         print(f"Error parsing LLM result: {str(e)}")
         raise
+
+
+def generate_answer_no_chunking_stream(
+    messages: list, media_name: str, full_transcript: str
+) -> Generator[FullQAnswer, None, None]:
+    """Bypass the knowledge base, impute the full transcript into the prompt and have
+    an LLM generate the answer. This function is used when user asks a question about
+    one media file. Media name is provided only because it is included in
+    the LLM-generated citations. KB lambda is used for convenience, as it has all of
+    the prompt engineering / output parsing required to form FullQAnswer objects.
+    messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
+    """
+    json_body = {
+        "action": "$default",
+        "messages": json.dumps(clean_messages(messages)),
+        "full_transcript": full_transcript,
+        "media_name": media_name,
+    }
+    yield from websocket_stream(json_body)
+
+
+def websocket_stream(json_body: dict) -> Generator[FullQAnswer, None, None]:
+    """Stream from websocket, parse response into FullQAnswer objects"""
+    try:
+        ws = websocket.create_connection(
+            url=WS_API_URL,
+            header=[],
+            enable_multithread=True,
+        )
+
+        ws.send(json.dumps(json_body))
+        # print(f">>> {json_body}")
+
+        while True:
+            response = ws.recv()
+            # print(f"<<< {response=}")
+            yield FullQAnswer(**json.loads(response))
+    except websocket.WebSocketConnectionClosedException:
+        # print("Connection closed")
+        pass
+    except Exception as e:
+        # The last response from ws is always an empty string, which doesn't parse as FullQAnswer,
+        # so this block is to ignore that
+        if str(e) != "Expecting value: line 1 column 1 (char 0)":
+            raise e
+    finally:
+        ws.close()

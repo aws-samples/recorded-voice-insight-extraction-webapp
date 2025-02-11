@@ -23,8 +23,11 @@ from .s3_utils import retrieve_media_url, retrieve_transcript_by_jobid
 from .bedrock_utils import (
     generate_answer_no_chunking,
     retrieve_and_generate_answer,
+    generate_answer_no_chunking_stream,
+    retrieve_and_generate_answer_stream,
 )
 import pandas as pd
+from typing import Generator
 
 
 def display_sidebar(current_page: str | None = None):
@@ -139,6 +142,8 @@ def display_full_ai_response(
                 media_url,
                 first_citation.timestamp,
             )
+        except AttributeError as e:
+            print(f"AttributeError: {e}")
         except ValueError:
             pass
 
@@ -204,6 +209,41 @@ def generate_full_answer(
             api_auth_token=api_auth_token,
         )
     return full_answer
+
+
+def generate_full_answer_stream(
+    messages: list,
+    username: str,
+    api_auth_token: str = "",  # Auth token used for REST API to retrieve transcript, not WS API
+    selected_media_name: str | None = None,
+    job_df: pd.DataFrame | None = None,
+) -> Generator[str, None, None]:
+    """Given a user query, use GenAI to generate an answer."""
+    # If last message was from AI, insert empty AI message
+    if messages[-1]["role"] == "assistant":
+        messages.append({"role": "assistant", "content": [{"text": ""}]})
+
+    # If no specific media file is selected, use RAG over all files
+    if not selected_media_name:
+        yield from retrieve_and_generate_answer_stream(
+            messages=messages,
+            username=username,
+        )
+    # If one file was selected, no retrieval is needed
+    else:
+        selected_job_id = job_df[job_df.media_name == selected_media_name][
+            "UUID"
+        ].values[0]
+        full_transcript = retrieve_transcript_by_jobid(
+            job_id=selected_job_id,
+            username=username,
+            api_auth_token=api_auth_token,
+        )
+        yield from generate_answer_no_chunking_stream(
+            messages=messages,
+            media_name=selected_media_name,
+            full_transcript=full_transcript,
+        )
 
 
 @lru_cache
