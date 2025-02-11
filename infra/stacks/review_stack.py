@@ -63,13 +63,15 @@ class ReVIEWStack(Stack):
             presigned_url_lambda=self.backend_stack.presigned_url_lambda,
         )
 
-        # Frontend stack (streamlit application code, VPC,
-        # ECS, fargate, etc)
+        # Frontend stack (streamlit application code, VPC, ECS, fargate, etc)
+        # Websocket url it needs is prefixed with "wss://"
         self.frontend_stack = ReVIEWFrontendStack(
             self,
             props=props,
             backend_api_url=self.api_stack.api.url,
-            websocket_api_url=self.api_stack.web_socket_api_stage.callback_url,
+            websocket_api_url=self.api_stack.web_socket_api_stage.url.replace(
+                "https://", "wss://"
+            ),
             cognito_pool=self.api_stack.cognito_user_pool,
         )
 
