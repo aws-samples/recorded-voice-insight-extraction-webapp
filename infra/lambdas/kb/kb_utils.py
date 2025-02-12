@@ -157,50 +157,62 @@ class ResponseProcessor:
     def postprocess_generation_stream(
         stream: Generator[Dict[str, Any], None, None],
     ) -> Generator[dict, None, None]:
-        full_json_string = ""
-        current_answer = {"answer": []}
-        partial_answer_text = ""
+        full_generated_string = ""
+        # current_answer = {"answer": []}
+        # current_partial_answer_index = 0
 
         for event in stream:
             if "contentBlockDelta" in event:
                 delta = event["contentBlockDelta"]["delta"].get("text", "")
-                full_json_string += delta
+                full_generated_string += delta
 
-                partial_answer_match = re.search(
-                    r'"partial_answer":\s*"([^"]*)', full_json_string
+                yield ResponseProcessor.generated_string_to_dict(full_generated_string)
+
+        yield ResponseProcessor.generated_string_to_dict(full_generated_string)
+
+    @staticmethod
+    def generated_string_to_dict(generated_string: str) -> dict:
+        """Given the growing LLM string, attempt to parse as much of the response as possible
+        into a json object matching the FullQAnswer object. This is some really tricky regex, all
+        designed to give the best user experience possible. Partial answers should update continuously,
+        citations don't get added to the output until they are fully formed"""
+        result = {"answer": []}
+
+        # Extract content between <json> tags, or everything after <json> if </json> is not present
+        match = re.search(r"<json>(.*?)(?:</json>|$)", generated_string, re.DOTALL)
+        if not match:
+            return result
+
+        json_content = match.group(1).strip()
+
+        # Split the content into individual answer items
+        answer_items = re.split(r"(?<=}),\s*{", json_content)
+
+        for item in answer_items:
+            current_item = {"partial_answer": "", "citations": []}
+
+            # Extract partial_answer
+            partial_answer_match = re.search(
+                r'"partial_answer"\s*:\s*"(.*?)(?:"|$)', item, re.DOTALL
+            )
+            if partial_answer_match:
+                current_item["partial_answer"] = (
+                    partial_answer_match.group(1).replace("\n", " ").strip()
                 )
-                if partial_answer_match:
-                    new_partial_answer = partial_answer_match.group(1)
-                    if new_partial_answer != partial_answer_text:
-                        partial_answer_text = new_partial_answer
-                        current_answer["answer"] = [
-                            {"partial_answer": partial_answer_text, "citations": []}
-                        ]
 
-                citations_match = re.search(
-                    r'"citations":\s*(\[.*?\])', full_json_string, re.DOTALL
-                )
-                if citations_match:
-                    try:
-                        citations_json = citations_match.group(1)
-                        citations = json.loads(citations_json)
-                        if current_answer["answer"]:
-                            current_answer["answer"][-1]["citations"] = citations
-                    except json.JSONDecodeError:
-                        pass
+            # Extract citations
+            citations_match = re.search(r'"citations"\s*:\s*(\[.*?\])', item)
+            if citations_match:
+                try:
+                    citations = json.loads(citations_match.group(1))
+                    if all("media_name" in c and "timestamp" in c for c in citations):
+                        current_item["citations"] = citations
+                except json.JSONDecodeError:
+                    pass
 
-                if full_json_string.strip().endswith("</json>"):
-                    try:
-                        json_content = full_json_string.split("<json>\n")[1].split(
-                            "</json>"
-                        )[0]
-                        current_answer = json.loads(json_content)
-                    except (json.JSONDecodeError, IndexError):
-                        pass
+            result["answer"].append(current_item)
 
-            yield current_answer
-
-        yield current_answer
+        return result
 
 
 class RetrievalStrategy:
