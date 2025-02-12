@@ -35,7 +35,7 @@ if not st.session_state.get("auth_username", None):
     st.stop()
 
 username = st.session_state["auth_username"]
-api_auth_token = st.session_state["auth_id_token"]
+api_auth_id_token = st.session_state["auth_id_token"]
 
 display_sidebar()
 
@@ -52,7 +52,7 @@ if uploaded_file is not None:
         uploaded_file,
         filename=uploaded_file.name,
         username=username,
-        api_auth_token=api_auth_token,
+        api_auth_id_token=api_auth_id_token,
     )
     if upload_successful:
         st.success(

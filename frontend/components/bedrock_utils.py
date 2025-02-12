@@ -37,7 +37,7 @@ BACKEND_API_URL = os.environ["BACKEND_API_URL"]
 WS_API_URL = os.environ["WS_API_URL"]
 
 
-def run_analysis(analysis_id: int, transcript: str, api_auth_token: str):
+def run_analysis(analysis_id: int, transcript: str, api_auth_id_token: str):
     """Run a predefined analysis (LLM generation) on a transcript"""
 
     # Get analysis template from csv
@@ -61,7 +61,7 @@ def run_analysis(analysis_id: int, transcript: str, api_auth_token: str):
     response = requests.post(
         BACKEND_API_URL + "/llm",
         json=json_body,
-        headers={"Authorization": api_auth_token},
+        headers={"Authorization": api_auth_id_token},
         timeout=30,
     )
     if response.status_code != 200:
@@ -86,7 +86,7 @@ def clean_messages(messages, max_number_of_messages=10):
 
 
 def retrieve_and_generate_answer(
-    messages: list, username: str, api_auth_token: str
+    messages: list, username: str, api_auth_id_token: str
 ) -> FullQAnswer:
     """Query knowledge base and generate an answer (REST API). Only filter applied is
     the username (so each user can only query their own files)
@@ -103,7 +103,7 @@ def retrieve_and_generate_answer(
     response = requests.post(
         BACKEND_API_URL + "/kb",
         json=json_body,
-        headers={"Authorization": api_auth_token},
+        headers={"Authorization": api_auth_id_token},
         timeout=30,
     )
     if response.status_code != 200:
@@ -119,7 +119,7 @@ def retrieve_and_generate_answer(
 
 
 def retrieve_and_generate_answer_stream(
-    messages: list, username: str
+    messages: list, username: str, api_auth_access_token: str
 ) -> Generator[FullQAnswer, None, None]:
     """Query knowledge base and generate an answer (streaming WS API). Only filter applied is
     the username (so each user can only query their own files)
@@ -130,11 +130,11 @@ def retrieve_and_generate_answer_stream(
         "messages": json.dumps(clean_messages(messages)),
         "username": username,
     }
-    yield from websocket_stream(json_body)
+    yield from websocket_stream(json_body, api_auth_access_token=api_auth_access_token)
 
 
 def generate_answer_no_chunking(
-    messages: list, media_name: str, full_transcript: str, api_auth_token: str
+    messages: list, media_name: str, full_transcript: str, api_auth_id_token: str
 ) -> FullQAnswer:
     """Bypass the knowledge base, impute the full transcript into the prompt and have
     an LLM generate the answer. This function is used when user asks a question about
@@ -152,7 +152,7 @@ def generate_answer_no_chunking(
     response = requests.post(
         BACKEND_API_URL + "/kb",
         json=json_body,
-        headers={"Authorization": api_auth_token},
+        headers={"Authorization": api_auth_id_token},
         timeout=30,
     )
     if response.status_code != 200:
@@ -168,7 +168,7 @@ def generate_answer_no_chunking(
 
 
 def generate_answer_no_chunking_stream(
-    messages: list, media_name: str, full_transcript: str
+    messages: list, media_name: str, full_transcript: str, api_auth_access_token: str
 ) -> Generator[FullQAnswer, None, None]:
     """Bypass the knowledge base, impute the full transcript into the prompt and have
     an LLM generate the answer. This function is used when user asks a question about
@@ -183,25 +183,29 @@ def generate_answer_no_chunking_stream(
         "full_transcript": full_transcript,
         "media_name": media_name,
     }
-    yield from websocket_stream(json_body)
+    yield from websocket_stream(json_body, api_auth_access_token=api_auth_access_token)
 
 
-def websocket_stream(json_body: dict) -> Generator[FullQAnswer, None, None]:
+def websocket_stream(
+    json_body: dict, api_auth_access_token: str
+) -> Generator[FullQAnswer, None, None]:
     """Stream from websocket, parse response into FullQAnswer objects"""
     try:
+        # Create headers with the bearer token
+        headers = {"Authorization": f"Bearer {api_auth_access_token}"}
+
         ws = websocket.create_connection(
             url=WS_API_URL,
-            header=[],
+            header=headers,
             enable_multithread=True,
         )
 
         ws.send(json.dumps(json_body))
-        # print(f">>> {json_body}")
 
         while True:
             response = ws.recv()
-            # print(f"<<< {response=}")
             yield FullQAnswer(**json.loads(response))
+
     except websocket.WebSocketConnectionClosedException:
         # print("Connection closed")
         pass

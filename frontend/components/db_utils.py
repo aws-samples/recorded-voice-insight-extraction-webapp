@@ -24,7 +24,7 @@ BACKEND_API_URL = os.environ["BACKEND_API_URL"]
 
 
 def retrieve_all_items(
-    username: str, max_rows: int | None, api_auth_token: str
+    username: str, max_rows: int | None, api_auth_id_token: str
 ) -> pd.DataFrame:
     """Query dynamodb table for rows from this username and return
     specific columns w/ optional max # of rows"""
@@ -37,7 +37,7 @@ def retrieve_all_items(
     response = requests.post(
         BACKEND_API_URL + "/ddb",
         json=json_body,
-        headers={"Authorization": api_auth_token},
+        headers={"Authorization": api_auth_id_token},
         timeout=10,
     )
     if response.status_code != 200:
@@ -64,7 +64,7 @@ def retrieve_all_items(
 
 
 def retrieve_analysis_by_jobid(
-    job_id: str, username: str, template_id: int, api_auth_token: str
+    job_id: str, username: str, template_id: int, api_auth_id_token: str
 ) -> str | None:
     """Retrieve analysis from dynamodb table by job_id
     (if analysis is cached, else none)"""
@@ -78,7 +78,7 @@ def retrieve_analysis_by_jobid(
     response = requests.post(
         BACKEND_API_URL + "/ddb",
         json=json_body,
-        headers={"Authorization": api_auth_token},
+        headers={"Authorization": api_auth_id_token},
         timeout=10,
     )
     if response.status_code != 200:
@@ -93,7 +93,7 @@ def store_analysis_result(
     username: str,
     template_id: int,
     analysis_result: str,
-    api_auth_token: str,
+    api_auth_id_token: str,
 ) -> str | None:
     """Store completed analysis in dynamodb table"""
 
@@ -107,7 +107,7 @@ def store_analysis_result(
     response = requests.post(
         BACKEND_API_URL + "/ddb",
         json=json_body,
-        headers={"Authorization": api_auth_token},
+        headers={"Authorization": api_auth_id_token},
         timeout=10,
     )
     if response.status_code != 200:

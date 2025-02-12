@@ -39,13 +39,14 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 username = st.session_state["auth_username"]
-api_auth_token = st.session_state["auth_id_token"]
+api_auth_id_token = st.session_state["auth_id_token"]
+api_auth_access_token = st.session_state["auth_access_token"]
 
 st.subheader("Pick media file to analyze:")
 stu.display_sidebar(current_page="Chat With Your Media")
 
 job_df = retrieve_all_items(
-    username=username, max_rows=None, api_auth_token=api_auth_token
+    username=username, max_rows=None, api_auth_id_token=api_auth_id_token
 )
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
@@ -94,7 +95,7 @@ for message_counter, message in enumerate(st.session_state.messages):
             stu.display_full_ai_response(
                 full_answer=message["full_answer"],
                 username=username,
-                api_auth_token=api_auth_token,
+                api_auth_id_token=api_auth_id_token,
                 message_index=message_counter,
                 new_message=False,
                 media_name=media_name,
@@ -116,7 +117,8 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
             full_answer_iterator = stu.generate_full_answer_stream(
                 messages=st.session_state.messages,
                 username=username,
-                api_auth_token=api_auth_token,  # Auth token is used for REST API, getting transcript from s3
+                api_auth_id_token=api_auth_id_token,  # Auth id token is used for REST API, getting transcript from s3
+                api_auth_access_token=api_auth_access_token,  # Access token used for WS API authorization
                 selected_media_name=selected_media_name,
                 job_df=job_df,
             )
@@ -138,7 +140,7 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
             stu.display_full_ai_response(
                 full_answer=current_full_answer,
                 username=username,
-                api_auth_token=api_auth_token,
+                api_auth_id_token=api_auth_id_token,
                 message_index=len(st.session_state.messages),
             )
 

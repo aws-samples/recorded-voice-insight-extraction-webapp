@@ -110,7 +110,7 @@ def display_video_at_timestamp(media_url, timestamp):
 def display_full_ai_response(
     full_answer,
     username: str,
-    api_auth_token: str,
+    api_auth_id_token: str,
     message_index: int,
     new_message: bool = True,
     media_name: str | None = None,
@@ -122,7 +122,7 @@ def display_full_ai_response(
     # If a start_timestamp and media_name are provided, display that
     if start_timestamp and media_name:
         media_url = retrieve_media_url(
-            media_name, username=username, api_auth_token=api_auth_token
+            media_name, username=username, api_auth_id_token=api_auth_id_token
         )
         display_video_at_timestamp(
             media_url,
@@ -136,7 +136,7 @@ def display_full_ai_response(
             media_url = retrieve_media_url(
                 first_citation.media_name,
                 username=username,
-                api_auth_token=api_auth_token,
+                api_auth_id_token=api_auth_id_token,
             )
             display_video_at_timestamp(
                 media_url,
@@ -169,7 +169,8 @@ def display_full_ai_response(
 def generate_full_answer(
     messages: list,
     username: str,
-    api_auth_token: str,
+    api_auth_id_token: str,
+    api_auth_access_token: str,
     selected_media_name: str | None = None,
     job_df: pd.DataFrame | None = None,
 ):
@@ -190,7 +191,7 @@ def generate_full_answer(
         full_answer = retrieve_and_generate_answer(
             messages=messages,
             username=username,
-            api_auth_token=api_auth_token,
+            api_auth_access_token=api_auth_access_token,
         )
     # If one file was selected, no retrieval is needed
     else:
@@ -200,13 +201,13 @@ def generate_full_answer(
         full_transcript = retrieve_transcript_by_jobid(
             job_id=selected_job_id,
             username=username,
-            api_auth_token=api_auth_token,
+            api_auth_token=api_auth_id_token,
         )
         full_answer = generate_answer_no_chunking(
             messages=messages,
             media_name=selected_media_name,
             full_transcript=full_transcript,
-            api_auth_token=api_auth_token,
+            api_auth_token=api_auth_access_token,
         )
     return full_answer
 
@@ -214,7 +215,8 @@ def generate_full_answer(
 def generate_full_answer_stream(
     messages: list,
     username: str,
-    api_auth_token: str = "",  # Auth token used for REST API to retrieve transcript, not WS API
+    api_auth_id_token: str,  # Auth token used for REST API to retrieve transcript
+    api_auth_access_token: str,  # Auth used for WS connection
     selected_media_name: str | None = None,
     job_df: pd.DataFrame | None = None,
 ) -> Generator[str, None, None]:
@@ -228,6 +230,7 @@ def generate_full_answer_stream(
         yield from retrieve_and_generate_answer_stream(
             messages=messages,
             username=username,
+            api_auth_access_token=api_auth_access_token,
         )
     # If one file was selected, no retrieval is needed
     else:
@@ -237,12 +240,13 @@ def generate_full_answer_stream(
         full_transcript = retrieve_transcript_by_jobid(
             job_id=selected_job_id,
             username=username,
-            api_auth_token=api_auth_token,
+            api_auth_id_token=api_auth_id_token,
         )
         yield from generate_answer_no_chunking_stream(
             messages=messages,
             media_name=selected_media_name,
             full_transcript=full_transcript,
+            api_auth_access_token=api_auth_access_token,
         )
 
 

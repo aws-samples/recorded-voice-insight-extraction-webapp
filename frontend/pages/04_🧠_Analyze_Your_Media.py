@@ -43,12 +43,12 @@ st.subheader("Pick a media file to analyze:")
 display_sidebar()
 
 username = st.session_state["auth_username"]
-api_auth_token = st.session_state["auth_id_token"]
+api_auth_id_token = st.session_state["auth_id_token"]
 
 job_df = retrieve_all_items(
     username=username,
     max_rows=None,
-    api_auth_token=api_auth_token,
+    api_auth_id_token=api_auth_id_token,
 )
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
@@ -89,7 +89,7 @@ if button_clicked:
         job_id=selected_job_id,
         username=username,
         template_id=selected_analysis_id,
-        api_auth_token=api_auth_token,
+        api_auth_id_token=api_auth_id_token,
     )
     if cached_results:
         st.info("Displaying cached analysis result:")
@@ -99,19 +99,21 @@ if button_clicked:
         st.info("Analysis results will be displayed here when complete:")
 
         transcript = retrieve_transcript_by_jobid(
-            job_id=selected_job_id, username=username, api_auth_token=api_auth_token
+            job_id=selected_job_id,
+            username=username,
+            api_auth_id_token=api_auth_id_token,
         )
         analysis_result = run_analysis(
             analysis_id=selected_analysis_id,
             transcript=transcript,
-            api_auth_token=api_auth_token,
+            api_auth_id_token=api_auth_id_token,
         )
         store_analysis_result(
             job_id=selected_job_id,
             username=username,
             template_id=selected_analysis_id,
             analysis_result=analysis_result,
-            api_auth_token=api_auth_token,
+            api_auth_id_token=api_auth_id_token,
         )
 
     stx.scrollableTextbox(
