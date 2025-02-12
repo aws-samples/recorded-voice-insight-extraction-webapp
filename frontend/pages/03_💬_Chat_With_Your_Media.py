@@ -128,7 +128,7 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
                 next_full_answer = next(full_answer_iterator, None)
 
                 if next_full_answer is not None:
-                    placeholder.markdown(current_full_answer.markdown())
+                    placeholder.markdown(current_full_answer.pprint())
                 else:
                     break
 
