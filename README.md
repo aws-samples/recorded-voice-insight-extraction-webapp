@@ -4,7 +4,7 @@
 
 Companion AWS blog post: [Accelerate video Q&A workflows using Amazon Bedrock Knowledge Bases, Amazon Transcribe, and thoughtful UX design](https://aws.amazon.com/blogs/machine-learning/accelerate-video-qa-workflows-using-amazon-bedrock-knowledge-bases-amazon-transcribe-and-thoughtful-ux-design/)
 
-See CHANGELOG for latest features sand fixes.
+See [CHANGELOG](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/blob/main/CHANGELOG.md) for latest features and fixes.
 
 # Contents
 - [Recorded Voice Insight Extraction Webapp (ReVIEW)](#recorded-voice-insight-extraction-webapp-review)
