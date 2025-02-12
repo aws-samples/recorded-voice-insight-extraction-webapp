@@ -2,6 +2,10 @@
 
 **_A generative AI tool to boost productivity by transcribing and analyzing audio or video recordings containing speech_**
 
+Companion AWS blog post: [Accelerate video Q&A workflows using Amazon Bedrock Knowledge Bases, Amazon Transcribe, and thoughtful UX design](https://aws.amazon.com/blogs/machine-learning/accelerate-video-qa-workflows-using-amazon-bedrock-knowledge-bases-amazon-transcribe-and-thoughtful-ux-design/)
+
+See CHANGELOG for latest features sand fixes.
+
 # Contents
 - [Recorded Voice Insight Extraction Webapp (ReVIEW)](#recorded-voice-insight-extraction-webapp-review)
 - [Contents](#contents)
@@ -29,7 +33,8 @@ Additionally, this application includes the capability to use an LLM to analyze 
 - Files automatically get transcribed, with status that can be viewed in the frontend.
 - Interactive chat-with-your-media function provides an AI assistant who will answer specific questions about one media file or a collection of multiple media files, and **will identify timestamps in the media files when the answer was provided. The media automatically gets played back starting at that timestamp, with clickable citations if multiple sources are relevant to the answer.**
 - Provided analysis templates allow for easy GenAI summarization, document generation, next-steps and blockers identifications, and more.
-- Complete frontend/backend separation via API Gateway to enable users to replace Streamlit if desired.
+- Complete frontend/backend separation via API Gateway to enable users to replace Streamlit if desired. REST API primarily used, along with websockets for streaming responses.
+
 Here is an overview of the architecture for the solution.
 
 Below is a screenshot of the chat functionality. Here, the user asked whether any new products were announced in a collection of uploaded videos of public AWS presentations. Since several videos mentioned the announcement of SageMaker HyperPods, three buttons appear which auto play the cited videos at the relevant timestamp when the announcements occurred. This is the critical user experience that allows the users to verify accuracy of LLM-generated answers for themselves.
@@ -60,7 +65,7 @@ The workflow is triggered by an Event Bridge notifications in the transcripts s3
 The code base behind the solution consists of one stack defined in `infra/stacks/review_stack.py`, which deploys four [nested stacks](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.NestedStack.html):
 1) A backend which handles transcribing uploaded media and tracking job statuses, 
 2) A RAG stack which handles setting up OpenSearch and Bedrock Knowledge bases, 
-3) An API stack which stands up a Cognito-authorized REST API and various lambda functions to logically separate the frontend from the backend, and
+3) An API stack which stands up both a Cognito-authorized API Gateway REST API and API Gateway Websocket API and various lambda functions to logically separate the frontend from the backend, and
 4) A frontend stack which consists of a containerized streamlit application running as a load balanced service in an ECS cluster in a VPC, with a cloudfront distribution connected to the load balancer.
 
 ### *Clone the Repository*
@@ -147,7 +152,7 @@ The only resource not automatically removed is the Cognito user pool, to preserv
 - diagram/ - Architecture diagrams of the solution used in READMEs
 
 # 🚪 Frontend Replacement
-This application has been designed to make the frontend easily replaceable, as end users may want to replace Streamlit with something more production-grade whilst preserving the backend. Besides the frontend being deployed as a separate stack, it also connects to the backend exclusively through a REST API hosted by API Gateway. 
+This application has been designed to make the frontend easily replaceable, as end users may want to replace Streamlit with something more production-grade whilst preserving the backend. Besides the frontend being deployed as a separate stack, it also connects to the backend exclusively through a REST API hosted by API Gateway and a Websocket API hosted by API Gateway. 
 
 At a high level, the steps to replace the frontend are:
 

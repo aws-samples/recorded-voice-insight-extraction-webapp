@@ -13,14 +13,16 @@
 # HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 import boto3
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, NestedStack
+from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy, aws_logs
 from aws_cdk import aws_apigateway as apigw
+from aws_cdk import aws_apigatewayv2 as apigwv2
+from aws_cdk import aws_apigatewayv2_integrations as integrations
+from aws_cdk import aws_apigatewayv2_authorizers as authorizers
 from aws_cdk import aws_cognito as cognito
-from aws_cdk import (
-    aws_lambda as _lambda,
-)
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_lambda as _lambda
+from aws_cdk.aws_bedrock import CfnKnowledgeBase
 
 
 class ReVIEWAPIStack(NestedStack):
@@ -34,7 +36,7 @@ class ReVIEWAPIStack(NestedStack):
         props: dict,
         llm_lambda: _lambda.Function,
         ddb_lambda: _lambda.Function,
-        kb_query_lambda: _lambda.Function,
+        knowledge_base: CfnKnowledgeBase,
         presigned_url_lambda: _lambda.Function,
         **kwargs,
     ):
@@ -44,14 +46,32 @@ class ReVIEWAPIStack(NestedStack):
         super().__init__(scope, construct_id, description=description, **kwargs)
 
         self.setup_cognito_pool()
-        self.create_gateway()
+        self.create_REST_gateway()
         self.associate_lambda_with_gateway(llm_lambda, "llm")
         self.associate_lambda_with_gateway(ddb_lambda, "ddb")
-        self.associate_lambda_with_gateway(kb_query_lambda, "kb")
+        # self.associate_lambda_with_gateway(kb_query_lambda, "kb")
         self.associate_lambda_with_gateway(presigned_url_lambda, "s3-presigned")
 
-        # Output the API URL and API Key
-        CfnOutput(self, "ApiUrl", value=self.api.url)
+        # Create lambda to query knowledge base (and stream responses to websocket)
+        self.kb_query_lambda = self.create_query_lambda(knowledge_base)
+
+        # Create a lambda to authorize access to websocket API (via cognito bearer token)
+        self.ws_authorizer_lambda = self.create_ws_authorizer_lambda()
+
+        # Create the websocket API
+        self.create_WS_gateway(self.kb_query_lambda, self.ws_authorizer_lambda)
+
+        # Add WS GW URL to KB lambda as env variable
+        # Lambda needs https://* url
+        # self.web_socket_api_stage.url is wss://*
+        # self.web_socket_api_stage.callback_url is https://
+        self.kb_query_lambda.add_environment(
+            "WS_API_URL", self.web_socket_api_stage.callback_url
+        )
+
+        # Output the API URLs
+        CfnOutput(self, "RESTApiUrl", value=self.api.url)
+        CfnOutput(self, "WSApiUrl", value=self.web_socket_api_stage.url)
 
     def setup_cognito_pool(self):
         # Cognito User Pool (stored as self.cognito_user_pool)
@@ -90,7 +110,7 @@ class ReVIEWAPIStack(NestedStack):
             # Create a new user pool
             self.cognito_user_pool = cognito.UserPool(self, **user_pool_common_config)
 
-    def create_gateway(self):
+    def create_REST_gateway(self):
         # Create API Gateway and Cognito authorizer
 
         self.api = apigw.RestApi(
@@ -133,3 +153,191 @@ class ReVIEWAPIStack(NestedStack):
             authorizer=self.authorizer,
             authorization_type=apigw.AuthorizationType.COGNITO,
         )
+
+    def create_ws_authorizer_lambda(self):
+        ### Create authorizer lambda role
+        ws_authorizer_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-WSAuthorizerLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                ),
+            ],
+        )
+        ws_authorizer_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["cognito-idp:GetUser"],
+                resources=["*"],
+            )
+        )
+        ws_authorizer_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
+
+        ### Create authorizer lambda
+        ws_authorizer_lambda = _lambda.Function(
+            self,
+            self.props["stack_name_base"] + "-WSAuthorizerLambda",
+            function_name=f"{self.props['stack_name_base']}-WSAuthorizerLambda",
+            description="Function for ReVIEW to authorize Websocket API",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="websockets.ws-authorizer-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            timeout=Duration.minutes(5),
+            role=ws_authorizer_lambda_role,
+        )
+
+        return ws_authorizer_lambda
+
+    def create_WS_gateway(self, kb_query_lambda, ws_authorizer_lambda):
+        self.web_socket_api = apigwv2.WebSocketApi(
+            self, "web_socket_api", route_selection_expression="$request.body.action"
+        )
+        # Create a log group for WebSocket API access logs
+        log_group = aws_logs.LogGroup(
+            self,
+            "ReVIEWWebSocketApiLogs",
+            retention=aws_logs.RetentionDays.ONE_WEEK,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        self.web_socket_api_stage = apigwv2.WebSocketStage(
+            self,
+            "web_socket_api_stage",
+            web_socket_api=self.web_socket_api,
+            stage_name="dev",
+            auto_deploy=True,
+        )
+
+        # Cast to CfnStage to configure logging
+        cfn_stage = self.web_socket_api_stage.node.default_child
+        cfn_stage.access_log_settings = {
+            "destinationArn": log_group.log_group_arn,
+            "format": '$context.identity.sourceIp - - [$context.requestTime] "$context.routeKey $context.connectionId" $context.status $context.responseLength $context.requestId',
+        }
+
+        # Add default route settings including throttling
+        cfn_stage.default_route_settings = {
+            "throttling_burst_limit": 500,
+            "throttling_rate_limit": 1000,
+            "data_trace_enabled": True,
+            "logging_level": "INFO",
+        }
+
+        connect_disconnect_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-WSConnectDisconnectLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                ),
+            ],
+        )
+
+        disconnect_lambda = _lambda.Function(
+            self,
+            "disconnect_lambda",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            code=_lambda.Code.from_asset("lambdas"),
+            handler="websockets.disconnect-lambda.lambda_handler",
+            role=connect_disconnect_lambda_role,
+            timeout=Duration.seconds(600),
+        )
+        connect_lambda = _lambda.Function(
+            self,
+            "connect_lambda",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            code=_lambda.Code.from_asset("lambdas"),
+            handler="websockets.connect-lambda.lambda_handler",
+            role=connect_disconnect_lambda_role,
+            timeout=Duration.seconds(600),
+        )
+
+        # Default route is kb query streaming response
+        self.web_socket_api.add_route(
+            "$default",
+            integration=integrations.WebSocketLambdaIntegration(
+                "default", handler=kb_query_lambda
+            ),
+            return_response=True,
+        )
+        self.web_socket_api.add_route(
+            "$connect",
+            integration=integrations.WebSocketLambdaIntegration(
+                "connect", handler=connect_lambda
+            ),
+            authorizer=authorizers.WebSocketLambdaAuthorizer(
+                "WS_Lambda_Authorizer", ws_authorizer_lambda
+            ),
+            return_response=True,
+        )
+        self.web_socket_api.add_route(
+            "$disconnect",
+            integration=integrations.WebSocketLambdaIntegration(
+                "disconnect", handler=disconnect_lambda
+            ),
+            return_response=True,
+        )
+
+    def create_query_lambda_role(self, knowledge_base: CfnKnowledgeBase) -> iam.Role:
+        """Create a role that allows lambda query Bedrock KB"""
+        query_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-KBQueryLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                )
+            ],
+            #     # KB lambda needs to post to websocket API gateway
+            #     iam.ManagedPolicy.from_aws_managed_policy_name(
+            #         "AmazonAPIGatewayInvokeFullAccess"
+            #     ),
+            # ],
+        )
+        query_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["execute-api:ManageConnections"],
+                resources=[
+                    "arn:aws:execute-api:*:*:*/*/DELETE/@connections/*",
+                    "arn:aws:execute-api:*:*:*/*/POST/@connections/*",
+                ],
+            )
+        )
+        query_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:RetrieveAndGenerate",
+                    "bedrock:Retrieve",
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                ],
+                resources=["*"],  # Needs access to all LLMs
+            )
+        )
+
+        query_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
+        return query_lambda_role
+
+    def create_query_lambda(self, knowledge_base: CfnKnowledgeBase) -> _lambda:
+        # Create a role that allows lambda to query knowledge base
+
+        query_lambda = _lambda.Function(
+            self,
+            self.props["stack_name_base"] + "-KBQueryLambda",
+            function_name=f"{self.props['stack_name_base']}-KBQueryLambda",
+            description="Function for ReVIEW to query Knowledge Base",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="kb.kb-query-lambda.stream_lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            timeout=Duration.minutes(5),
+            environment={
+                "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
+                "FOUNDATION_MODEL_ID": self.props["llm_model_id"],
+                "NUM_CHUNKS": self.props["kb_num_chunks"],
+            },
+            role=self.create_query_lambda_role(knowledge_base=knowledge_base),
+        )
+
+        return query_lambda

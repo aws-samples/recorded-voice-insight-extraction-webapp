@@ -24,7 +24,7 @@ BACKEND_API_URL = os.environ["BACKEND_API_URL"]
 
 
 def retrieve_transcript_by_jobid(
-    job_id: str, username: str, api_auth_token: str
+    job_id: str, username: str, api_auth_id_token: str
 ) -> str:
     """Get presigned URL to download transcript from s3, download it, return str"""
     # Download transcript txt file workflow
@@ -38,7 +38,7 @@ def retrieve_transcript_by_jobid(
     response = requests.post(
         BACKEND_API_URL + "/s3-presigned",
         json=json_body,
-        headers={"Authorization": api_auth_token},
+        headers={"Authorization": api_auth_id_token},
         timeout=5,
     )
     if response.status_code != 200:
@@ -60,7 +60,7 @@ def retrieve_transcript_by_jobid(
     return http_response.text
 
 
-def retrieve_media_url(media_name: str, username: str, api_auth_token: str) -> str:
+def retrieve_media_url(media_name: str, username: str, api_auth_id_token: str) -> str:
     """Get presigned URL to view media in s3, return URL"""
     # Download media file workflow
 
@@ -73,7 +73,7 @@ def retrieve_media_url(media_name: str, username: str, api_auth_token: str) -> s
     response = requests.post(
         BACKEND_API_URL + "/s3-presigned",
         json=json_body,
-        headers={"Authorization": api_auth_token},
+        headers={"Authorization": api_auth_id_token},
         timeout=5,
     )
     if response.status_code != 200:
@@ -87,7 +87,7 @@ def retrieve_media_url(media_name: str, username: str, api_auth_token: str) -> s
     return presigned_url
 
 
-def upload_to_s3(fileobj, filename: str, username: str, api_auth_token: str) -> bool:
+def upload_to_s3(fileobj, filename: str, username: str, api_auth_id_token: str) -> bool:
     """Get presigned URL to upload to s3, then upload"""
     # Upload media file workflow
 
@@ -100,7 +100,7 @@ def upload_to_s3(fileobj, filename: str, username: str, api_auth_token: str) -> 
     response = requests.post(
         BACKEND_API_URL + "/s3-presigned",
         json=json_body,
-        headers={"Authorization": api_auth_token},
+        headers={"Authorization": api_auth_id_token},
         timeout=5,
     )
     if response.status_code != 200:

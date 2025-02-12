@@ -22,7 +22,7 @@ import os
 
 def login():
     """Display cognito login screen, on success set "auth_username" session state variable
-    and "auth_id_token", and a bunch of other session variables not explicitly used elsewhere.
+    and "auth_id_token", "auth_access_token", and other session variables not explicitly used elsewhere.
     """
 
     # This sets "auth_username" session state variable if successful, otherwise it's ""

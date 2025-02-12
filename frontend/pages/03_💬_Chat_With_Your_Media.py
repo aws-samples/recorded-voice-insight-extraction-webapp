@@ -39,13 +39,14 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 username = st.session_state["auth_username"]
-api_auth_token = st.session_state["auth_id_token"]
+api_auth_id_token = st.session_state["auth_id_token"]
+api_auth_access_token = st.session_state["auth_access_token"]
 
 st.subheader("Pick media file to analyze:")
 stu.display_sidebar(current_page="Chat With Your Media")
 
 job_df = retrieve_all_items(
-    username=username, max_rows=None, api_auth_token=api_auth_token
+    username=username, max_rows=None, api_auth_id_token=api_auth_id_token
 )
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
@@ -94,7 +95,7 @@ for message_counter, message in enumerate(st.session_state.messages):
             stu.display_full_ai_response(
                 full_answer=message["full_answer"],
                 username=username,
-                api_auth_token=api_auth_token,
+                api_auth_id_token=api_auth_id_token,
                 message_index=message_counter,
                 new_message=False,
                 media_name=media_name,
@@ -110,19 +111,38 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
     st.session_state.messages.append(
         {"role": "user", "content": [{"text": user_message}]}
     )
-    # Display assistant response in chat message container
+    # Display streaming assistant response in chat message container
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            full_answer = stu.generate_full_answer(
+            full_answer_iterator = stu.generate_full_answer_stream(
                 messages=st.session_state.messages,
                 username=username,
-                api_auth_token=api_auth_token,
+                api_auth_id_token=api_auth_id_token,  # Auth id token is used for REST API, getting transcript from s3
+                api_auth_access_token=api_auth_access_token,  # Access token used for WS API authorization
                 selected_media_name=selected_media_name,
                 job_df=job_df,
             )
+            placeholder = st.empty()
+            # current_full_answer grows in size as stream continues, so repeatedly
+            # display the full answer (excluding citations) as the stream progresses
+            current_full_answer = next(full_answer_iterator, None)
+            while current_full_answer is not None:
+                next_full_answer = next(full_answer_iterator, None)
+
+                if next_full_answer is not None:
+                    placeholder.markdown(current_full_answer.pprint())
+                else:
+                    break
+
+                current_full_answer = next_full_answer
+
+            # Display the final full, complete answer with citations and media players
             stu.display_full_ai_response(
-                full_answer=full_answer,
+                full_answer=current_full_answer,
                 username=username,
-                api_auth_token=api_auth_token,
+                api_auth_id_token=api_auth_id_token,
                 message_index=len(st.session_state.messages),
             )
+
+            # Empty the old placeholder to avoid duplicating the message
+            placeholder.empty()

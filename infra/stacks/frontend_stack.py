@@ -27,6 +27,7 @@ from aws_cdk import aws_ecs_patterns as ecs_patterns
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_ecr_assets as ecr_assets  # noqa
 
 
 class ReVIEWFrontendStack(NestedStack):
@@ -35,6 +36,7 @@ class ReVIEWFrontendStack(NestedStack):
         scope,
         props: dict,
         backend_api_url: str,
+        websocket_api_url: str,
         cognito_pool: cognito.UserPool,
         **kwargs,
     ):
@@ -52,6 +54,7 @@ class ReVIEWFrontendStack(NestedStack):
 
         # This will be exported as an env variable in the frontend, for it to call API Gateway
         self.backend_api_url = backend_api_url
+        self.websocket_api_url = websocket_api_url
 
         self.cognito_user_pool_id = cognito_pool.user_pool_id
         # Frontend needs a cognito client associated with the user pool created in API stack
@@ -105,7 +108,7 @@ class ReVIEWFrontendStack(NestedStack):
         # Docker build the frontend UI image
         self.app_image = ecs.ContainerImage.from_asset(
             os.path.join(Path(__file__).parent.parent.parent, "frontend"),
-            # platform = Platform.LINUX_AMD64 ## Use this if Docker building on a mac OS
+            # platform = ecr_assets.Platform.LINUX_AMD64 ## Use this if Docker building on a mac OS
         )
         # Deploy the frontend UI image into a load balanced fargate service in the cluster
         self.service = ecs_patterns.ApplicationLoadBalancedFargateService(
@@ -124,6 +127,7 @@ class ReVIEWFrontendStack(NestedStack):
                     "COGNITO_CLIENT_ID": self.cognito_user_pool_client.user_pool_client_id,
                     "COGNITO_POOL_ID": self.cognito_user_pool_id,
                     "BACKEND_API_URL": self.backend_api_url,
+                    "WS_API_URL": self.websocket_api_url,
                     # Export all string props as environment variables in the frontend
                     **{k: v for k, v in self.props.items() if isinstance(v, str)},
                 },

@@ -16,6 +16,7 @@
 
 """Lambda to handle interactions with Bedrock Knowledge Base"""
 
+import boto3
 import os
 from kb.kb_utils import KBQARAG
 import logging
@@ -25,7 +26,7 @@ KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
 AWS_REGION = os.environ["AWS_REGION"]
 NUM_CHUNKS = os.environ["NUM_CHUNKS"]
 FOUNDATION_MODEL = os.environ["FOUNDATION_MODEL_ID"]
-
+WEBSOCKET_API_URL = os.environ["WS_API_URL"]
 
 # Class to handle connections to Bedrock and QA RAG workflow processes
 kbqarag = KBQARAG(
@@ -34,12 +35,17 @@ kbqarag = KBQARAG(
     num_chunks=NUM_CHUNKS,
     foundation_model=FOUNDATION_MODEL,
 )
+api_client = boto3.client(
+    "apigatewaymanagementapi",
+    endpoint_url=WEBSOCKET_API_URL,
+    region_name=AWS_REGION,
+)
 
 logger = logging.getLogger()
 logger.setLevel("DEBUG")
 
 
-def lambda_handler(event, context):
+def stream_lambda_handler(event, context):
     """
     Event will provide either:
     * query and username (to query all media uploaded by that user)
@@ -55,6 +61,7 @@ def lambda_handler(event, context):
     # unnecessary
 
     logger.debug(f"{event=}")
+    connection_id = event["requestContext"]["connectionId"]
 
     if "body" in event:
         event = json.loads(event["body"])
@@ -69,25 +76,32 @@ def lambda_handler(event, context):
     # If no specific media file is selected, use RAG over all files
     if not media_name:
         try:
-            full_answer: dict = kbqarag.retrieve_and_generate_answer(
+            generation_stream = kbqarag.retrieve_and_generate_answer_stream(
                 messages=messages,
                 username=username,
                 media_name=None,
             )
+            for generation_event in generation_stream:
+                # Serialize the dictionary to a JSON string and encode to bytes
+                data = json.dumps(generation_event).encode("utf-8")
+                api_client.post_to_connection(Data=data, ConnectionId=connection_id)
         except Exception as e:
             return {"statusCode": 500, "body": f"Internal server error: {e}"}
 
-    # If one file was selected, no knowledge base or retrieval is needed,
-    # pass the full transcript in to an LLM for generation
-    # Media name is provided for use in the LLM-generated citations
     else:
         try:
-            full_answer: dict = kbqarag.generate_answer_no_chunking(
+            generation_stream = kbqarag.generate_answer_no_chunking_stream(
                 messages=messages,
                 media_name=media_name,
                 full_transcript=full_transcript,
             )
+            for generation_event in generation_stream:
+                # Serialize the dictionary to a JSON string and encode to bytes
+                data = json.dumps(generation_event).encode("utf-8")
+                api_client.post_to_connection(Data=data, ConnectionId=connection_id)
         except Exception as e:
             return {"statusCode": 500, "body": f"Internal server error: {e}"}
 
-    return {"statusCode": 200, "body": json.dumps(full_answer)}
+    logger.info(f"Closing connection {connection_id}")
+    api_client.delete_connection(ConnectionId=connection_id)
+    return {"statusCode": 200, "body": "Success"}
