@@ -16,6 +16,7 @@
 
 """Helper utilities for working with Amazon Bedrock"""
 
+import re
 import json
 import os
 import sys
@@ -74,15 +75,27 @@ def run_analysis(analysis_id: int, transcript: str, api_auth_id_token: str):
 
 def clean_messages(messages, max_number_of_messages=10):
     """Ensure messages list only has elements like {"role":"user", "cotent":[{"text":"blah}]},
-    Also make sure <= max_number_of_messages latest messages are sent"""
+    Also make sure <= max_number_of_messages latest messages are sent.
+    Also make sure the first element in messages is a user message.
+    Also remove any citations in the content, for example if a message has content
+    "This is the first sentence[1][2]." that will be cleaned to "This is the first sentence."
+    """
     cleaned_messages = []
     for message in messages:
+        content_str = message.get("content")[0]["text"]
+        cleaned_content_str = re.sub(r"\[\d+\]", "", content_str)
         cleaned_message = {
             "role": message.get("role"),
-            "content": message.get("content"),
+            "content": [{"text": cleaned_content_str}],
         }
         cleaned_messages.append(cleaned_message)
-    return cleaned_messages[-max_number_of_messages:]
+
+    cleaned_messages = cleaned_messages[-max_number_of_messages:]
+
+    while cleaned_messages[0]["role"] != "user":
+        _ = cleaned_messages.pop(0)
+
+    return cleaned_messages
 
 
 def retrieve_and_generate_answer(
@@ -204,7 +217,14 @@ def websocket_stream(
 
         while True:
             response = ws.recv()
-            yield FullQAnswer(**json.loads(response))
+            try:
+                yield FullQAnswer(**json.loads(response))
+            except Exception as e:
+                if response:
+                    print(f"Error parsing this into FullQAnswer: {response=}")
+                    raise Exception(f"Error: {response}") from e
+                else:
+                    continue
 
     except websocket.WebSocketConnectionClosedException:
         # print("Connection closed")
