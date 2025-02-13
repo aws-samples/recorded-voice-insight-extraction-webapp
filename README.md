@@ -195,7 +195,7 @@ The following are some security best practices one should keep in mind when usin
 
 # 🤔 Common Issues
 1. API gateway "Endpoint request timed out" issue: This is caused when lambda functions connected to API Gateways take more than 29 seconds to execute. This 29 seconds quota [can now be increased at the account level](https://aws.amazon.com/about-aws/whats-new/2024/06/amazon-api-gateway-integration-timeout-limit-29-seconds/), under API Gateway quotas named "Maximum integration timeout in milliseconds". Recommended increase from 29000 to 60000 to fix this issue.
-   
+2. Frontend ECS Container Task does not launch successfully (perhaps with the logged error: `exec /usr/local/bin/streamlit: exec format error`): This happens because the frontend `docker build` step can be OS dependent. If you are deploying from a mac OS, [uncomment this line](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/blob/c729e51ec43436fe26b82a2e89666a50ae08f46c/infra/stacks/frontend_stack.py#L111) in `frontend_stack.py` before deploying.
    
 # 👥 Authors
 <div style="display: flex; align-items: center;">
