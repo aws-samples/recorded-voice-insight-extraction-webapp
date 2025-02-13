@@ -33,7 +33,7 @@ class ReVIEWStack(Stack):
 
     def __init__(self, scope: Construct, props: dict, **kwargs) -> None:
         construct_id = props["stack_name_base"]
-        description = "ReVIEW Application - Parent stack (v1.0.0) - a2F6dQ=="
+        description = "ReVIEW Application - Parent stack (v1.1.0) - a2F6dQ=="
 
         super().__init__(scope, construct_id, description=description, **kwargs)
 
