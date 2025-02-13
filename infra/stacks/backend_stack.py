@@ -42,7 +42,7 @@ class ReVIEWBackendStack(NestedStack):
     def __init__(self, scope: Construct, props: dict, **kwargs) -> None:
         self.props = props
         construct_id = props["stack_name_base"] + "-backend"
-        description = "ReVIEW Application - Backend stack (v1.0.0)"
+        description = "ReVIEW Application - Backend stack"
 
         super().__init__(scope, construct_id, description=description, **kwargs)
 
@@ -63,13 +63,13 @@ class ReVIEWBackendStack(NestedStack):
         self.generate_media_transcript_lambdaLogGroup = logs.LogGroup(
             self,
             "GenerateMediaTranscriptLogGroup",
-            log_group_name=f"""/aws/lambda/{self.props['stack_name_base']}-GenerateMediaTranscript""",
+            log_group_name=f"""/aws/lambda/{self.props["stack_name_base"]}-GenerateMediaTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
         )
         self.postprocess_transcript_lambdaLogGroup = logs.LogGroup(
             self,
             "PostProcessTranscriptLogGroup",
-            log_group_name=f"""/aws/lambda/{self.props['stack_name_base']}-PostProcessTranscript""",
+            log_group_name=f"""/aws/lambda/{self.props["stack_name_base"]}-PostProcessTranscript""",
             removal_policy=RemovalPolicy.DESTROY,
         )
 

@@ -41,7 +41,7 @@ class ReVIEWRAGStack(NestedStack):
         job status in a dynamo table"""
         self.props = props
         construct_id = props["stack_name_base"] + "-rag"
-        description = "ReVIEW Application - RAG stack (v1.0.0)"
+        description = "ReVIEW Application - RAG stack"
         super().__init__(scope, construct_id, description=description, **kwargs)
 
         # Setup KB role

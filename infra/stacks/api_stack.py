@@ -42,7 +42,7 @@ class ReVIEWAPIStack(NestedStack):
     ):
         self.props = props
         construct_id = props["stack_name_base"] + "-api"
-        description = "ReVIEW Application - API stack (v1.0.0)"
+        description = "ReVIEW Application - API stack"
         super().__init__(scope, construct_id, description=description, **kwargs)
 
         self.setup_cognito_pool()

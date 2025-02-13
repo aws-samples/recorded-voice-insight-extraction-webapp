@@ -42,7 +42,7 @@ class ReVIEWFrontendStack(NestedStack):
     ):
         self.props = props
         construct_id = props["stack_name_base"] + "-frontend"
-        description = "ReVIEW Application - Frontend stack (v1.0.0)"
+        description = "ReVIEW Application - Frontend stack"
         super().__init__(scope, construct_id, description=description, **kwargs)
 
         # Note: all props (which have string values) are exported as env variables
