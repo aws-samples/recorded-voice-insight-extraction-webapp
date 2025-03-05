@@ -98,39 +98,6 @@ def clean_messages(messages, max_number_of_messages=10):
     return cleaned_messages
 
 
-def retrieve_and_generate_answer(
-    messages: list, username: str, api_auth_id_token: str
-) -> FullQAnswer:
-    """Query knowledge base and generate an answer (REST API). Only filter applied is
-    the username (so each user can only query their own files)
-    messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
-    """
-
-    # Make sure only "role" and "content" fields are kept from the messages ... UI logic sometimes
-    # adds other things in there to make the UI code more convenient
-    json_body = {
-        "messages": json.dumps(clean_messages(messages)),
-        "username": username,
-    }
-
-    response = requests.post(
-        BACKEND_API_URL + "/kb",
-        json=json_body,
-        headers={"Authorization": api_auth_id_token},
-        timeout=30,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Non 200 response from API gateway: {response.text}")
-
-    result = response.json()
-
-    try:
-        return FullQAnswer(**result)
-    except Exception as e:
-        print(f"Error parsing KB result: {str(e)}")
-        raise
-
-
 def retrieve_and_generate_answer_stream(
     messages: list, username: str, api_auth_access_token: str
 ) -> Generator[FullQAnswer, None, None]:
@@ -146,54 +113,28 @@ def retrieve_and_generate_answer_stream(
     yield from websocket_stream(json_body, api_auth_access_token=api_auth_access_token)
 
 
-def generate_answer_no_chunking(
-    messages: list, media_name: str, full_transcript: str, api_auth_id_token: str
-) -> FullQAnswer:
-    """Bypass the knowledge base, impute the full transcript into the prompt and have
-    an LLM generate the answer. This function is used when user asks a question about
-    one media file. Media name is provided only because it is included in
-    the LLM-generated citations. KB lambda is used for convenience, as it has all of
-    the prompt engineering / output parsing required to form FullQAnswer objects.
-    messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
-    """
-
-    json_body = {
-        "messages": json.dumps(clean_messages(messages)),
-        "full_transcript": full_transcript,
-        "media_name": media_name,
-    }
-    response = requests.post(
-        BACKEND_API_URL + "/kb",
-        json=json_body,
-        headers={"Authorization": api_auth_id_token},
-        timeout=30,
-    )
-    if response.status_code != 200:
-        raise Exception(f"Non 200 response from API gateway: {response.text}")
-
-    result = response.json()
-
-    try:
-        return FullQAnswer(**result)
-    except Exception as e:
-        print(f"Error parsing LLM result: {str(e)}")
-        raise
-
-
 def generate_answer_no_chunking_stream(
-    messages: list, media_name: str, full_transcript: str, api_auth_access_token: str
+    messages: list,
+    media_name: str,
+    username: str,
+    transcript_job_id: str,
+    api_auth_access_token: str,
 ) -> Generator[FullQAnswer, None, None]:
     """Bypass the knowledge base, impute the full transcript into the prompt and have
     an LLM generate the answer. This function is used when user asks a question about
     one media file. Media name is provided only because it is included in
     the LLM-generated citations. KB lambda is used for convenience, as it has all of
     the prompt engineering / output parsing required to form FullQAnswer objects.
+    Full transcript is not provided as input to this function due to maximum
+    allowable websocket payload size:
+    https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-known-issues.html#api-gateway-known-issues-websocket-apis
     messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
     """
     json_body = {
         "action": "$default",
         "messages": json.dumps(clean_messages(messages)),
-        "full_transcript": full_transcript,
+        "transcript_job_id": transcript_job_id,
+        "username": username,
         "media_name": media_name,
     }
     yield from websocket_stream(json_body, api_auth_access_token=api_auth_access_token)

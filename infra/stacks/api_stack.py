@@ -23,6 +23,7 @@ from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as _lambda
 from aws_cdk.aws_bedrock import CfnKnowledgeBase
+import aws_cdk.aws_s3 as s3
 
 
 class ReVIEWAPIStack(NestedStack):
@@ -38,6 +39,7 @@ class ReVIEWAPIStack(NestedStack):
         ddb_lambda: _lambda.Function,
         knowledge_base: CfnKnowledgeBase,
         presigned_url_lambda: _lambda.Function,
+        source_bucket: s3.Bucket,
         **kwargs,
     ):
         self.props = props
@@ -45,6 +47,7 @@ class ReVIEWAPIStack(NestedStack):
         description = "ReVIEW Application - API stack"
         super().__init__(scope, construct_id, description=description, **kwargs)
 
+        self.bucket = source_bucket
         self.setup_cognito_pool()
         self.create_REST_gateway()
         self.associate_lambda_with_gateway(llm_lambda, "llm")
@@ -290,6 +293,17 @@ class ReVIEWAPIStack(NestedStack):
                     "CloudWatchLogsFullAccess"
                 )
             ],
+            # Lambda sometimes reads transcripts from s3
+            inline_policies={
+                "s3Access": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:GetObject", "s3:ListBucket"],
+                            resources=[f"{self.bucket.bucket_arn}*"],
+                        )
+                    ]
+                ),
+            },
             #     # KB lambda needs to post to websocket API gateway
             #     iam.ManagedPolicy.from_aws_managed_policy_name(
             #         "AmazonAPIGatewayInvokeFullAccess"
@@ -336,6 +350,8 @@ class ReVIEWAPIStack(NestedStack):
                 "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
                 "FOUNDATION_MODEL_ID": self.props["llm_model_id"],
                 "NUM_CHUNKS": self.props["kb_num_chunks"],
+                "S3_BUCKET": self.bucket.bucket_name,
+                "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
             },
             role=self.create_query_lambda_role(knowledge_base=knowledge_base),
         )

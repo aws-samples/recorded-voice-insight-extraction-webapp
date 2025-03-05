@@ -61,6 +61,7 @@ class ReVIEWStack(Stack):
             ddb_lambda=self.backend_stack.ddb_handler_lambda,
             knowledge_base=self.rag_stack.kb_construct.knowledge_base,
             presigned_url_lambda=self.backend_stack.presigned_url_lambda,
+            source_bucket=self.backend_stack.bucket,
         )
 
         # Frontend stack (streamlit application code, VPC, ECS, fargate, etc)

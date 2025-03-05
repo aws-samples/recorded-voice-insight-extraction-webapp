@@ -19,10 +19,8 @@ from functools import lru_cache
 import base64
 import streamlit as st
 from .cognito_utils import logout
-from .s3_utils import retrieve_media_url, retrieve_transcript_by_jobid
+from .s3_utils import retrieve_media_url
 from .bedrock_utils import (
-    generate_answer_no_chunking,
-    retrieve_and_generate_answer,
     generate_answer_no_chunking_stream,
     retrieve_and_generate_answer_stream,
 )
@@ -166,52 +164,6 @@ def display_full_ai_response(
         )
 
 
-def generate_full_answer(
-    messages: list,
-    username: str,
-    api_auth_id_token: str,
-    api_auth_access_token: str,
-    selected_media_name: str | None = None,
-    job_df: pd.DataFrame | None = None,
-):
-    """Given a user query, use GenAI to generate an answer.
-    If selected_media_name and job_df are provided, download the full transcript and
-    pass it to the LLM context (that is why job_df is required, it is used
-    to find the UUID for the transcription job to get the transcript).
-    If selected media_name is not provided, do RAG over all transcripts using the
-    knowledge base.
-    messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
-    """
-    # If last message was from AI, insert empty AI message (this happens when exceptions are thrown in the UI)
-    if messages[-1]["role"] == "assistant":
-        messages.append({"role": "assistant", "content": [{"text": ""}]})
-
-    # If no specific media file is selected, use RAG over all files
-    if not selected_media_name:
-        full_answer = retrieve_and_generate_answer(
-            messages=messages,
-            username=username,
-            api_auth_access_token=api_auth_access_token,
-        )
-    # If one file was selected, no retrieval is needed
-    else:
-        selected_job_id = job_df[job_df.media_name == selected_media_name][
-            "UUID"
-        ].values[0]
-        full_transcript = retrieve_transcript_by_jobid(
-            job_id=selected_job_id,
-            username=username,
-            api_auth_token=api_auth_id_token,
-        )
-        full_answer = generate_answer_no_chunking(
-            messages=messages,
-            media_name=selected_media_name,
-            full_transcript=full_transcript,
-            api_auth_token=api_auth_access_token,
-        )
-    return full_answer
-
-
 def generate_full_answer_stream(
     messages: list,
     username: str,
@@ -237,15 +189,13 @@ def generate_full_answer_stream(
         selected_job_id = job_df[job_df.media_name == selected_media_name][
             "UUID"
         ].values[0]
-        full_transcript = retrieve_transcript_by_jobid(
-            job_id=selected_job_id,
-            username=username,
-            api_auth_id_token=api_auth_id_token,
-        )
+        print(f"{selected_job_id=}")
+
         yield from generate_answer_no_chunking_stream(
             messages=messages,
             media_name=selected_media_name,
-            full_transcript=full_transcript,
+            transcript_job_id=selected_job_id,
+            username=username,
             api_auth_access_token=api_auth_access_token,
         )
 

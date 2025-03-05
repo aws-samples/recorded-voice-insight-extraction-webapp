@@ -27,6 +27,8 @@ AWS_REGION = os.environ["AWS_REGION"]
 NUM_CHUNKS = os.environ["NUM_CHUNKS"]
 FOUNDATION_MODEL = os.environ["FOUNDATION_MODEL_ID"]
 WEBSOCKET_API_URL = os.environ["WS_API_URL"]
+S3_BUCKET = os.environ.get("S3_BUCKET")
+TEXT_TRANSCRIPTS_PREFIX = os.environ.get("TEXT_TRANSCRIPTS_PREFIX")
 
 # Class to handle connections to Bedrock and QA RAG workflow processes
 kbqarag = KBQARAG(
@@ -41,8 +43,11 @@ api_client = boto3.client(
     region_name=AWS_REGION,
 )
 
+# This lambda needs access to s3 because in some cases it GETs transcripts from there
+s3_client = boto3.client("s3")
+
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 
 def stream_lambda_handler(event, context):
@@ -51,7 +56,7 @@ def stream_lambda_handler(event, context):
     * query and username (to query all media uploaded by that user)
 
     OR
-    * query, media_name, and full_transcript (to query one specific file)
+    * query, media_name, and transcript_job_id (to query one specific file)
 
     Lambda returns a json which can be parsed into a FullQAnswer object like
     answer = FullQAnswer(**lambda_response)
@@ -69,9 +74,11 @@ def stream_lambda_handler(event, context):
     messages = json.loads(event["messages"])
     username = event.get("username", None)
     media_name = event.get("media_name", None)
-    full_transcript = event.get("full_transcript", None)
+    transcript_job_id = event.get("transcript_job_id", None)
 
-    assert (messages and username) or (messages and media_name and full_transcript)
+    assert (messages and username) or (
+        messages and media_name and transcript_job_id and username
+    )
 
     # If no specific media file is selected, use RAG over all files
     if not media_name:
@@ -90,10 +97,23 @@ def stream_lambda_handler(event, context):
 
     else:
         try:
+            # Retrieve the full_transcript from the job_id
+            # Get the object from S3
+            logger.info(
+                f"Attempting to retrieve: s3://{S3_BUCKET}/{TEXT_TRANSCRIPTS_PREFIX}/{username}/{transcript_job_id}.txt"
+            )
+            full_transcript_from_s3 = (
+                s3_client.get_object(
+                    Bucket=S3_BUCKET,
+                    Key=f"{TEXT_TRANSCRIPTS_PREFIX}/{username}/{transcript_job_id}.txt",
+                )["Body"]
+                .read()
+                .decode("utf-8")
+            )
             generation_stream = kbqarag.generate_answer_no_chunking_stream(
                 messages=messages,
                 media_name=media_name,
-                full_transcript=full_transcript,
+                full_transcript=full_transcript_from_s3,
             )
             for generation_event in generation_stream:
                 # Serialize the dictionary to a JSON string and encode to bytes
