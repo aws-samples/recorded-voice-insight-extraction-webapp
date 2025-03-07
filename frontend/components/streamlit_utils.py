@@ -189,8 +189,7 @@ def generate_full_answer_stream(
         selected_job_id = job_df[job_df.media_name == selected_media_name][
             "UUID"
         ].values[0]
-        print(f"{selected_job_id=}")
-
+        
         yield from generate_answer_no_chunking_stream(
             messages=messages,
             media_name=selected_media_name,

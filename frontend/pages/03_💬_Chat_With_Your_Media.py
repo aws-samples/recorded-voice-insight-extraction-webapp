@@ -19,6 +19,7 @@ import streamlit as st
 from components.cognito_utils import login
 from components.db_utils import retrieve_all_items
 import components.streamlit_utils as stu
+from components.bedrock_utils import WebsocketTimeoutError
 
 st.set_page_config(
     page_title="Chat With Your Media",
@@ -114,35 +115,42 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
     # Display streaming assistant response in chat message container
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            full_answer_iterator = stu.generate_full_answer_stream(
-                messages=st.session_state.messages,
-                username=username,
-                api_auth_id_token=api_auth_id_token,  # Auth id token is used for REST API, getting transcript from s3
-                api_auth_access_token=api_auth_access_token,  # Access token used for WS API authorization
-                selected_media_name=selected_media_name,
-                job_df=job_df,
-            )
-            placeholder = st.empty()
-            # current_full_answer grows in size as stream continues, so repeatedly
-            # display the full answer (excluding citations) as the stream progresses
-            current_full_answer = next(full_answer_iterator, None)
-            while current_full_answer is not None:
-                next_full_answer = next(full_answer_iterator, None)
+            try:
+                full_answer_iterator = stu.generate_full_answer_stream(
+                    messages=st.session_state.messages,
+                    username=username,
+                    api_auth_id_token=api_auth_id_token,  # Auth id token is used for REST API, getting transcript from s3
+                    api_auth_access_token=api_auth_access_token,  # Access token used for WS API authorization
+                    selected_media_name=selected_media_name,
+                    job_df=job_df,
+                )
+                placeholder = st.empty()
+                # current_full_answer grows in size as stream continues, so repeatedly
+                # display the full answer (excluding citations) as the stream progresses
+                current_full_answer = next(full_answer_iterator, None)
+                while current_full_answer is not None:
+                    next_full_answer = next(full_answer_iterator, None)
 
-                if next_full_answer is not None:
-                    placeholder.markdown(current_full_answer.pprint())
-                else:
-                    break
+                    if next_full_answer is not None:
+                        placeholder.markdown(current_full_answer.pprint())
+                    else:
+                        break
 
-                current_full_answer = next_full_answer
+                    current_full_answer = next_full_answer
+            except WebsocketTimeoutError:
+                st.warning(
+                    "Warning: Response truncated due to API Gateway Websocket Timeout. Showing partial results."
+                )
 
             # Display the final full, complete answer with citations and media players
-            stu.display_full_ai_response(
-                full_answer=current_full_answer,
-                username=username,
-                api_auth_id_token=api_auth_id_token,
-                message_index=len(st.session_state.messages),
-            )
+            # (or, last valid answer we received, if WebsocketTimeoutError)
+            if current_full_answer:  # Ensure we have a valid answer to display
+                stu.display_full_ai_response(
+                    full_answer=current_full_answer,
+                    username=username,
+                    api_auth_id_token=api_auth_id_token,
+                    message_index=len(st.session_state.messages),
+                )
 
             # Empty the old placeholder to avoid duplicating the message
             placeholder.empty()

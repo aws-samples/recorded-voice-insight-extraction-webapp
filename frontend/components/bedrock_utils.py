@@ -38,6 +38,12 @@ BACKEND_API_URL = os.environ["BACKEND_API_URL"]
 WS_API_URL = os.environ["WS_API_URL"]
 
 
+class WebsocketTimeoutError(Exception):
+    """Exception raised when the websocket connection times out."""
+
+    pass
+
+
 def run_analysis(analysis_id: int, transcript: str, api_auth_id_token: str):
     """Run a predefined analysis (LLM generation) on a transcript"""
 
@@ -159,7 +165,22 @@ def websocket_stream(
         while True:
             response = ws.recv()
             try:
-                yield FullQAnswer(**json.loads(response))
+                # First parse the response to check for timeout error
+                parsed_response = json.loads(response)
+
+                # Check if this is the specific timeout error
+                if (
+                    isinstance(parsed_response, dict)
+                    and parsed_response.get("message") == "Endpoint request timed out"
+                ):
+                    raise WebsocketTimeoutError("Endpoint request timed out")
+
+                # Otherwise, process as normal
+                yield FullQAnswer(**parsed_response)
+
+            except WebsocketTimeoutError:
+                # Re-raise the timeout error to be caught by the frontend
+                raise
             except Exception as e:
                 if response:
                     print(f"Error parsing this into FullQAnswer: {response=}")
@@ -170,6 +191,9 @@ def websocket_stream(
     except websocket.WebSocketConnectionClosedException:
         # print("Connection closed")
         pass
+    except WebsocketTimeoutError:
+        # Re-raise to be caught by the frontend
+        raise
     except Exception as e:
         # The last response from ws is always an empty string, which doesn't parse as FullQAnswer,
         # so this block is to ignore that
