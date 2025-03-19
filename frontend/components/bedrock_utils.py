@@ -34,6 +34,7 @@ sys.path.append(
 from schemas.qa_response import FullQAnswer
 from components.io_utils import get_analysis_templates
 
+
 BACKEND_API_URL = os.environ["BACKEND_API_URL"]
 WS_API_URL = os.environ["WS_API_URL"]
 
@@ -150,20 +151,26 @@ def websocket_stream(
     json_body: dict, api_auth_access_token: str
 ) -> Generator[FullQAnswer, None, None]:
     """Stream from websocket, parse response into FullQAnswer objects"""
+    ws = None
+
     try:
         # Create headers with the bearer token
         headers = {"Authorization": f"Bearer {api_auth_access_token}"}
 
-        ws = websocket.create_connection(
-            url=WS_API_URL,
-            header=headers,
-            enable_multithread=True,
-        )
+        try:
+            ws = websocket.create_connection(
+                url=WS_API_URL,
+                header=headers,
+                enable_multithread=True,
+            )
+        except websocket.WebSocketBadStatusException:
+            raise
 
         ws.send(json.dumps(json_body))
 
         while True:
             response = ws.recv()
+
             try:
                 # First parse the response to check for timeout error
                 parsed_response = json.loads(response)
@@ -194,10 +201,16 @@ def websocket_stream(
     except WebsocketTimeoutError:
         # Re-raise to be caught by the frontend
         raise
+    except websocket.WebSocketBadStatusException:
+        raise Exception(
+            "Your authentication has expired. Please refresh the page and log in again."
+        )
+
     except Exception as e:
         # The last response from ws is always an empty string, which doesn't parse as FullQAnswer,
         # so this block is to ignore that
         if str(e) != "Expecting value: line 1 column 1 (char 0)":
             raise e
     finally:
-        ws.close()
+        if ws:
+            ws.close()

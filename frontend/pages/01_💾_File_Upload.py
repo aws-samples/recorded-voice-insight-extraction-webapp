@@ -19,6 +19,7 @@ from components.cognito_utils import login
 from components.streamlit_utils import display_sidebar, show_cover
 from components.s3_utils import upload_to_s3
 from components.io_utils import check_valid_file_extension
+import urllib.parse
 
 st.set_page_config(
     page_title="File Upload",
@@ -46,17 +47,19 @@ if uploaded_file is not None:
             'Invalid file extension. Allowed extensions are: "mp3", "mp4", "wav", "flac", "ogg", "amr", "webm", "m4a".'
         )
         st.stop()
-
-    st.info(f"Uploading file {uploaded_file.name}...")
+    url_encoded_filename = urllib.parse.quote_plus(uploaded_file.name)
+    if url_encoded_filename != uploaded_file.name:
+        st.warning(f"Renaming file to {url_encoded_filename}...")
+    st.info(f"Uploading file {url_encoded_filename}...")
     upload_successful = upload_to_s3(
         uploaded_file,
-        filename=uploaded_file.name,
+        filename=url_encoded_filename,
         username=username,
         api_auth_id_token=api_auth_id_token,
     )
     if upload_successful:
         st.success(
-            f"{uploaded_file.name} successfully uploaded and submitted for transcription. Check its progress on the Job Status page."
+            f"{url_encoded_filename} successfully uploaded and submitted for transcription. Check its progress on the Job Status page."
         )
     else:
         st.error(f"File {uploaded_file.name} not found.")

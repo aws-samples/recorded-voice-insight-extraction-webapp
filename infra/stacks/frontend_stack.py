@@ -87,7 +87,8 @@ class ReVIEWFrontendStack(NestedStack):
             "review-app-cognito-client",
             user_pool_client_name="review-app-cognito-client",
             generate_secret=False,
-            access_token_validity=Duration.minutes(30),
+            access_token_validity=Duration.hours(8),
+            id_token_validity=Duration.hours(8),
             auth_flows=cognito.AuthFlow(user_srp=True),
         )
 
