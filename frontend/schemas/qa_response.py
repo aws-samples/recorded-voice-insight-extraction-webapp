@@ -51,15 +51,26 @@ class FullQAnswer(BaseModel):
 
     def pprint(self) -> str:
         """Format the FullQAnswer to a string for display by a chatbot
-        (namely by concatenating partial answers)"""
+        (namely by concatenating partial answers)
+        Also handles some edge cases around unicode escape for non-english"""
         result = ""
         citation_counter = 1
 
         for partial in self.answer:
-            result += partial.partial_answer
+            try:
+                if (
+                    "\\u" in partial.partial_answer
+                ):  # Only process if there are escape sequences
+                    result += partial.partial_answer.encode().decode("unicode_escape")
+                else:
+                    result += partial.partial_answer
+            except Exception:
+                result += partial.partial_answer
+
             for _citation in partial.citations:
                 result += f"[{citation_counter}]"
                 citation_counter += 1
             # result += "\n" # This works better for Claude 3
             result += "\n\n"  # This works better for Nova Pro
+
         return result
