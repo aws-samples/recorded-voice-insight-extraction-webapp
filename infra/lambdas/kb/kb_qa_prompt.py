@@ -68,7 +68,7 @@ KB_QA_SYSTEM_PROMPT = """You are an intelligent AI which attempts to answer ques
 
 # This one works well for Nova Pro
 KB_QA_MESSAGE_TEMPLATE = """
-I will provide you with retrieved chunks of transcripts. The user will provide you with a question. Using only information in the provided transcript chunks, you will attempt to answer the user's question with an answer broken into potentially multiple parts, each with citations.
+I will provide you with retrieved chunks of transcripts. The user will provide you with a question. Using only information in the provided transcript chunks, you will attempt to answer the user's question with an answer broken into potentially multiple parts, each with citations. Always answer the users question in the same language the question was asked.
 
 Each chunk will include a <media_name> block which contains the parent file that the transcript came from. Each line in the transcript chunk begins with an integer timestamp (in seconds) within square brackets, followed by a transcribed sentence. When answering the question, you will need to provide the timestamp you got the answer from in a citation (but not in the human-readable portion of the answer).
 
@@ -108,6 +108,8 @@ Now write your json response in <json> </json> brackets like explained above. Ma
 <json>
 {{"answer": [ {{"partial_answer": "I am unable to answer the question based on the provided media file(s).", "citations": []}} ] }}
 </json>
+
+You are allowed to translate the above "I am unable to answer the question..." response to whatever language the user's question was in, if it was not in English.
 
 Now write your answer, trying to keep each partial_answer only a few sentences maximum. It is better to have more shorter partial_answers with a few citations each than one large partial_answer with a large number of citations.
 """
