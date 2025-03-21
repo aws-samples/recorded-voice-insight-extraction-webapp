@@ -30,8 +30,11 @@ Additionally, this application includes the capability to use an LLM to analyze 
 
 - User authentication is provided by Amazon Cognito.
 - Upload any audio or video recording file through a user friendly frontend.
-- Files automatically get transcribed, with status that can be viewed in the frontend.
-- Interactive chat-with-your-media function provides an AI assistant who will answer specific questions about one media file or a collection of multiple media files, and **will identify timestamps in the media files when the answer was provided. The media automatically gets played back starting at that timestamp, with clickable citations if multiple sources are relevant to the answer.**
+- Files automatically get transcribed in [any language supported by Amazon Transcribe](https://docs.aws.amazon.com/transcribe/latest/dg/supported-languages.html), with status that can be viewed in the frontend.
+- Interactive chat-with-your-media function provides an AI assistant who will answer specific questions about one media file or a collection of multiple media files. The AI assistant will:
+  - **Identify timestamps in the media files when the answer was provided. The media automatically gets played back starting at that timestamp, with clickable citations if multiple sources are relevant to the answer.**
+  - Stream a continuous response back to the frontend for an optimal user experience.
+  - Respond in the same language as the question asked regardless the language of the source media, given the LLM used knows that language.
 - Provided analysis templates allow for easy GenAI summarization, document generation, next-steps and blockers identifications, and more.
 - Complete frontend/backend separation via API Gateway to enable users to replace Streamlit if desired. REST API primarily used, along with websockets for streaming responses.
 

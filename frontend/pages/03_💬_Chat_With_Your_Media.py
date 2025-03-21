@@ -144,6 +144,7 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
 
             # Display the final full, complete answer with citations and media players
             # (or, last valid answer we received, if WebsocketTimeoutError)
+            # Also adds the AI message to st.session_state.messages
             if current_full_answer:  # Ensure we have a valid answer to display
                 stu.display_full_ai_response(
                     full_answer=current_full_answer,
