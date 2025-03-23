@@ -36,19 +36,19 @@ class KBRetriever:
             region=region_name, agent=True
         )
 
-    def retrieve(self, query: str, username: str, media_names: list[str] | None = None):
+    def retrieve(self, query: str, username: str, media_names: list[str] = []):
         """Retrieve from the knowledge base.
-        If media_names is None, retrieval is applied to all files uploaded by the user with `username`.
+        If media_names is [], retrieval is applied to all files uploaded by the user with `username`.
         If media_names is a list, retrieval is applied to only those files uploaded by `username`.
         If media_names is a list it must be at least length 2. Single files are handled
         separately (no retrieval is done at all -- the full transcript is imputed into the LLM prompt)
         """
 
-        assert media_names is None or len(media_names) > 1
+        assert len(media_names) == 0 or len(media_names) > 1
 
         username_filter = {"equals": {"key": "username", "value": username}}
 
-        if media_names is None:
+        if len(media_names) == 0:
             retrieval_filter = username_filter
         else:
             media_name_filters = [
@@ -267,7 +267,7 @@ class KBQARAG:
         self,
         messages: list,
         username: str,
-        media_names: list[str] | None = None,
+        media_names: list[str] = [],
         strategy: RetrievalStrategy = ChunkingStrategy(),
         full_transcript: str = None,
     ) -> Generator[dict, None, None]:

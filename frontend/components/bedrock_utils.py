@@ -107,7 +107,7 @@ def clean_messages(messages, max_number_of_messages=10):
 
 def retrieve_and_generate_answer_stream(
     messages: list,
-    media_names: list[str] | None,
+    media_names: list[str],
     username: str,
     api_auth_access_token: str,
 ) -> Generator[FullQAnswer, None, None]:
@@ -120,7 +120,8 @@ def retrieve_and_generate_answer_stream(
         "messages": json.dumps(clean_messages(messages)),
         "username": username,
     }
-    if media_names is not None:
+    # If media_names is an empty list, don't include it in the message body
+    if len(media_names):
         json_body["media_names"] = json.dumps(media_names)
 
     yield from websocket_stream(json_body, api_auth_access_token=api_auth_access_token)

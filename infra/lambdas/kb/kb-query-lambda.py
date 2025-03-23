@@ -73,7 +73,7 @@ def stream_lambda_handler(event, context):
 
     messages = json.loads(event["messages"])
     username = event.get("username", None)
-    media_names = event.get("media_names", None)
+    media_names = event.get("media_names", [])
     if media_names:
         media_names = json.loads(media_names)
     transcript_job_id = event.get("transcript_job_id", None)
@@ -84,12 +84,12 @@ def stream_lambda_handler(event, context):
 
     # If no specific media file is selected, use RAG over all files
     # If 2+ media files are selected, use RAG over just those files
-    if not media_names or len(media_names) > 1:
+    if len(media_names) == 0 or len(media_names) > 1:
         try:
             generation_stream = kbqarag.retrieve_and_generate_answer_stream(
                 messages=messages,
                 username=username,
-                media_names=media_names,  # media_names can be None or a list of length > 1 here
+                media_names=media_names,  # media_names can be [] or a list of length > 1 here
             )
             for generation_event in generation_stream:
                 # Serialize the dictionary to a JSON string and encode to bytes

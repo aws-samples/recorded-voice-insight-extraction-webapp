@@ -51,16 +51,27 @@ job_df = retrieve_all_items(
 )
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
+if "selected_media_names" not in st.session_state:
+    st.session_state.selected_media_names = None
+
 CHAT_WITH_ALL_STRING = "Chat with all media files"
-selected_media_names = st.multiselect(
+selected_media_names = st.multiselect(  # This is an empty list if nothing is selected
     "kazu",
     options=sorted(completed_jobs.media_name.to_list()),  # Display alphabetically
     placeholder=CHAT_WITH_ALL_STRING,
     label_visibility="collapsed",
 )
-if selected_media_names == CHAT_WITH_ALL_STRING:
-    selected_media_names = None
-st.write(f"{selected_media_names=}")
+
+# If the user is in the middle of a conversation and they change selected_media_names,
+# reset the conversation
+if (
+    st.session_state.messages
+    and selected_media_names != st.session_state.selected_media_names
+):
+    stu.reset_and_rerun_page()
+
+
+st.session_state.selected_media_names = selected_media_names
 
 # Display chat messages from history on app rerun
 # Use special function to display AI messages

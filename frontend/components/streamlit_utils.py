@@ -28,6 +28,14 @@ import pandas as pd
 from typing import Generator
 
 
+def reset_and_rerun_page():
+    # Clear all messages
+    st.session_state.messages = []
+    # Reset citation state
+    reset_citation_session_state()
+    st.rerun()
+
+
 def display_sidebar(current_page: str | None = None):
     sidebar = st.sidebar
     # If user is logged in, display a logout button
@@ -40,11 +48,7 @@ def display_sidebar(current_page: str | None = None):
     # On the Chat With Your Media page, display a "clear conversation" button
     if current_page == "Chat With Your Media":
         if sidebar.button("Clear Conversation"):
-            # Clear all messages
-            st.session_state.messages = []
-            # Reset citation state
-            reset_citation_session_state()
-            st.rerun()
+            reset_and_rerun_page()
 
 
 def reset_citation_session_state():
@@ -169,7 +173,7 @@ def generate_full_answer_stream(
     username: str,
     api_auth_id_token: str,  # Auth token used for REST API to retrieve transcript
     api_auth_access_token: str,  # Auth used for WS connection
-    selected_media_names: list[str] | None = None,
+    selected_media_names: list[str] = [],
     job_df: pd.DataFrame | None = None,
 ) -> Generator[str, None, None]:
     """Given a user query, use GenAI to generate an answer."""
@@ -177,16 +181,8 @@ def generate_full_answer_stream(
     if messages[-1]["role"] == "assistant":
         messages.append({"role": "assistant", "content": [{"text": ""}]})
 
-    # If no specific media file is selected, use RAG over all files
-    if not selected_media_names:
-        yield from retrieve_and_generate_answer_stream(
-            messages=messages,
-            media_names=None,
-            username=username,
-            api_auth_access_token=api_auth_access_token,
-        )
     # If one file was selected, no retrieval is needed
-    elif len(selected_media_names) == 1:
+    if len(selected_media_names) == 1:
         selected_job_id = job_df[job_df.media_name == selected_media_names[0]][
             "UUID"
         ].values[0]
@@ -198,6 +194,7 @@ def generate_full_answer_stream(
             username=username,
             api_auth_access_token=api_auth_access_token,
         )
+    # If no specific media file is selected, use RAG over all files
     # If 2 or more files were selected, do retrieval matching any of those files
     else:
         yield from retrieve_and_generate_answer_stream(
