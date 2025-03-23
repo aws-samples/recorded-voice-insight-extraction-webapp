@@ -24,40 +24,52 @@ KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
 DDB_LAMBDA_NAME = os.environ.get("DDB_LAMBDA_NAME")
 AWS_REGION = os.environ["AWS_REGION"]
 DATA_SOURCE_ID = os.environ["DATA_SOURCE_ID"]
+SOURCE_BUCKET = os.environ.get("S3_BUCKET")
+TEXT_TRANSCRIPTS_PREFIX = os.environ.get("TEXT_TRANSCRIPTS_PREFIX")
 
 bedrock_agent_client = boto3.client("bedrock-agent", region_name=AWS_REGION)
 # Create a Lambda client so this lambda can invoke other lambdas
 lambda_client = boto3.client("lambda")
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 
 def lambda_handler(event, context):
     # This gets passed in from the previous lambda in the state machine, which launches sync job
-    ingestion_job_id = event["ingestion_job_id"]
+    ddb_uuid = event["uuid"]
+    username = event["username"]
 
     try:
-        ingest_status_response = bedrock_agent_client.get_ingestion_job(
+        ingest_status_response = bedrock_agent_client.get_knowledge_base_documents(
             knowledgeBaseId=KNOWLEDGE_BASE_ID,
             dataSourceId=DATA_SOURCE_ID,
-            ingestionJobId=ingestion_job_id,
+            documentIdentifiers=[
+                {
+                    "dataSourceType": "S3",
+                    "s3": {
+                        "uri": f"s3://{SOURCE_BUCKET}/{TEXT_TRANSCRIPTS_PREFIX}/{username}/{ddb_uuid}.txt"
+                    },
+                }
+            ],
         )
 
-        job_status = ingest_status_response["ingestionJob"]["status"]
-        logger.debug(f"Ingestion job status: {job_status}")
+        job_status = ingest_status_response["documentDetails"][0]["status"]
+        logger.info(f"Ingestion job status: {job_status}")
 
         # Possible Bedrock knowledge base sync job statuses:
-        # "STARTING" | "IN_PROGRESS" | "COMPLETE" | "FAILED" | "STOPPING" | "STOPPED"
+        # 'INDEXED'|'PARTIALLY_INDEXED'|'PENDING'|'FAILED'|'METADATA_PARTIALLY_INDEXED'|'METADATA_UPDATE_FAILED'|'IGNORED'|'NOT_FOUND'|'STARTING'|'IN_PROGRESS'|'DELETING'|'DELETE_IN_PROGRESS'
+        # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agent/client/get_knowledge_base_documents.html
 
         # If job is complete or failed, update dynamoDB
-        if job_status == "COMPLETE":
+        if job_status == "INDEXED":
             _ = invoke_lambda(
                 lambda_client=lambda_client,
                 lambda_function_name=DDB_LAMBDA_NAME,
-                action="batch_update_job_statuses",
+                action="update_job_status",
                 params={
-                    "ingestion_job_id": ingestion_job_id,
+                    "job_id": ddb_uuid,
+                    "username": username,
                     "new_status": JobStatus.COMPLETED.value,
                 },
             )
@@ -65,15 +77,23 @@ def lambda_handler(event, context):
             _ = invoke_lambda(
                 lambda_client=lambda_client,
                 lambda_function_name=DDB_LAMBDA_NAME,
-                action="batch_update_job_statuses",
+                action="update_job_status",
                 params={
-                    "ingestion_job_id": ingestion_job_id,
+                    "job_id": ddb_uuid,
+                    "username": username,
                     "new_status": JobStatus.FAILED.value,
                 },
             )
         # Return the job status regardless
-        # how does this response get used by the state machine with "$.Payload"
-        return {"status": job_status, "ingestion_job_id": ingestion_job_id}
+
+        # "status" is tracked by the state machine like this:
+        #     .when(sfn.Condition.string_equals("$.status", "FAILED"), job_failed)
+        #     .when(sfn.Condition.string_equals("$.status", "COMPLETE"), job_succeeded)
+        return {
+            "status": job_status,
+            "uuid": ddb_uuid,
+            "username": username,
+        }
 
     except Exception as e:
         logger.warning(f"Error checking job status: {str(e)}")

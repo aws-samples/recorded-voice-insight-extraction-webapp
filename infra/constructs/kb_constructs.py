@@ -234,6 +234,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         super().__init__(scope, construct_id, **kwargs)
 
         self.ddb_handler_lambda = ddb_lambda
+        self.source_bucket = source_bucket
 
         # Create ingest lambda
         self.ingest_lambda = self.create_ingest_lambda(knowledge_base, data_source)
@@ -266,6 +267,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         ingest_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
+                    "bedrock:IngestKnowledgeBaseDocuments",
                     "bedrock:StartIngestionJob",
                 ],
                 resources=[knowledge_base.attr_knowledge_base_arn],
@@ -306,6 +308,8 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
                 KNOWLEDGE_BASE_ID=knowledge_base.attr_knowledge_base_id,
                 DATA_SOURCE_ID=data_source.attr_data_source_id,
                 DDB_LAMBDA_NAME=self.ddb_handler_lambda.function_name,
+                S3_BUCKET=self.source_bucket.bucket_name,
+                TEXT_TRANSCRIPTS_PREFIX=self.props["s3_text_transcripts_prefix"],
             ),
             role=self.create_ingest_lambda_role(knowledge_base),
         )
@@ -333,7 +337,10 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         )
         job_status_lambda_role.add_to_policy(
             iam.PolicyStatement(
-                actions=["bedrock:GetIngestionJob"],
+                actions=[
+                    "bedrock:GetKnowledgeBaseDocuments",
+                    "bedrock:GetIngestionJob",
+                ],
                 resources=[knowledge_base.attr_knowledge_base_arn],
             )
         )
@@ -366,6 +373,8 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
                 "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
                 "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
                 "DATA_SOURCE_ID": data_source.attr_data_source_id,
+                "S3_BUCKET": self.source_bucket.bucket_name,
+                "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
             },
             role=self.create_job_status_lambda_role(knowledge_base),
         )
