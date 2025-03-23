@@ -19,6 +19,7 @@ import streamlit as st
 from components.cognito_utils import login
 from components.db_utils import retrieve_all_items
 import components.streamlit_utils as stu
+import components.bedrock_utils as bru
 from components.bedrock_utils import WebsocketTimeoutError
 
 st.set_page_config(
@@ -35,9 +36,7 @@ if not st.session_state.get("auth_username", None):
     login()
     st.stop()
 
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+stu.initialize_session_state()
 
 username = st.session_state["auth_username"]
 api_auth_id_token = st.session_state["auth_id_token"]
@@ -50,9 +49,6 @@ job_df = retrieve_all_items(
     username=username, max_rows=None, api_auth_id_token=api_auth_id_token
 )
 completed_jobs = job_df[job_df.job_status == "Completed"]
-
-if "selected_media_names" not in st.session_state:
-    st.session_state.selected_media_names = None
 
 CHAT_WITH_ALL_STRING = "Chat with all media files"
 selected_media_names = st.multiselect(  # This is an empty list if nothing is selected
@@ -126,12 +122,11 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                full_answer_iterator = stu.generate_full_answer_stream(
+                full_answer_iterator = bru.retrieve_and_generate_answer_stream(
                     messages=st.session_state.messages,
+                    media_names=selected_media_names,
                     username=username,
-                    api_auth_id_token=api_auth_id_token,  # Auth id token is used for REST API, getting transcript from s3
                     api_auth_access_token=api_auth_access_token,  # Access token used for WS API authorization
-                    selected_media_names=selected_media_names,
                     job_df=job_df,
                 )
                 placeholder = st.empty()

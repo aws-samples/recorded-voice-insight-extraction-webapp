@@ -23,6 +23,7 @@ import sys
 import requests  # for REST API
 import websocket  # for streaming WS API
 from typing import Generator
+import pandas as pd
 
 # Add frontend dir to system path to import FullQAnswer
 sys.path.append(
@@ -110,11 +111,27 @@ def retrieve_and_generate_answer_stream(
     media_names: list[str],
     username: str,
     api_auth_access_token: str,
+    job_df: pd.DataFrame | None = None,
 ) -> Generator[FullQAnswer, None, None]:
-    """Query knowledge base and generate an answer (streaming WS API). Only filter applied is
-    the username (so each user can only query their own files)
+    """Query knowledge base and generate an answer (streaming WS API).
+    If media_names is an empty list, all videos from this user are queried.
+    If media_names is a list of length 1, no retrieval is done, entire transcript is imputed into LLM.
+    If media_names is len > 1, retrieval is done across those files only.
+
     messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
     """
+
+    # If last message was from AI, insert empty AI message
+    if messages[-1]["role"] == "assistant":
+        messages.append({"role": "assistant", "content": [{"text": ""}]})
+
+    # If one file was selected, the backend needs the job_id to find the full transcript
+    selected_job_id = (
+        job_df[job_df.media_name == media_names[0]]["UUID"].values[0]
+        if len(media_names) == 1
+        else ""
+    )
+
     json_body = {
         "action": "$default",
         "messages": json.dumps(clean_messages(messages)),
@@ -124,33 +141,11 @@ def retrieve_and_generate_answer_stream(
     if len(media_names):
         json_body["media_names"] = json.dumps(media_names)
 
-    yield from websocket_stream(json_body, api_auth_access_token=api_auth_access_token)
+    # If media_names is length 1, transcript_job_id must be supplied so the backend
+    # can grab the full transcript to impute it
+    if len(media_names) == 1:
+        json_body["transcript_job_id"] = selected_job_id
 
-
-def generate_answer_no_chunking_stream(
-    messages: list,
-    media_name: str,
-    username: str,
-    transcript_job_id: str,
-    api_auth_access_token: str,
-) -> Generator[FullQAnswer, None, None]:
-    """Bypass the knowledge base, impute the full transcript into the prompt and have
-    an LLM generate the answer. This function is used when user asks a question about
-    one media file. Media name is provided only because it is included in
-    the LLM-generated citations. KB lambda is used for convenience, as it has all of
-    the prompt engineering / output parsing required to form FullQAnswer objects.
-    Full transcript is not provided as input to this function due to maximum
-    allowable websocket payload size:
-    https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-known-issues.html#api-gateway-known-issues-websocket-apis
-    messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
-    """
-    json_body = {
-        "action": "$default",
-        "messages": json.dumps(clean_messages(messages)),
-        "transcript_job_id": transcript_job_id,
-        "username": username,
-        "media_names": json.dumps([media_name]),
-    }
     yield from websocket_stream(json_body, api_auth_access_token=api_auth_access_token)
 
 

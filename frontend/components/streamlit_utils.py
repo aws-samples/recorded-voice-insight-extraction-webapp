@@ -21,11 +21,18 @@ import streamlit as st
 from .cognito_utils import logout
 from .s3_utils import retrieve_media_url
 from .bedrock_utils import (
-    generate_answer_no_chunking_stream,
     retrieve_and_generate_answer_stream,
 )
 import pandas as pd
 from typing import Generator
+
+
+def initialize_session_state():
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "selected_media_names" not in st.session_state:
+        st.session_state.selected_media_names = None
 
 
 def reset_and_rerun_page():
@@ -165,43 +172,6 @@ def display_full_ai_response(
                 "content": [{"text": assistant_message}],
                 "full_answer": full_answer,
             }
-        )
-
-
-def generate_full_answer_stream(
-    messages: list,
-    username: str,
-    api_auth_id_token: str,  # Auth token used for REST API to retrieve transcript
-    api_auth_access_token: str,  # Auth used for WS connection
-    selected_media_names: list[str] = [],
-    job_df: pd.DataFrame | None = None,
-) -> Generator[str, None, None]:
-    """Given a user query, use GenAI to generate an answer."""
-    # If last message was from AI, insert empty AI message
-    if messages[-1]["role"] == "assistant":
-        messages.append({"role": "assistant", "content": [{"text": ""}]})
-
-    # If one file was selected, no retrieval is needed
-    if len(selected_media_names) == 1:
-        selected_job_id = job_df[job_df.media_name == selected_media_names[0]][
-            "UUID"
-        ].values[0]
-
-        yield from generate_answer_no_chunking_stream(
-            messages=messages,
-            media_name=selected_media_names[0],
-            transcript_job_id=selected_job_id,
-            username=username,
-            api_auth_access_token=api_auth_access_token,
-        )
-    # If no specific media file is selected, use RAG over all files
-    # If 2 or more files were selected, do retrieval matching any of those files
-    else:
-        yield from retrieve_and_generate_answer_stream(
-            messages=messages,
-            media_names=selected_media_names,
-            username=username,
-            api_auth_access_token=api_auth_access_token,
         )
 
 
