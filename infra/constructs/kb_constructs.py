@@ -420,7 +420,7 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         chain = submit_job_task.next(check_job_status_task).next(
             sfn.Choice(self, "JobComplete?")
             .when(sfn.Condition.string_equals("$.status", "FAILED"), job_failed)
-            .when(sfn.Condition.string_equals("$.status", "COMPLETE"), job_succeeded)
+            .when(sfn.Condition.string_equals("$.status", "INDEXED"), job_succeeded)
             .otherwise(wait_state.next(check_job_status_task))
         )
 

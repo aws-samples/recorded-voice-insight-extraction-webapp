@@ -88,7 +88,7 @@ def lambda_handler(event, context):
 
         # "status" is tracked by the state machine like this:
         #     .when(sfn.Condition.string_equals("$.status", "FAILED"), job_failed)
-        #     .when(sfn.Condition.string_equals("$.status", "COMPLETE"), job_succeeded)
+        #     .when(sfn.Condition.string_equals("$.status", "INDEXED"), job_succeeded)
         return {
             "status": job_status,
             "uuid": ddb_uuid,
