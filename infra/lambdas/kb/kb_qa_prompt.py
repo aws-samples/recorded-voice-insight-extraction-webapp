@@ -94,11 +94,6 @@ If no transcript_chunks are provided or if you are unable to answer the question
 {{"answer": [ {{"partial_answer": "I am unable to answer the question based on the provided media file(s).", "citations": []}} ] }}
 </json>
 
-Here is the conversation with the user leading up to now, just for context:
-<conversation_context>
-{conversation_context}
-</conversation_context>
-
 Here is the user's question you should answer:
 <question>
 {query}

@@ -25,7 +25,7 @@ from bedrock.bedrock_utils import get_bedrock_client
 from kb.kb_qa_prompt import KB_QA_MESSAGE_TEMPLATE, KB_QA_SYSTEM_PROMPT
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 
 class KBRetriever:
@@ -36,18 +36,28 @@ class KBRetriever:
             region=region_name, agent=True
         )
 
-    def retrieve(self, query: str, username: str, media_name: str = None):
+    def retrieve(self, query: str, username: str, media_names: list[str] | None = None):
+        """Retrieve from the knowledge base.
+        If media_names is None, retrieval is applied to all files uploaded by the user with `username`.
+        If media_names is a list, retrieval is applied to only those files uploaded by `username`.
+        If media_names is a list it must be at least length 2. Single files are handled
+        separately (no retrieval is done at all -- the full transcript is imputed into the LLM prompt)
+        """
+
+        assert media_names is None or len(media_names) > 1
+
         username_filter = {"equals": {"key": "username", "value": username}}
-        retrieval_filter = (
-            username_filter
-            if not media_name
-            else {
-                "andAll": [
-                    username_filter,
-                    {"equals": {"key": "media_name", "value": media_name}},
-                ]
+
+        if media_names is None:
+            retrieval_filter = username_filter
+        else:
+            media_name_filters = [
+                {"equals": {"key": "media_name", "value": media_name}}
+                for media_name in media_names
+            ]
+            retrieval_filter = {
+                "andAll": [username_filter, {"orAll": media_name_filters}]
             }
-        )
 
         retrieval_config = {
             "vectorSearchConfiguration": {
@@ -55,6 +65,7 @@ class KBRetriever:
                 "filter": retrieval_filter,
             },
         }
+        logger.debug(f"Retrieving! {retrieval_config= }")
 
         return self.bedrock_agent_runtime_client.retrieve(
             knowledgeBaseId=self.knowledge_base_id,
@@ -82,7 +93,7 @@ class LLMGenerator:
         message_content = prompt_builder.build_full_prompt(
             query=messages[-1]["content"][0]["text"],
             chunks=prompt_builder.build_chunks_string(retrieval_response),
-            conversation_context=prompt_builder.build_conversation_context(messages),
+            # conversation_context=prompt_builder.build_conversation_context(messages),
         )
 
         converse_kwargs = self._build_converse_kwargs(messages, message_content)
@@ -95,7 +106,7 @@ class LLMGenerator:
         message_content = prompt_builder.build_full_prompt(
             query=messages[-1]["content"][0]["text"],
             chunks=prompt_builder.build_chunks_string(retrieval_response),
-            conversation_context=prompt_builder.build_conversation_context(messages),
+            # conversation_context=prompt_builder.build_conversation_context(messages),
         )
 
         converse_kwargs = self._build_converse_kwargs(messages, message_content)
@@ -124,18 +135,10 @@ class PromptBuilder:
         return chunks_string
 
     @staticmethod
-    def build_conversation_context(messages: list) -> str:
-        return "".join(
-            f"{message['role']}: {message['content'][0]['text']}\n"
-            for message in messages
-        )
-
-    @staticmethod
-    def build_full_prompt(query: str, chunks: str, conversation_context: str) -> str:
+    def build_full_prompt(query: str, chunks: str) -> str:
         return KB_QA_MESSAGE_TEMPLATE.format(
             query=query,
             chunks=chunks,
-            conversation_context=conversation_context,
         )
 
 
@@ -217,26 +220,26 @@ class ResponseProcessor:
 
 class RetrievalStrategy:
     def get_retrieval_response(
-        self, retriever, query, username, media_name, full_transcript=None
+        self, retriever, query, username, media_names, full_transcript=None
     ):
         raise NotImplementedError
 
 
 class ChunkingStrategy(RetrievalStrategy):
     def get_retrieval_response(
-        self, retriever, query, username, media_name, full_transcript=None
+        self, retriever, query, username, media_names, full_transcript=None
     ):
-        return retriever.retrieve(query, username, media_name)
+        return retriever.retrieve(query, username, media_names)
 
 
 class NoChunkingStrategy(RetrievalStrategy):
     def get_retrieval_response(
-        self, retriever, query, username, media_name, full_transcript=None
+        self, retriever, query, username, media_names, full_transcript=None
     ):
         return {
             "retrievalResults": [
                 {
-                    "metadata": {"media_name": media_name},
+                    "metadata": {"media_name": media_names[0]},
                     "content": {"text": full_transcript},
                 }
             ]
@@ -260,35 +263,20 @@ class KBQARAG:
         self.prompt_builder = PromptBuilder()
         self.response_processor = ResponseProcessor()
 
-    def retrieve_and_generate_answer(
-        self,
-        messages: list,
-        username: str,
-        media_name: str = None,
-        strategy: RetrievalStrategy = ChunkingStrategy(),
-        full_transcript: str = None,
-    ) -> dict:
-        query = messages[-1]["content"][0]["text"]
-        retrieval_response = strategy.get_retrieval_response(
-            self.retriever, query, username, media_name, full_transcript
-        )
-        generation_response = self.generator.generate(
-            messages, retrieval_response, self.prompt_builder
-        )
-        return self.response_processor.postprocess_generation(generation_response)
-
     def retrieve_and_generate_answer_stream(
         self,
         messages: list,
         username: str,
-        media_name: str = None,
+        media_names: list[str] | None = None,
         strategy: RetrievalStrategy = ChunkingStrategy(),
         full_transcript: str = None,
     ) -> Generator[dict, None, None]:
         query = messages[-1]["content"][0]["text"]
+
         retrieval_response = strategy.get_retrieval_response(
-            self.retriever, query, username, media_name, full_transcript
+            self.retriever, query, username, media_names, full_transcript
         )
+
         generation_response = self.generator.generate_stream(
             messages, retrieval_response, self.prompt_builder
         )
@@ -296,18 +284,14 @@ class KBQARAG:
             generation_response
         )
 
-    def generate_answer_no_chunking(
-        self, messages: list, media_name: str, full_transcript: str
-    ) -> dict:
-        strategy = NoChunkingStrategy()
-        return self.retrieve_and_generate_answer(
-            messages, "", media_name, strategy=strategy, full_transcript=full_transcript
-        )
-
     def generate_answer_no_chunking_stream(
         self, messages: list, media_name: str, full_transcript: str
     ) -> Generator[dict, None, None]:
         strategy = NoChunkingStrategy()
         return self.retrieve_and_generate_answer_stream(
-            messages, "", media_name, strategy=strategy, full_transcript=full_transcript
+            messages,
+            "",
+            [media_name],
+            strategy=strategy,
+            full_transcript=full_transcript,
         )

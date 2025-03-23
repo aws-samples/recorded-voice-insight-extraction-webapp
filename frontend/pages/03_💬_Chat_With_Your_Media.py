@@ -52,16 +52,15 @@ job_df = retrieve_all_items(
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
 CHAT_WITH_ALL_STRING = "Chat with all media files"
-selected_media_name = st.selectbox(
+selected_media_names = st.multiselect(
     "kazu",
-    options=[CHAT_WITH_ALL_STRING] + completed_jobs.media_name.to_list(),
-    index=None,
+    options=sorted(completed_jobs.media_name.to_list()),  # Display alphabetically
     placeholder=CHAT_WITH_ALL_STRING,
     label_visibility="collapsed",
 )
-if selected_media_name == CHAT_WITH_ALL_STRING:
-    selected_media_name = None
-
+if selected_media_names == CHAT_WITH_ALL_STRING:
+    selected_media_names = None
+st.write(f"{selected_media_names=}")
 
 # Display chat messages from history on app rerun
 # Use special function to display AI messages
@@ -121,7 +120,7 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
                     username=username,
                     api_auth_id_token=api_auth_id_token,  # Auth id token is used for REST API, getting transcript from s3
                     api_auth_access_token=api_auth_access_token,  # Access token used for WS API authorization
-                    selected_media_name=selected_media_name,
+                    selected_media_names=selected_media_names,
                     job_df=job_df,
                 )
                 placeholder = st.empty()

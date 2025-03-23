@@ -81,7 +81,7 @@ def run_analysis(analysis_id: int, transcript: str, api_auth_id_token: str):
 
 
 def clean_messages(messages, max_number_of_messages=10):
-    """Ensure messages list only has elements like {"role":"user", "cotent":[{"text":"blah}]},
+    """Ensure messages list only has elements like {"role":"user", "content":[{"text":"blah}]},
     Also make sure <= max_number_of_messages latest messages are sent.
     Also make sure the first element in messages is a user message.
     Also remove any citations in the content, for example if a message has content
@@ -106,7 +106,10 @@ def clean_messages(messages, max_number_of_messages=10):
 
 
 def retrieve_and_generate_answer_stream(
-    messages: list, username: str, api_auth_access_token: str
+    messages: list,
+    media_names: list[str] | None,
+    username: str,
+    api_auth_access_token: str,
 ) -> Generator[FullQAnswer, None, None]:
     """Query knowledge base and generate an answer (streaming WS API). Only filter applied is
     the username (so each user can only query their own files)
@@ -117,6 +120,9 @@ def retrieve_and_generate_answer_stream(
         "messages": json.dumps(clean_messages(messages)),
         "username": username,
     }
+    if media_names is not None:
+        json_body["media_names"] = json.dumps(media_names)
+
     yield from websocket_stream(json_body, api_auth_access_token=api_auth_access_token)
 
 
@@ -142,7 +148,7 @@ def generate_answer_no_chunking_stream(
         "messages": json.dumps(clean_messages(messages)),
         "transcript_job_id": transcript_job_id,
         "username": username,
-        "media_name": media_name,
+        "media_names": json.dumps([media_name]),
     }
     yield from websocket_stream(json_body, api_auth_access_token=api_auth_access_token)
 

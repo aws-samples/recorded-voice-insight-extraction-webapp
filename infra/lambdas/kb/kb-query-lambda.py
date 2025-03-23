@@ -56,7 +56,7 @@ def stream_lambda_handler(event, context):
     * query and username (to query all media uploaded by that user)
 
     OR
-    * query, media_name, and transcript_job_id (to query one specific file)
+    * query, media_names, and transcript_job_id (to query one or more specific files)
 
     Lambda returns a json which can be parsed into a FullQAnswer object like
     answer = FullQAnswer(**lambda_response)
@@ -73,20 +73,23 @@ def stream_lambda_handler(event, context):
 
     messages = json.loads(event["messages"])
     username = event.get("username", None)
-    media_name = event.get("media_name", None)
+    media_names = event.get("media_names", None)
+    if media_names:
+        media_names = json.loads(media_names)
     transcript_job_id = event.get("transcript_job_id", None)
 
     assert (messages and username) or (
-        messages and media_name and transcript_job_id and username
+        messages and media_names and transcript_job_id and username
     )
 
     # If no specific media file is selected, use RAG over all files
-    if not media_name:
+    # If 2+ media files are selected, use RAG over just those files
+    if not media_names or len(media_names) > 1:
         try:
             generation_stream = kbqarag.retrieve_and_generate_answer_stream(
                 messages=messages,
                 username=username,
-                media_name=None,
+                media_names=media_names,  # media_names can be None or a list of length > 1 here
             )
             for generation_event in generation_stream:
                 # Serialize the dictionary to a JSON string and encode to bytes
@@ -95,7 +98,7 @@ def stream_lambda_handler(event, context):
         except Exception as e:
             return {"statusCode": 500, "body": f"Internal server error: {e}"}
 
-    else:
+    else:  # media_name is a list of length 1 here
         try:
             # Retrieve the full_transcript from the job_id
             # Get the object from S3
@@ -112,7 +115,7 @@ def stream_lambda_handler(event, context):
             )
             generation_stream = kbqarag.generate_answer_no_chunking_stream(
                 messages=messages,
-                media_name=media_name,
+                media_name=media_names[0],  # media_name is a string here
                 full_transcript=full_transcript_from_s3,
             )
             for generation_event in generation_stream:

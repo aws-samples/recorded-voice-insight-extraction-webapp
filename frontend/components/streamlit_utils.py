@@ -169,7 +169,7 @@ def generate_full_answer_stream(
     username: str,
     api_auth_id_token: str,  # Auth token used for REST API to retrieve transcript
     api_auth_access_token: str,  # Auth used for WS connection
-    selected_media_name: str | None = None,
+    selected_media_names: list[str] | None = None,
     job_df: pd.DataFrame | None = None,
 ) -> Generator[str, None, None]:
     """Given a user query, use GenAI to generate an answer."""
@@ -178,22 +178,31 @@ def generate_full_answer_stream(
         messages.append({"role": "assistant", "content": [{"text": ""}]})
 
     # If no specific media file is selected, use RAG over all files
-    if not selected_media_name:
+    if not selected_media_names:
         yield from retrieve_and_generate_answer_stream(
             messages=messages,
+            media_names=None,
             username=username,
             api_auth_access_token=api_auth_access_token,
         )
     # If one file was selected, no retrieval is needed
-    else:
-        selected_job_id = job_df[job_df.media_name == selected_media_name][
+    elif len(selected_media_names) == 1:
+        selected_job_id = job_df[job_df.media_name == selected_media_names[0]][
             "UUID"
         ].values[0]
-        
+
         yield from generate_answer_no_chunking_stream(
             messages=messages,
-            media_name=selected_media_name,
+            media_name=selected_media_names[0],
             transcript_job_id=selected_job_id,
+            username=username,
+            api_auth_access_token=api_auth_access_token,
+        )
+    # If 2 or more files were selected, do retrieval matching any of those files
+    else:
+        yield from retrieve_and_generate_answer_stream(
+            messages=messages,
+            media_names=selected_media_names,
             username=username,
             api_auth_access_token=api_auth_access_token,
         )
