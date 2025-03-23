@@ -19,6 +19,7 @@ import streamlit as st
 from components.cognito_utils import login
 from components.db_utils import retrieve_all_items
 import components.streamlit_utils as stu
+import components.bedrock_utils as bru
 from components.bedrock_utils import WebsocketTimeoutError
 
 st.set_page_config(
@@ -35,9 +36,7 @@ if not st.session_state.get("auth_username", None):
     login()
     st.stop()
 
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+stu.initialize_session_state()
 
 username = st.session_state["auth_username"]
 api_auth_id_token = st.session_state["auth_id_token"]
@@ -52,16 +51,23 @@ job_df = retrieve_all_items(
 completed_jobs = job_df[job_df.job_status == "Completed"]
 
 CHAT_WITH_ALL_STRING = "Chat with all media files"
-selected_media_name = st.selectbox(
+selected_media_names = st.multiselect(  # This is an empty list if nothing is selected
     "kazu",
-    options=[CHAT_WITH_ALL_STRING] + completed_jobs.media_name.to_list(),
-    index=None,
+    options=sorted(completed_jobs.media_name.to_list()),  # Display alphabetically
     placeholder=CHAT_WITH_ALL_STRING,
     label_visibility="collapsed",
 )
-if selected_media_name == CHAT_WITH_ALL_STRING:
-    selected_media_name = None
 
+# If the user is in the middle of a conversation and they change selected_media_names,
+# reset the conversation
+if (
+    st.session_state.messages
+    and selected_media_names != st.session_state.selected_media_names
+):
+    stu.reset_and_rerun_page()
+
+
+st.session_state.selected_media_names = selected_media_names
 
 # Display chat messages from history on app rerun
 # Use special function to display AI messages
@@ -116,12 +122,11 @@ if user_message := st.chat_input(placeholder="Enter your question here"):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                full_answer_iterator = stu.generate_full_answer_stream(
+                full_answer_iterator = bru.retrieve_and_generate_answer_stream(
                     messages=st.session_state.messages,
+                    media_names=selected_media_names,
                     username=username,
-                    api_auth_id_token=api_auth_id_token,  # Auth id token is used for REST API, getting transcript from s3
                     api_auth_access_token=api_auth_access_token,  # Access token used for WS API authorization
-                    selected_media_name=selected_media_name,
                     job_df=job_df,
                 )
                 placeholder = st.empty()
