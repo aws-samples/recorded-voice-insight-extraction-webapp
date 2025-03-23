@@ -99,12 +99,6 @@ def lambda_handler(event, context):
         result = ddb_utils._retrieve_media_name_by_jobid(
             table=table, job_id=job_id, username=username
         )
-    elif action == "batch_update_job_statuses":
-        ingestion_job_id = event["ingestion_job_id"]
-        new_status = JobStatus(event["new_status"])
-        result = ddb_utils._batch_update_job_statuses(
-            table=table, ingestion_job_id=ingestion_job_id, new_status=new_status
-        )
     else:
         return {"statusCode": 400, "body": json.dumps("Invalid action")}
 

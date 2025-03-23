@@ -16,7 +16,7 @@
 
 import logging
 import os
-import time
+# import time
 
 import boto3
 
@@ -31,6 +31,8 @@ KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
 DATA_SOURCE_ID = os.environ["DATA_SOURCE_ID"]
 AWS_REGION = os.environ["AWS_REGION"]
 DDB_LAMBDA_NAME = os.environ.get("DDB_LAMBDA_NAME")
+SOURCE_BUCKET = os.environ.get("S3_BUCKET")
+TEXT_TRANSCRIPTS_PREFIX = os.environ.get("TEXT_TRANSCRIPTS_PREFIX")
 
 bedrock_agent_client = boto3.client("bedrock-agent", region_name=AWS_REGION)
 
@@ -38,99 +40,72 @@ bedrock_agent_client = boto3.client("bedrock-agent", region_name=AWS_REGION)
 lambda_client = boto3.client("lambda")
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
-
-
-# Structured this way to fix Probe scan issues
-def sleep_dur():
-    return 60
+logger.setLevel("INFO")
 
 
 def lambda_handler(event, context):
     """Call the KB sync function, possibly sleeping and retrying a few times
     Also update the dynamo DB job status for this UUID to "Indexing"
     """
+    #    "transcripts-txt/gclaeys/569f4f91-9542-4e1b-a402-209c135c4605.txt.metadata.json"
+    s3_file_key = event["detail"]["object"]["key"]
+    logger.info(f"Ingest lambda {s3_file_key=}")
+    username = extract_username_from_s3_URI(s3_file_key)
+    ddb_uuid = extract_uuid_from_s3_URI(s3_file_key)
+    # Get Account ID from lambda function arn in the context
+    ACCOUNT_ID = context.invoked_function_arn.split(":")[4]
+    logger.info(f"Extracted account ID = {ACCOUNT_ID}")
     input_data = {
         "knowledgeBaseId": KNOWLEDGE_BASE_ID,
         "dataSourceId": DATA_SOURCE_ID,
-        # "clientToken": context.aws_request_id,
-    }
-    s3_file_key = event["detail"]["object"]["key"]
-    logger.debug(f"Ingest lambda {s3_file_key=}")
-    username = extract_username_from_s3_URI(s3_file_key)
-    ddb_uuid = extract_uuid_from_s3_URI(s3_file_key)
-
-    # Retry a few times
-    # TODO: handle this better with a queue
-    response = None
-    retries_left = 5
-    while response is None:
-        try:
-            logger.debug(f"Starting ingestion job with {input_data=}")
-            ingest_start_response = bedrock_agent_client.start_ingestion_job(
-                **input_data
-            )
-            ingest_job_id = ingest_start_response["ingestionJob"]["ingestionJobId"]
-            logger.debug(f"Ingestion job response: {ingest_start_response=}")
-            # Update DDB status
-            response = invoke_lambda(
-                lambda_client=lambda_client,
-                lambda_function_name=DDB_LAMBDA_NAME,
-                action="update_job_status",
-                params={
-                    "job_id": ddb_uuid,
-                    "username": username,
-                    "new_status": JobStatus.INDEXING.value,
-                },
-            )
-
-            logger.debug(f"Updated job status for {ddb_uuid=} to Indexing.")
-            # Add ingestion job ID to DDB to check ingestion status later
-            response = invoke_lambda(
-                lambda_client=lambda_client,
-                lambda_function_name=DDB_LAMBDA_NAME,
-                action="update_ddb_entry",
-                params={
-                    "job_id": ddb_uuid,
-                    "username": username,
-                    "new_item_name": "ingestion_job_id",
-                    "new_item_value": ingest_job_id,
-                },
-            )
-            logger.debug(
-                f"Updated DDB entry {ddb_uuid=} by adding an ingestion_job_id field, with value {ingest_job_id=}."
-            )
-            # Return the ingestion job ID rather than relying on downstream lambdas to read it from dynamo
-            # due to potential consistency issues
-            return {
-                "ingestion_job_id": ingest_job_id,
-                "uuid": ddb_uuid,
-                "username": username,
-            }
-
-        except Exception as e:
-            # E.g. too many ingestion jobs to the same KB will raise a
-            # botocore.errorfactory.ConflictException
-            retries_left -= 1
-            if retries_left:
-                response = None
-                logger.debug(
-                    f"Ingestion job failed with exception: {e}... retrying in 1 min"
-                )
-                time.sleep(sleep_dur())
-            else:
-                logger.debug(
-                    f"Ingestion job failed and no retries left. Marking {ddb_uuid=} as Failed."
-                )
-                response = invoke_lambda(
-                    lambda_client=lambda_client,
-                    lambda_function_name=DDB_LAMBDA_NAME,
-                    action="update_job_status",
-                    params={
-                        "job_id": ddb_uuid,
-                        "username": username,
-                        "new_status": JobStatus.FAILED.value,
+        "documents": [
+            {
+                "content": {
+                    "dataSourceType": "S3",
+                    "s3": {
+                        "s3Location": {
+                            "uri": f"s3://{SOURCE_BUCKET}/{TEXT_TRANSCRIPTS_PREFIX}/{username}/{ddb_uuid}.txt"
+                        }
                     },
-                )
+                },
+                "metadata": {
+                    "s3Location": {
+                        "bucketOwnerAccountId": ACCOUNT_ID,
+                        "uri": f"s3://{SOURCE_BUCKET}/{TEXT_TRANSCRIPTS_PREFIX}/{username}/{ddb_uuid}.txt.metadata.json",
+                    },
+                    "type": "S3_LOCATION",
+                },
+            },
+        ],
+    }
+    try:
+        logger.info(f"Starting ingestion job with {input_data=}")
+        ingest_start_response = bedrock_agent_client.ingest_knowledge_base_documents(
+            **input_data
+        )
+        # ingest_job_id = ingest_start_response["ingestionJob"]["ingestionJobId"]
+        logger.info(f"Ingestion job response: {ingest_start_response=}")
+        # Update DDB status
+        _ = invoke_lambda(
+            lambda_client=lambda_client,
+            lambda_function_name=DDB_LAMBDA_NAME,
+            action="update_job_status",
+            params={
+                "job_id": ddb_uuid,
+                "username": username,
+                "new_status": JobStatus.INDEXING.value,
+            },
+        )
 
-                raise e
+        logger.info(f"Updated job status for {ddb_uuid=} to Indexing.")
+
+        # Return uuid and ddb_uuid fr kb-job-status-lambda to use to track job status
+        return {
+            # "ingestion_job_id": ingest_job_id,
+            "uuid": ddb_uuid,
+            "username": username,
+        }
+
+    except Exception as e:
+        logger.error(f"Exception thrown in kb-ingest-job-lambda: {e}")
+        raise e
