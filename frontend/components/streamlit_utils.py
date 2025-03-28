@@ -19,12 +19,9 @@ from functools import lru_cache
 import base64
 import streamlit as st
 from .cognito_utils import logout
-from .s3_utils import retrieve_media_url
-from .bedrock_utils import (
-    retrieve_and_generate_answer_stream,
-)
-import pandas as pd
-from typing import Generator
+from .s3_utils import retrieve_media_url, retrieve_subtitles_by_jobid
+from .db_utils import retrieve_jobid_by_media_name
+from urllib.parse import urlparse
 
 
 def initialize_session_state():
@@ -33,6 +30,8 @@ def initialize_session_state():
         st.session_state.messages = []
     if "selected_media_names" not in st.session_state:
         st.session_state.selected_media_names = None
+    if "display_subtitles" not in st.session_state:
+        st.session_state.display_subtitles = False
 
 
 def reset_and_rerun_page():
@@ -56,6 +55,7 @@ def display_sidebar(current_page: str | None = None):
     if current_page == "Chat With Your Media":
         if sidebar.button("Clear Conversation"):
             reset_and_rerun_page()
+        st.session_state.display_subtitles = sidebar.checkbox("Display subtitles")
 
 
 def reset_citation_session_state():
@@ -107,13 +107,39 @@ def draw_or_redraw_citation_buttons(full_answer, message_index: int):
                 )
 
 
-def display_video_at_timestamp(media_url, timestamp):
+def display_video_at_timestamp(
+    media_url,
+    timestamp,
+    api_auth_id_token: str | None = None,
+    username: str | None = None,
+):
+    """Display video starting at timestamp.
+    Username, api_auth_access_token are only needed if display_subtitles is true, because
+    this function hits an API endpoint to get the subtitles from the backend
+    """
+    # If display_subtitles, retrieve job_id based on media_url, then retrieve vtt subtitles
+    subtitles_string = None
+    display_subtitles = st.session_state.display_subtitles
+    if display_subtitles:
+        # Note media_url is a presigned url
+        media_name = urlparse(media_url).path.split("/")[-1]
+
+        job_id = retrieve_jobid_by_media_name(
+            username=username,
+            media_name=media_name,
+            api_auth_id_token=api_auth_id_token,
+        )
+
+        subtitles_string = retrieve_subtitles_by_jobid(
+            job_id=job_id, username=username, api_auth_id_token=api_auth_id_token
+        )  # TODO: translation parameters
+
     if timestamp >= 0:
         # Note: this works for audio files, too.
-        _video = st.video(
-            data=media_url,
-            start_time=timestamp,
-        )
+        video_kwargs = {"data": media_url, "start_time": timestamp}
+        if subtitles_string:
+            video_kwargs["subtitles"] = subtitles_string
+        _video = st.video(**video_kwargs)
 
 
 def display_full_ai_response(
@@ -136,6 +162,8 @@ def display_full_ai_response(
         display_video_at_timestamp(
             media_url,
             start_timestamp,
+            username=username,
+            api_auth_id_token=api_auth_id_token,
         )
     else:
         # If answer has any citations, automatically queue up the media to the first citation
@@ -150,6 +178,8 @@ def display_full_ai_response(
             display_video_at_timestamp(
                 media_url,
                 first_citation.timestamp,
+                username=username,
+                api_auth_id_token=api_auth_id_token,
             )
         except AttributeError as e:
             print(f"AttributeError: {e}")

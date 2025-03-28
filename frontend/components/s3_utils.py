@@ -17,7 +17,7 @@
 """Utilities related to accessing s3"""
 
 import os
-
+import json
 import requests
 
 BACKEND_API_URL = os.environ["BACKEND_API_URL"]
@@ -58,6 +58,42 @@ def retrieve_transcript_by_jobid(
 
     # 3. Return the transcript txt
     return http_response.text
+
+
+def retrieve_subtitles_by_jobid(
+    job_id: str,
+    username: str,
+    api_auth_id_token: str,
+    translation_start_time: int | None = None,
+    translation_duration: int | None = None,
+    translation_destination_language: str | None = None,
+) -> str:
+    """Retrieve subtitles (vtt format) for a file via the job_id.
+    Optional parameters to translate a portion of them to a
+    new language."""
+
+    json_body = {
+        "username": username,
+        "transcript_job_id": job_id,
+    }
+    if translation_start_time:
+        json_body["translation_start_time"] = translation_start_time
+    if translation_duration:
+        json_body["translation_duration"] = translation_duration
+    if translation_destination_language:
+        json_body["translation_destination_language"] = translation_destination_language
+
+    response = requests.post(
+        BACKEND_API_URL + "/subtitles",
+        json=json_body,
+        headers={"Authorization": api_auth_id_token},
+        timeout=29,
+    )
+    if response.status_code != 200:
+        raise Exception(f"Error getting subtitles from API gateway: {response.reason}")
+
+    # Return the vtt string directly
+    return response.json()
 
 
 def retrieve_media_url(media_name: str, username: str, api_auth_id_token: str) -> str:

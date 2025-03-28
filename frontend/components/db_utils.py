@@ -63,6 +63,31 @@ def retrieve_all_items(
     return result_df if not max_rows else result_df.head(n=max_rows)
 
 
+def retrieve_jobid_by_media_name(
+    username: str, api_auth_id_token: str, media_name: str
+) -> str:
+    """Query dynamodb table for first job_id from this username/media_name"""
+
+    json_body = {
+        "action": "retrieve_jobid_by_media_name",
+        "username": username,
+        "media_name": media_name,
+    }
+
+    response = requests.post(
+        BACKEND_API_URL + "/ddb",
+        json=json_body,
+        headers={"Authorization": api_auth_id_token},
+        timeout=10,
+    )
+    if response.status_code != 200:
+        raise Exception(f"Non 200 response from API gateway: {response.reason}")
+
+    result = response.json()
+
+    return result
+
+
 def retrieve_analysis_by_jobid(
     job_id: str, username: str, template_id: int, api_auth_id_token: str
 ) -> str | None:
