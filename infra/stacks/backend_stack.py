@@ -240,6 +240,37 @@ class ReVIEWBackendStack(NestedStack):
             },
         )
 
+        # Role for lambda to grab and optionally translate subtitles
+        self.subtitle_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-SubtitleLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                )
+            ],
+            inline_policies={
+                "S3PresignedUrl": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:GetObject", "s3:ListBucket"],
+                            resources=[f"{self.bucket.bucket_arn}*"],
+                        )
+                    ]
+                ),
+            },
+        )
+        # Subtitle lambda needs to access bedrock to translate subtitles to diff languages
+        self.subtitle_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:InvokeModel",
+                ],
+                resources=["*"],  # Needs access to every LLM
+            )
+        )
+
     def setup_lambdas(self):
         # Create DDB handler lambda first, as other lambdas need permission to invoke this one
         self.ddb_handler_lambda = _lambda.Function(
@@ -347,6 +378,23 @@ class ReVIEWBackendStack(NestedStack):
             },
             timeout=Duration.seconds(30),
             role=self.presigned_url_lambda_role,
+        )
+
+        # Lambda to retrieve and optionally translate subtitles
+        self.subtitle_lambda = _lambda.Function(
+            self,
+            self.props["stack_name_base"] + "-SubtitleLambda",
+            function_name=f"{self.props['stack_name_base']}-SubtitleLambda",
+            description="Function for ReVIEW backend to retrieve and translate subtitles.",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="bedrock.subtitle-handler-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            environment={
+                "S3_BUCKET": self.bucket.bucket_name,
+                "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
+            },
+            timeout=Duration.minutes(2),
+            role=self.subtitle_lambda_role,
         )
 
     def setup_events(self):
