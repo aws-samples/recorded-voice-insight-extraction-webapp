@@ -391,7 +391,7 @@ class ReVIEWBackendStack(NestedStack):
             code=_lambda.Code.from_asset("lambdas"),
             environment={
                 "S3_BUCKET": self.bucket.bucket_name,
-                "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
+                "TRANSCRIPTS_PREFIX": self.props["s3_transcripts_prefix"],
             },
             timeout=Duration.minutes(2),
             role=self.subtitle_lambda_role,
@@ -407,13 +407,13 @@ class ReVIEWBackendStack(NestedStack):
             s3n.LambdaDestination(self.generate_media_transcript_lambda),
             s3.NotificationKeyFilter(prefix=f"{self.props['s3_recordings_prefix']}/"),
         )
-        # Event to convert json transcript to txt file once it lands in s3
+        # Event to convert vtt transcript to txt file once it lands in s3
         self.bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
             s3n.LambdaDestination(self.postprocess_transcript_lambda),
             s3.NotificationKeyFilter(
                 prefix=f"{self.props['s3_transcripts_prefix']}/",
-                suffix=".json",
+                suffix=".vtt",
             ),
         )
 

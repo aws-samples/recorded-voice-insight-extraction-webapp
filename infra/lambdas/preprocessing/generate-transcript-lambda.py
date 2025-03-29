@@ -50,7 +50,7 @@ def lambda_handler(event, context):
     # Sometimes recording_key is url-encoded, and transcription API wants non-url-encoded
     # https://stackoverflow.com/questions/44779042/aws-how-to-fix-s3-event-replacing-space-with-sign-in-object-key-names-in-js
     logger.debug(
-        f'recording_key from event: {event["Records"][0]["s3"]["object"]["key"]}'
+        f"recording_key from event: {event['Records'][0]['s3']['object']['key']}"
     )
     recording_key = unquote_plus(event["Records"][0]["s3"]["object"]["key"])
 
@@ -102,6 +102,7 @@ def lambda_handler(event, context):
         "IdentifyLanguage": True,
         "OutputBucketName": S3_BUCKET,
         "OutputKey": output_key,
+        "Subtitles": {"Formats": ["vtt"], "OutputStartIndex": 1},
     }
     logger.debug(f"{job_args=}")
     try:
