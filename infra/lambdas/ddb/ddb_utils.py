@@ -23,7 +23,7 @@ import datetime
 import os
 from typing import Any
 
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key, Attr
 from schemas.job_status import JobStatus
 
 
@@ -78,6 +78,24 @@ def _retrieve_media_name_by_jobid(table, job_id: str, username: str) -> str | No
         Key={"username": username, "UUID": job_id}, ProjectionExpression="media_name"
     )["Item"]
     return response["media_name"]
+
+
+def _retrieve_jobid_by_media_name(table, media_name: str, username: str) -> str | None:
+    """Given media_name and username, return the job_id (UUID)
+    "table" input is a dynamo DB resource Table"""
+
+    # Query items with the username as partition key and filter by media_name
+    response = table.query(
+        KeyConditionExpression=Key("username").eq(username),
+        FilterExpression=Attr("media_name").eq(media_name),
+    )
+
+    # Check if any items were returned
+    if response["Count"] > 0:
+        # Return the first matching UUID
+        return response["Items"][0]["UUID"]
+    else:
+        return None
 
 
 def _template_id_to_dynamo_field_name(template_id: int) -> str:

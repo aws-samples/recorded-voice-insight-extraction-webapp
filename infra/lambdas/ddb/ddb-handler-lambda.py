@@ -24,7 +24,7 @@ import ddb.ddb_utils as ddb_utils
 from schemas.job_status import JobStatus
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 TABLE_NAME = os.environ["DYNAMO_TABLE_NAME"]
 dyn_resource = boto3.resource("dynamodb")
@@ -98,6 +98,12 @@ def lambda_handler(event, context):
         username = event["username"]
         result = ddb_utils._retrieve_media_name_by_jobid(
             table=table, job_id=job_id, username=username
+        )
+    elif action == "retrieve_jobid_by_media_name":
+        media_name = event["media_name"]
+        username = event["username"]
+        result = ddb_utils._retrieve_jobid_by_media_name(
+            table=table, media_name=media_name, username=username
         )
     else:
         return {"statusCode": 400, "body": json.dumps("Invalid action")}

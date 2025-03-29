@@ -47,31 +47,31 @@ def lambda_handler(event, context):
     logger.debug(f"{event=}")
     logger.debug(f"{context=}")
 
-    # Read in json file, dump to txt
-    json_transcript_key = event["Records"][0]["s3"]["object"]["key"]
-    logger.debug(f"{json_transcript_key=}")
-    username = extract_username_from_s3_URI(json_transcript_key)
+    # Read in vtt file, dump to txt
+    vtt_transcript_key = event["Records"][0]["s3"]["object"]["key"]
+    logger.debug(f"{vtt_transcript_key=}")
+    username = extract_username_from_s3_URI(vtt_transcript_key)
     logger.debug(f"{username=}")
-    filename = os.path.split(json_transcript_key)[1]
+    filename = os.path.split(vtt_transcript_key)[1]
     uuid, extension = os.path.splitext(filename)
     try:
-        assert extension == ".json"
+        assert extension == ".vtt"
     except AssertionError as err:
-        logger.warning(f"Unable to dump txt from non-json file: {json_transcript_key}.")
+        logger.warning(f"Unable to dump txt from non-vtt file: {vtt_transcript_key}.")
         raise err
 
     output_key = os.path.join(DESTINATION_PREFIX, username, uuid + ".txt")
     logger.debug(f"{output_key=}")
 
     try:
-        # Download json_uri from s3 to tmp dir, read it in
-        full_json = json.loads(
-            s3.get_object(Bucket=S3_BUCKET, Key=json_transcript_key)["Body"]
+        # Download vtt_uri from s3 to tmp dir, read it in
+        full_vtt = (
+            s3.get_object(Bucket=S3_BUCKET, Key=vtt_transcript_key)["Body"]
             .read()
             .decode()
         )
 
-        # Save json URI to dynamodb
+        # Save vtt URI to dynamodb
         response = invoke_lambda(
             lambda_client=lambda_client,
             lambda_function_name=DDB_LAMBDA_NAME,
@@ -79,15 +79,15 @@ def lambda_handler(event, context):
             params={
                 "job_id": uuid,
                 "username": username,
-                "new_item_name": "json_transcript_uri",
-                "new_item_value": os.path.join("s3://", S3_BUCKET, json_transcript_key),
+                "new_item_name": "vtt_transcript_uri",
+                "new_item_value": os.path.join("s3://", S3_BUCKET, vtt_transcript_key),
             },
         )
 
         logger.debug(f"Response to putting json URI into {uuid}: {response}")
 
         # Convert json transcript into human readable form for LLM
-        transcript_processed = build_timestamped_segmented_transcript(full_json)
+        transcript_processed = build_timestamped_segmented_transcript(full_vtt)
 
         # Build json with metadata for Bedrock KB to index and filter on later
         # Note: need to get media_uri from DDB

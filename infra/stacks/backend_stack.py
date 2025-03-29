@@ -240,6 +240,37 @@ class ReVIEWBackendStack(NestedStack):
             },
         )
 
+        # Role for lambda to grab and optionally translate subtitles
+        self.subtitle_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-SubtitleLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                )
+            ],
+            inline_policies={
+                "S3PresignedUrl": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:GetObject", "s3:ListBucket"],
+                            resources=[f"{self.bucket.bucket_arn}*"],
+                        )
+                    ]
+                ),
+            },
+        )
+        # Subtitle lambda needs to access bedrock to translate subtitles to diff languages
+        self.subtitle_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:InvokeModel",
+                ],
+                resources=["*"],  # Needs access to every LLM
+            )
+        )
+
     def setup_lambdas(self):
         # Create DDB handler lambda first, as other lambdas need permission to invoke this one
         self.ddb_handler_lambda = _lambda.Function(
@@ -349,6 +380,23 @@ class ReVIEWBackendStack(NestedStack):
             role=self.presigned_url_lambda_role,
         )
 
+        # Lambda to retrieve and optionally translate subtitles
+        self.subtitle_lambda = _lambda.Function(
+            self,
+            self.props["stack_name_base"] + "-SubtitleLambda",
+            function_name=f"{self.props['stack_name_base']}-SubtitleLambda",
+            description="Function for ReVIEW backend to retrieve and translate subtitles.",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="bedrock.subtitle-handler-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            environment={
+                "S3_BUCKET": self.bucket.bucket_name,
+                "TRANSCRIPTS_PREFIX": self.props["s3_transcripts_prefix"],
+            },
+            timeout=Duration.minutes(2),
+            role=self.subtitle_lambda_role,
+        )
+
     def setup_events(self):
         # Create event notification to the bucket for lambda functions
         # When an s3:ObjectCreated:* event happens in the bucket, the
@@ -359,13 +407,13 @@ class ReVIEWBackendStack(NestedStack):
             s3n.LambdaDestination(self.generate_media_transcript_lambda),
             s3.NotificationKeyFilter(prefix=f"{self.props['s3_recordings_prefix']}/"),
         )
-        # Event to convert json transcript to txt file once it lands in s3
+        # Event to convert vtt transcript to txt file once it lands in s3
         self.bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
             s3n.LambdaDestination(self.postprocess_transcript_lambda),
             s3.NotificationKeyFilter(
                 prefix=f"{self.props['s3_transcripts_prefix']}/",
-                suffix=".json",
+                suffix=".vtt",
             ),
         )
 
