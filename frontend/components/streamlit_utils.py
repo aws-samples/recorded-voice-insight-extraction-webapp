@@ -55,7 +55,9 @@ def display_sidebar(current_page: str | None = None):
     if current_page == "Chat With Your Media":
         if sidebar.button("Clear Conversation"):
             reset_and_rerun_page()
-        st.session_state.display_subtitles = sidebar.checkbox("Display subtitles")
+        st.session_state.display_subtitles = sidebar.checkbox(
+            "Display subtitles in videos"
+        )
 
 
 def reset_citation_session_state():
