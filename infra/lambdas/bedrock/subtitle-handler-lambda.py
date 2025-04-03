@@ -19,9 +19,9 @@
 import json
 import logging
 import os
-import re
-import boto3
 
+import boto3
+from .subtitle_utils import translate_vtt
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -65,8 +65,6 @@ def lambda_handler(event, context):
     assert none_count == 0 or none_count == 3, (
         "Translation parameters must be either all provided or all omitted"
     )
-    if none_count == 0:
-        raise NotImplementedError("Haven't implemented transcription translation yet.")
 
     # Retrieve the full_transcript from s3 via the job_id
     logger.info(
@@ -85,4 +83,16 @@ def lambda_handler(event, context):
     except Exception as e:
         return {"statusCode": 500, "body": f"Internal server error: {e}"}
 
-    return {"statusCode": 200, "body": json.dumps(full_transcript_vtt_string)}
+    # If no translation is needed, return vtt string directly
+    if not translation_start_time:
+        return {"statusCode": 200, "body": json.dumps(full_transcript_vtt_string)}
+
+    # If translation is needed, translate
+    translated_vtt_string = translate_vtt(
+        vtt_string=full_transcript_vtt_string,
+        target_language=translation_destination_language,
+        start_time_seconds=float(translation_start_time),
+        end_time_seconds=float(translation_start_time) + float(translation_duration),
+    )
+
+    return {"statusCode": 200, "body": json.dumps(translated_vtt_string)}

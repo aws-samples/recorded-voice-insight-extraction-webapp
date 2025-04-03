@@ -32,6 +32,8 @@ def initialize_session_state():
         st.session_state.selected_media_names = None
     if "display_subtitles" not in st.session_state:
         st.session_state.display_subtitles = False
+    if "translation_destination_language" not in st.session_state:
+        st.session_state.translation_destination_language = None
 
 
 def reset_and_rerun_page():
@@ -58,6 +60,13 @@ def display_sidebar(current_page: str | None = None):
         st.session_state.display_subtitles = sidebar.checkbox(
             "Display subtitles in videos"
         )
+        if st.session_state.display_subtitles:
+            st.session_state.translation_destination_language = sidebar.selectbox(
+                "Translate subtitles?",
+                ("Spanish", "French"),
+                index=None,
+                placeholder="Select a language",
+            )
 
 
 def reset_citation_session_state():
@@ -132,9 +141,28 @@ def display_video_at_timestamp(
             api_auth_id_token=api_auth_id_token,
         )
 
+        translation_start_time = None
+        translation_duration = None
+        translation_destination_language = None
+        if st.session_state.translation_destination_language:
+            translation_start_time = timestamp
+            translation_duration = 60  # seconds
+            translation_destination_language = (
+                st.session_state.translation_destination_language
+            )
+        # Retrieve subtitles, optionally translating them
+        # (let the user know if translation is happening
+        #  because this adds significant latency to the
+        #  video playback experience)
+        st.toast("Translating subtitles...")
         subtitles_string = retrieve_subtitles_by_jobid(
-            job_id=job_id, username=username, api_auth_id_token=api_auth_id_token
-        )  # TODO: translation parameters
+            job_id=job_id,
+            username=username,
+            api_auth_id_token=api_auth_id_token,
+            translation_start_time=translation_start_time,
+            translation_duration=translation_duration,
+            translation_destination_language=translation_destination_language,
+        )
 
     if timestamp >= 0:
         # Note: this works for audio files, too.
@@ -155,7 +183,7 @@ def display_full_ai_response(
 ):
     """Display video, citation buttons, and AI response text
     Also updates session state for new messages and citations"""
-
+    print(full_answer)
     # If a start_timestamp and media_name are provided, display that
     if start_timestamp and media_name:
         media_url = retrieve_media_url(
