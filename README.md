@@ -35,6 +35,7 @@ Additionally, this application includes the capability to use an LLM to analyze 
   - **Identify timestamps in the media files when the answer was provided. The media automatically gets played back starting at that timestamp, with clickable citations if multiple sources are relevant to the answer.**
   - Stream a continuous response back to the frontend for an optimal user experience.
   - Respond in the same language as the question asked regardless the language of the source media, given the LLM used knows that language.
+  - Display subtitles during video playback in any language, regardless of the language of the video.
 - Provided analysis templates allow for easy GenAI summarization, document generation, next-steps and blockers identifications, and more.
 - Complete frontend/backend separation via API Gateway to enable users to replace Streamlit if desired. REST API primarily used, along with websockets for streaming responses.
 
