@@ -23,6 +23,33 @@ from .s3_utils import retrieve_media_url, retrieve_subtitles_by_jobid
 from .db_utils import retrieve_jobid_by_media_name
 from urllib.parse import urlparse
 
+LANGUAGE_OPTIONS = (
+    "Bulgarian",
+    "Croatian",
+    "Czech",
+    "Danish",
+    "Dutch",
+    "English",
+    "Estonian",
+    "Finnish",
+    "French",
+    "German",
+    "Greek",
+    "Hungarian",
+    "Irish",
+    "Italian",
+    "Latvian",
+    "Lithuanian",
+    "Maltese",
+    "Polish",
+    "Portuguese",
+    "Romanian",
+    "Slovak",
+    "Slovenian",
+    "Spanish",
+    "Swedish",
+)
+
 
 def initialize_session_state():
     # Initialize chat history
@@ -63,7 +90,7 @@ def display_sidebar(current_page: str | None = None):
         if st.session_state.display_subtitles:
             st.session_state.translation_destination_language = sidebar.selectbox(
                 "Translate subtitles?",
-                ("Spanish", "French"),
+                LANGUAGE_OPTIONS,
                 index=None,
                 placeholder="Select a language",
             )
@@ -154,7 +181,9 @@ def display_video_at_timestamp(
         # (let the user know if translation is happening
         #  because this adds significant latency to the
         #  video playback experience)
-        st.toast("Translating subtitles...")
+        if translation_destination_language:
+            st.toast("Translating subtitles...")
+
         subtitles_string = retrieve_subtitles_by_jobid(
             job_id=job_id,
             username=username,
@@ -183,7 +212,7 @@ def display_full_ai_response(
 ):
     """Display video, citation buttons, and AI response text
     Also updates session state for new messages and citations"""
-    print(full_answer)
+
     # If a start_timestamp and media_name are provided, display that
     if start_timestamp and media_name:
         media_url = retrieve_media_url(
