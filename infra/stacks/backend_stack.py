@@ -22,6 +22,7 @@ import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_s3_notifications as s3n
 from aws_cdk import Duration, RemovalPolicy, NestedStack, Aspects
 from constructs import Construct
+from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
 
 import cdk_nag
 
@@ -289,6 +290,21 @@ class ReVIEWBackendStack(NestedStack):
             role=self.ddb_lambda_execution_role,
         )
 
+        # Some lambdas need webvtt as a dependency (subtitles)
+        vtt_dependency_layer = PythonLayerVersion(
+            self,
+            "dependency_layer",
+            entry="lambda-layers",  # directory containing requirements.txt for lambda dependency layer
+            compatible_runtimes=[
+                _lambda.Runtime.PYTHON_3_8,
+                _lambda.Runtime.PYTHON_3_9,
+                _lambda.Runtime.PYTHON_3_10,
+                _lambda.Runtime.PYTHON_3_12,
+            ],
+            license="Apache-2.0",
+            description="dependency_layer including webvtt dependency",
+        )
+
         self.generate_media_transcript_lambda = _lambda.Function(
             self,
             f"{self.props['stack_name_base']}-GenerateMediaTranscript",
@@ -330,6 +346,7 @@ class ReVIEWBackendStack(NestedStack):
                 "SOURCE_PREFIX": self.props["s3_transcripts_prefix"],
                 "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
             },
+            layers=[vtt_dependency_layer],
             timeout=Duration.seconds(15),
             role=self.backend_lambda_execution_role,
         )
@@ -380,7 +397,6 @@ class ReVIEWBackendStack(NestedStack):
             role=self.presigned_url_lambda_role,
         )
 
-        # Lambda to retrieve and optionally translate subtitles
         self.subtitle_lambda = _lambda.Function(
             self,
             self.props["stack_name_base"] + "-SubtitleLambda",
@@ -393,6 +409,7 @@ class ReVIEWBackendStack(NestedStack):
                 "S3_BUCKET": self.bucket.bucket_name,
                 "TRANSCRIPTS_PREFIX": self.props["s3_transcripts_prefix"],
             },
+            layers=[vtt_dependency_layer],
             timeout=Duration.minutes(2),
             role=self.subtitle_lambda_role,
         )

@@ -21,7 +21,34 @@ import streamlit as st
 from .cognito_utils import logout
 from .s3_utils import retrieve_media_url, retrieve_subtitles_by_jobid
 from .db_utils import retrieve_jobid_by_media_name
-from urllib.parse import urlparse
+import urllib.parse
+
+LANGUAGE_OPTIONS = (
+    "Bulgarian",
+    "Croatian",
+    "Czech",
+    "Danish",
+    "Dutch",
+    "English",
+    "Estonian",
+    "Finnish",
+    "French",
+    "German",
+    "Greek",
+    "Hungarian",
+    "Irish",
+    "Italian",
+    "Latvian",
+    "Lithuanian",
+    "Maltese",
+    "Polish",
+    "Portuguese",
+    "Romanian",
+    "Slovak",
+    "Slovenian",
+    "Spanish",
+    "Swedish",
+)
 
 
 def initialize_session_state():
@@ -32,6 +59,8 @@ def initialize_session_state():
         st.session_state.selected_media_names = None
     if "display_subtitles" not in st.session_state:
         st.session_state.display_subtitles = False
+    if "translation_destination_language" not in st.session_state:
+        st.session_state.translation_destination_language = None
 
 
 def reset_and_rerun_page():
@@ -58,6 +87,13 @@ def display_sidebar(current_page: str | None = None):
         st.session_state.display_subtitles = sidebar.checkbox(
             "Display subtitles in videos"
         )
+        if st.session_state.display_subtitles:
+            st.session_state.translation_destination_language = sidebar.selectbox(
+                "Translate subtitles?",
+                LANGUAGE_OPTIONS,
+                index=None,
+                placeholder="Select a language",
+            )
 
 
 def reset_citation_session_state():
@@ -124,7 +160,9 @@ def display_video_at_timestamp(
     display_subtitles = st.session_state.display_subtitles
     if display_subtitles:
         # Note media_url is a presigned url
-        media_name = urlparse(media_url).path.split("/")[-1]
+        media_name = urllib.parse.unquote(
+            urllib.parse.urlparse(media_url).path.split("/")[-1]
+        )
 
         job_id = retrieve_jobid_by_media_name(
             username=username,
@@ -132,9 +170,30 @@ def display_video_at_timestamp(
             api_auth_id_token=api_auth_id_token,
         )
 
+        translation_start_time = None
+        translation_duration = None
+        translation_destination_language = None
+        if st.session_state.translation_destination_language:
+            translation_start_time = timestamp
+            translation_duration = 60  # seconds
+            translation_destination_language = (
+                st.session_state.translation_destination_language
+            )
+        # Retrieve subtitles, optionally translating them
+        # (let the user know if translation is happening
+        #  because this adds significant latency to the
+        #  video playback experience)
+        if translation_destination_language:
+            st.toast("Translating subtitles...")
+
         subtitles_string = retrieve_subtitles_by_jobid(
-            job_id=job_id, username=username, api_auth_id_token=api_auth_id_token
-        )  # TODO: translation parameters
+            job_id=job_id,
+            username=username,
+            api_auth_id_token=api_auth_id_token,
+            translation_start_time=translation_start_time,
+            translation_duration=translation_duration,
+            translation_destination_language=translation_destination_language,
+        )
 
     if timestamp >= 0:
         # Note: this works for audio files, too.

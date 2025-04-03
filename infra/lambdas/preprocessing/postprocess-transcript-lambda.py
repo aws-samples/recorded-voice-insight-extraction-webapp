@@ -20,9 +20,9 @@ import os
 import boto3
 from preprocessing.preprocessing_utils import (
     extract_username_from_s3_URI,
-    build_timestamped_segmented_transcript,
     build_kb_metadata_json,
 )
+from lambda_utils.vtt_utils import build_timestamped_segmented_transcript
 from lambda_utils.invoke_lambda import invoke_lambda
 
 from schemas.job_status import JobStatus
