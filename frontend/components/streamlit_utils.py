@@ -21,7 +21,7 @@ import streamlit as st
 from .cognito_utils import logout
 from .s3_utils import retrieve_media_url, retrieve_subtitles_by_jobid
 from .db_utils import retrieve_jobid_by_media_name
-from urllib.parse import urlparse
+import urllib.parse
 
 LANGUAGE_OPTIONS = (
     "Bulgarian",
@@ -160,7 +160,9 @@ def display_video_at_timestamp(
     display_subtitles = st.session_state.display_subtitles
     if display_subtitles:
         # Note media_url is a presigned url
-        media_name = urlparse(media_url).path.split("/")[-1]
+        media_name = urllib.parse.unquote(
+            urllib.parse.urlparse(media_url).path.split("/")[-1]
+        )
 
         job_id = retrieve_jobid_by_media_name(
             username=username,
