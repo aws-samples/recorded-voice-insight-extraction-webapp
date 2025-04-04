@@ -239,6 +239,9 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
         # Create ingest lambda
         self.ingest_lambda = self.create_ingest_lambda(knowledge_base, data_source)
 
+        # Create delete lambda
+        self.deletion_lambda = self.create_deletion_lambda(knowledge_base, data_source)
+
         # Create job status polling lambda
         self.job_status_lambda = self.create_job_status_lambda(
             knowledge_base, data_source
@@ -432,6 +435,87 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
             state_machine_name=f"{self.props['stack_name_base']}-SyncStateMachine-{ingest_lambda.current_version.version}-{job_status_lambda.current_version.version}",
             timeout=Duration.hours(1),  # TODO: timeout should update ddb status
         )
+
+    def create_deletion_lambda_role(self, knowledge_base: CfnKnowledgeBase) -> iam.Role:
+        """Create a role that allows lambda to start ingestion job"""
+        deletion_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-KBDeletionLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                ),
+            ],
+            inline_policies={
+                "DeleteFromBucket": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=[
+                                "s3:DeleteObject",
+                                "s3:GetObject",
+                                "s3:ListBucket",
+                            ],
+                            resources=[f"{self.source_bucket.bucket_arn}*"],
+                        )
+                    ]
+                ),
+            },
+        )
+        deletion_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:DeleteKnowledgeBaseDocuments",
+                    "bedrock:StartIngestionJob",
+                ],
+                resources=[knowledge_base.attr_knowledge_base_arn],
+            )
+        )
+
+        # Allow lambda to invoke the dynamodb handling lambda for job status updates etc
+        deletion_lambda_role.add_to_policy(
+            statement=iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.ddb_handler_lambda.function_arn],
+            )
+        )
+
+        deletion_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
+        return deletion_lambda_role
+
+    def create_deletion_lambda(
+        self,
+        knowledge_base: CfnKnowledgeBase,
+        data_source: CfnDataSource,
+    ) -> _lambda:
+        self.kb_deletion_lambda_log_group = logs.LogGroup(
+            self,
+            "KBDeletionLambdaLogGroup",
+            log_group_name=f"""/aws/lambda/{self.props["stack_name_base"]}-KBDeletionJob""",
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        """Create a lambda function to launch knowledge base deletion"""
+        deletion_lambda = _lambda.Function(
+            self,
+            self.props["stack_name_base"] + "-KBDeletionJob",
+            description="ReVIEW KB Deletion Job Launch",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="kb.kb-remove-job-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            timeout=Duration.minutes(5),
+            environment=dict(
+                KNOWLEDGE_BASE_ID=knowledge_base.attr_knowledge_base_id,
+                DATA_SOURCE_ID=data_source.attr_data_source_id,
+                S3_BUCKET=self.source_bucket.bucket_name,
+                RECORDINGS_PREFIX=self.props["s3_recordings_prefix"],
+                TRANSCRIPTS_PREFIX=self.props["s3_transcripts_prefix"],
+                TEXT_TRANSCRIPTS_PREFIX=self.props["s3_text_transcripts_prefix"],
+                DDB_LAMBDA_NAME=self.ddb_handler_lambda.function_name,
+            ),
+            role=self.create_deletion_lambda_role(knowledge_base),
+        )
+
+        return deletion_lambda
 
     def setup_events(self, source_bucket: s3.Bucket):
         """Transcripts appearing in s3 trigger the sync state machine to begin"""
