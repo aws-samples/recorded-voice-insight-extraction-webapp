@@ -45,13 +45,20 @@ def retrieve_all_items(
 
     result = response.json()
 
+    MINIMUM_COLUMNS_TO_RETURN = [
+        "media_name",
+        "job_creation_time",
+        "job_status",
+        "UUID",
+    ]
+
     # Lambda returns json, convert to dataframe for UI
     if not result:
         # If no results at all in the DB (user hasn't uploaded anything yet),
         # return an empty dataframe with the right columns so user at least sees
         # what they should expect
         return pd.DataFrame(
-            {"media_name": [], "job_creation_time": [], "job_status": []}
+            {column_name: [] for column_name in MINIMUM_COLUMNS_TO_RETURN}
         )
 
     result_df = (
