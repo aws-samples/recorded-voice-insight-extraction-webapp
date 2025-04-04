@@ -47,7 +47,7 @@ def lambda_handler(event, context):
     """Call the KB sync function, possibly sleeping and retrying a few times
     Also update the dynamo DB job status for this UUID to "Indexing"
     """
-    #    "transcripts-txt/gclaeys/569f4f91-9542-4e1b-a402-209c135c4605.txt.metadata.json"
+
     s3_file_key = event["detail"]["object"]["key"]
     logger.info(f"Ingest lambda {s3_file_key=}")
     username = extract_username_from_s3_URI(s3_file_key)

@@ -105,6 +105,12 @@ def lambda_handler(event, context):
         result = ddb_utils._retrieve_jobid_by_media_name(
             table=table, media_name=media_name, username=username
         )
+    elif action == "delete_ddb_entry":
+        job_id = event["job_id"]
+        username = event["username"]
+        result = ddb_utils._delete_job_by_id(
+            table=table, username=username, job_id=job_id
+        )
     else:
         return {"statusCode": 400, "body": json.dumps("Invalid action")}
 

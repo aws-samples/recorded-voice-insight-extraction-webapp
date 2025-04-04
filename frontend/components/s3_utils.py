@@ -160,3 +160,27 @@ def upload_to_s3(fileobj, filename: str, username: str, api_auth_id_token: str) 
         )
 
     return True
+
+
+def delete_file_by_jobid(
+    job_id: str,
+    username: str,
+    api_auth_id_token: str,
+) -> str:
+    """Permanently delete uploaded file (and re-sync knowledge base)"""
+
+    json_body = {
+        "username": username,
+        "job_id": job_id,
+    }
+
+    response = requests.post(
+        BACKEND_API_URL + "/kb-job-deletion",
+        json=json_body,
+        headers={"Authorization": api_auth_id_token},
+        timeout=29,
+    )
+    if response.status_code != 200:
+        raise Exception(f"Error deleting file: {response.reason}")
+
+    return response.json()

@@ -144,3 +144,20 @@ def store_analysis_result(
     )
 
     return
+
+
+def _delete_job_by_id(table, username: str, job_id: str):
+    """
+    Delete a specific job entry from the DynamoDB table.
+
+    Args:
+        table: DynamoDB resource Table
+        username: The username associated with the job
+        job_id: The UUID of the job to delete
+
+    Returns:
+        The response from DynamoDB delete operation
+    """
+    response = table.delete_item(Key={"username": username, "UUID": job_id})
+
+    return response

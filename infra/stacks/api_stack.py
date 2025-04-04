@@ -39,6 +39,7 @@ class ReVIEWAPIStack(NestedStack):
         ddb_lambda: _lambda.Function,
         knowledge_base: CfnKnowledgeBase,
         presigned_url_lambda: _lambda.Function,
+        kb_job_deletion_lambda: _lambda.Function,
         subtitle_lambda: _lambda.Function,
         source_bucket: s3.Bucket,
         **kwargs,
@@ -55,6 +56,7 @@ class ReVIEWAPIStack(NestedStack):
         self.associate_lambda_with_gateway(ddb_lambda, "ddb")
         # self.associate_lambda_with_gateway(kb_query_lambda, "kb")
         self.associate_lambda_with_gateway(presigned_url_lambda, "s3-presigned")
+        self.associate_lambda_with_gateway(kb_job_deletion_lambda, "kb-job-deletion")
         self.associate_lambda_with_gateway(subtitle_lambda, "subtitles")
 
         # Create lambda to query knowledge base (and stream responses to websocket)
