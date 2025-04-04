@@ -59,8 +59,8 @@ button_pressed = st.button(
 if button_pressed and media_names_to_delete:
     for media_name_to_delete in media_names_to_delete:
         job_id = job_df[job_df.media_name == media_name_to_delete]["UUID"].values[0]
-        st.toast(f"Deleting {media_name_to_delete}...")
+        st.info(f"Deleting {media_name_to_delete}...")
         deletion_response = delete_file_by_jobid(
             job_id=job_id, username=username, api_auth_id_token=api_auth_id_token
         )
-    st.info("File deletion complete.")
+    st.success("File deletion complete.")

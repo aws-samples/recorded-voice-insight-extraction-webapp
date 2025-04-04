@@ -63,11 +63,23 @@ def lambda_handler(event, context):
     }
     try:
         logger.info(f"Starting deletion job with {input_data=}")
-        ingest_start_response = bedrock_agent_client.delete_knowledge_base_documents(
+        deletion_response = bedrock_agent_client.delete_knowledge_base_documents(
             **input_data
         )
-        # ingest_job_id = ingest_start_response["ingestionJob"]["ingestionJobId"]
-        logger.info(f"Deletion job response: {ingest_start_response=}")
+
+        logger.info(f"Deletion job response: {deletion_response=}")
+
+        # Note: deletion may take several seconds. It must FULLY complete (e.g.
+        # deletion_response['documentDetails'][0]['status'] == 'NOT_FOUND')
+        # BEFORE you delete the txt and metadata file from s3.
+        # Instead of having this lambda try/retry for the deletion to complete,
+        # we opt to simply never delete the txt and metadata files from s3.
+        # Deleting the source media file, transcript json/vtt, and the dynamodb
+        # row is sufficient for the app to have no access to the remaining
+        # txt files.
+        # TODO: perhaps incorporate a state machine here to do this more cleanly
+        # with benefits being 1) verification that KB delete sync worked
+        # successfully, and 2) total clean up of s3, no remaining artifacts
 
         # Retrieve media_name from ddb
         media_name = invoke_lambda(
@@ -85,8 +97,10 @@ def lambda_handler(event, context):
         # Delete media and transcript files from s3
         keys_to_delete = [
             f"{RECORDINGS_PREFIX}/{username}/{media_name}",
-            f"{TEXT_TRANSCRIPTS_PREFIX}/{username}/{UUID}.txt",
-            f"{TEXT_TRANSCRIPTS_PREFIX}/{username}/{UUID}.txt.metadata.json",
+            ## We don't delete these two files ever. See above comment block
+            ## for explanation why.
+            # f"{TEXT_TRANSCRIPTS_PREFIX}/{username}/{UUID}.txt",
+            # f"{TEXT_TRANSCRIPTS_PREFIX}/{username}/{UUID}.txt.metadata.json",
             f"{TRANSCRIPTS_PREFIX}/{username}/{UUID}.json",
             f"{TRANSCRIPTS_PREFIX}/{username}/{UUID}.vtt",
         ]
