@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added support for non-English languages. 
   - Audio/videos for all languages supported by Amazon Transcribe are supported. 
   - Chatbot responds in the same language as the user's question, regardless the language of the source media.
+  - Added ability to display subtitles in videos, including translating them to any language of your choice.
 - Added ability to select individual files to chat with, either 0 (chat with all files), 1 (chat with one file), or 2+ (chat with selected files).
 - Added improved knowledge base syncing mechanism leveraging [file-by-file ingestion](https://docs.aws.amazon.com/bedrock/latest/userguide/kb-direct-ingestion-add.html) rather than entire-KB sync, simplifying backend architecture and improving application scalability.
+- Added "File Management" page which allows users to delete files they have uploaded (and knowledge base is synced accordingly).
+
   
 ## [1.1.0](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/releases/tag/v1.1.0) - 2025-02-12
 ### Added 
