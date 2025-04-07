@@ -18,11 +18,12 @@ import logging
 import webvtt
 import boto3
 from lambda_utils.vtt_utils import time_to_seconds
+from botocore.config import Config
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
-
-bedrock_client = boto3.client("bedrock-runtime")
+config = Config(retries={"total_max_attempts": 10, "mode": "standard"})
+bedrock_client = boto3.client("bedrock-runtime", config=config)
 
 
 TRANSLATION_PROMPT = """\
