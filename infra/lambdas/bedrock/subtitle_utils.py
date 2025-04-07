@@ -22,7 +22,7 @@ from botocore.config import Config
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
-config = Config(retries={"total_max_attempts": 10, "mode": "standard"})
+config = Config(retries={"total_max_attempts": 3, "mode": "standard"})
 bedrock_client = boto3.client("bedrock-runtime", config=config)
 
 

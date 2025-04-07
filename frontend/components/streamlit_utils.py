@@ -22,6 +22,7 @@ from .cognito_utils import logout
 from .s3_utils import retrieve_media_url, retrieve_subtitles_by_jobid
 from .db_utils import retrieve_jobid_by_media_name
 import urllib.parse
+from requests.exceptions import RequestException
 
 LANGUAGE_OPTIONS = (
     "Bulgarian",
@@ -186,14 +187,30 @@ def display_video_at_timestamp(
         if translation_destination_language:
             st.toast("Translating subtitles...")
 
-        subtitles_string = retrieve_subtitles_by_jobid(
-            job_id=job_id,
-            username=username,
-            api_auth_id_token=api_auth_id_token,
-            translation_start_time=translation_start_time,
-            translation_duration=translation_duration,
-            translation_destination_language=translation_destination_language,
-        )
+        # Try to retrieve subtitles, optionally translating
+        try:
+            subtitles_string = retrieve_subtitles_by_jobid(
+                job_id=job_id,
+                username=username,
+                api_auth_id_token=api_auth_id_token,
+                translation_start_time=translation_start_time,
+                translation_duration=translation_duration,
+                translation_destination_language=translation_destination_language,
+            )
+        except RequestException as e:
+            # Throttling errors on translation... warn user, retrieve non-translated subtitles.
+            st.toast(
+                "Error translating subtitles. Please try again in a few seconds.",
+                icon="🚨",
+            )
+            subtitles_string = retrieve_subtitles_by_jobid(
+                job_id=job_id,
+                username=username,
+                api_auth_id_token=api_auth_id_token,
+                translation_start_time=None,
+                translation_duration=None,
+                translation_destination_language=None,
+            )
 
     if timestamp >= 0:
         # Note: this works for audio files, too.

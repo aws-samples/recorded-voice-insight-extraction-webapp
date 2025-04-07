@@ -19,6 +19,7 @@
 import os
 import json
 import requests
+from requests.exceptions import RequestException
 
 BACKEND_API_URL = os.environ["BACKEND_API_URL"]
 
@@ -89,11 +90,17 @@ def retrieve_subtitles_by_jobid(
         headers={"Authorization": api_auth_id_token},
         timeout=29,
     )
-    if response.status_code != 200:
+    if response.status_code != 200 and response.status_code != 503:
         raise Exception(f"Error getting subtitles from API gateway: {response.reason}")
 
-    # Return the vtt string directly
-    return response.json()
+    # Translation LLM throttling error
+    elif response.status_code == 503:
+        raise RequestException(
+            f"Throttling error received from translation job: {response.reason}"
+        )
+    else:
+        # Return the vtt string directly
+        return response.json()
 
 
 def retrieve_media_url(media_name: str, username: str, api_auth_id_token: str) -> str:

@@ -21,6 +21,7 @@ import logging
 import os
 
 import boto3
+import botocore.exceptions
 from .subtitle_utils import translate_vtt
 
 logger = logging.getLogger()
@@ -53,7 +54,9 @@ def lambda_handler(event, context):
     )
 
     # Assert username and transcript_job_id are always supplied
-    assert username and transcript_job_id, "Missing username and/or transcript_job_id"
+    assert username and transcript_job_id, (
+        f"Missing username and/or transcript_job_id. {username=} {transcript_job_id=}"
+    )
 
     # Assert that if ANY of the translation arguments are supplied, they ALL are
     # Create a list of the translation-related variables and count how many are None
@@ -88,11 +91,30 @@ def lambda_handler(event, context):
         return {"statusCode": 200, "body": json.dumps(full_transcript_vtt_string)}
 
     # If translation is needed, translate
-    translated_vtt_string = translate_vtt(
-        vtt_string=full_transcript_vtt_string,
-        target_language=translation_destination_language,
-        start_time_seconds=float(translation_start_time),
-        end_time_seconds=float(translation_start_time) + float(translation_duration),
-    )
+    try:
+        translated_vtt_string = translate_vtt(
+            vtt_string=full_transcript_vtt_string,
+            target_language=translation_destination_language,
+            start_time_seconds=float(translation_start_time),
+            end_time_seconds=float(translation_start_time)
+            + float(translation_duration),
+        )
+    # If LLM performing translation is throttled, return 503.
+    # The frontend should catch the 503 code and display a warning to the user.
+    except botocore.exceptions.ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "")
+        if error_code in [
+            "ThrottlingException",
+            "TooManyRequestsException",
+            "RequestLimitExceeded",
+        ]:
+            return {
+                "statusCode": 503,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"message": f"Throttling error: {str(e)}"}),
+            }
+        else:
+            # Re-raise if it's not a throttling error
+            raise
 
     return {"statusCode": 200, "body": json.dumps(translated_vtt_string)}
