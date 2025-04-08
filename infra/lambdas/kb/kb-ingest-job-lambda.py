@@ -107,5 +107,5 @@ def lambda_handler(event, context):
         }
 
     except Exception as e:
-        logger.error(f"Exception thrown in kb-ingest-job-lambda: {e}")
+        logger.warning(f"Exception thrown in kb-ingest-job-lambda: {e}")
         raise e

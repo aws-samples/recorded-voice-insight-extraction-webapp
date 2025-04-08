@@ -93,14 +93,22 @@ def retrieve_subtitles_by_jobid(
     if response.status_code != 200 and response.status_code != 503:
         raise Exception(f"Error getting subtitles from API gateway: {response.reason}")
 
-    # Translation LLM throttling error
-    elif response.status_code == 503:
-        raise RequestException(
-            f"Throttling error received from translation job: {response.reason}"
-        )
-    else:
-        # Return the vtt string directly
+    try:
+        # This will raise an HTTPError for any 4XX or 5XX status
+        response.raise_for_status()
+        # Code reaches here only if status code is 200-399
         return response.json()
+
+    except requests.exceptions.HTTPError as e:
+        # Handle the specific 503 error case (Translation LLM throttling)
+        if response.status_code == 503:
+            raise RequestException(
+                f"Throttling error received from translation job: {response.reason}"
+            ) from e
+        else:
+            raise Exception(
+                f"Error getting subtitles from API gateway: {response.reason}"
+            ) from e
 
 
 def retrieve_media_url(media_name: str, username: str, api_auth_id_token: str) -> str:
