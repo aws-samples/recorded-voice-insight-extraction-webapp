@@ -90,8 +90,6 @@ def retrieve_subtitles_by_jobid(
         headers={"Authorization": api_auth_id_token},
         timeout=29,
     )
-    if response.status_code != 200 and response.status_code != 503:
-        raise Exception(f"Error getting subtitles from API gateway: {response.reason}")
 
     try:
         # This will raise an HTTPError for any 4XX or 5XX status
