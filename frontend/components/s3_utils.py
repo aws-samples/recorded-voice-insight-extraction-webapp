@@ -84,21 +84,21 @@ def retrieve_subtitles_by_jobid(
     if translation_destination_language:
         json_body["translation_destination_language"] = translation_destination_language
 
-    response = requests.post(
-        BACKEND_API_URL + "/subtitles",
-        json=json_body,
-        headers={"Authorization": api_auth_id_token},
-        timeout=29,
-    )
-
     try:
+        response = requests.post(
+            BACKEND_API_URL + "/subtitles",
+            json=json_body,
+            headers={"Authorization": api_auth_id_token},
+            timeout=29,
+        )
         # This will raise an HTTPError for any 4XX or 5XX status
         response.raise_for_status()
-        # Code reaches here only if status code is 200-399
+
         return response.json()
 
     except requests.exceptions.HTTPError as e:
-        # Handle the specific 503 error case (Translation LLM throttling)
+        # This exception is only raised by raise_for_status()
+        # So response is guaranteed to exist here
         if response.status_code == 503:
             raise RequestException(
                 f"Throttling error received from translation job: {response.reason}"
@@ -107,6 +107,12 @@ def retrieve_subtitles_by_jobid(
             raise Exception(
                 f"Error getting subtitles from API gateway: {response.reason}"
             ) from e
+    except requests.exceptions.RequestException as e:
+        # Handle other request-related exceptions (ConnectionError, Timeout, etc.)
+        raise Exception(f"Request error: {str(e)}") from e
+    except Exception as e:
+        # Handle any other unexpected exceptions
+        raise Exception(f"Unexpected error: {str(e)}") from e
 
 
 def retrieve_media_url(media_name: str, username: str, api_auth_id_token: str) -> str:
