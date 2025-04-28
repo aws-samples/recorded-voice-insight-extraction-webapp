@@ -33,7 +33,9 @@ class ReVIEWStack(Stack):
 
     def __init__(self, scope: Construct, props: dict, **kwargs) -> None:
         construct_id = props["stack_name_base"]
-        description = "ReVIEW Application - Parent stack (v1.1.0) - a2F6dQ== (uksb-bpfhuojorc)"
+        description = (
+            "ReVIEW Application - Parent stack (v1.1.0) - a2F6dQ== (uksb-bpfhuojorc)"
+        )
 
         super().__init__(scope, construct_id, description=description, **kwargs)
 
@@ -81,4 +83,10 @@ class ReVIEWStack(Stack):
             self,
             "ReVIEW Frontend URL",
             value=self.frontend_stack.cfn_distribution.domain_name,
+        )
+        # Add source backend bucket to CFN output for users to easily find
+        CfnOutput(
+            self,
+            "ReVIEW Media Source Bucket",
+            value=self.backend_stack.bucket.bucket_name,
         )
