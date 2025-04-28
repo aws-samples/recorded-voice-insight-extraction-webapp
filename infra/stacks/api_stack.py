@@ -14,6 +14,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 import boto3
+import os
 from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy, aws_logs
 from aws_cdk import aws_apigateway as apigw
 from aws_cdk import aws_apigatewayv2 as apigwv2
@@ -102,7 +103,8 @@ class ReVIEWAPIStack(NestedStack):
         # Check if a user pool with this name already exists, else create one
         # Unfortunately currently there is no way to do this w/ constructs
         # (only search by ID, which I don't have a priori)
-        cognito_client = boto3.client("cognito-idp", "us-east-1")
+        cognito_region = os.environ.get("CDK_DEFAULT_REGION", "us-east-1")
+        cognito_client = boto3.client("cognito-idp", cognito_region)
         existing_pools = cognito_client.list_user_pools(MaxResults=10)["UserPools"]
         found_existing_pool = False
         for pool in existing_pools:
