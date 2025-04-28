@@ -96,12 +96,21 @@ class ReVIEWFrontendStack(NestedStack):
 
     def deploy_fargate_service(self):
         """Deploy VPC, cluster, app image into fargate"""
-        # Create a VPC
-        self.vpc = ec2.Vpc(
-            self,
-            f"{self.fe_stack_name}-WebappVpc",
-            max_azs=2,
-        )
+        # Create a VPC if user does not specify an existing one
+        if not self.props["existing_vpc_id"]:
+            self.vpc = ec2.Vpc(
+                self,
+                f"{self.fe_stack_name}-WebappVpc",
+                max_azs=2,
+            )
+        else:
+            # Re-use existing VPC (with internet gateway)
+            self.vpc = ec2.Vpc.from_lookup(
+                self,
+                f"{self.fe_stack_name}-WebappVpc",
+                vpc_id=self.props["existing_vpc_id"],
+            )
+
         # Create an ECS cluster in the VPC
         self.cluster = ecs.Cluster(
             self, f"{self.fe_stack_name}-WebappCluster", vpc=self.vpc

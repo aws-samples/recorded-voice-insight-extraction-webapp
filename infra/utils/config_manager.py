@@ -33,9 +33,9 @@ class ConfigManager:
         assert self.config["stack_name_base"] != "", "Stack name cannot be empty"
 
         # Ensure stack name is only numbers, letters, and hyphens
-        assert re.match(
-            r"^[a-zA-Z0-9-]+$", self.config["stack_name_base"]
-        ), "Stack name must only contain numbers, letters, and/or hyphens"
+        assert re.match(r"^[a-zA-Z0-9-]+$", self.config["stack_name_base"]), (
+            "Stack name must only contain numbers, letters, and/or hyphens"
+        )
 
     def _load_config(self, config_file_path: str) -> Dict[str, Any]:
         with open(config_file_path, "r", encoding="utf-8") as config_file:
@@ -66,6 +66,7 @@ class ConfigManager:
             "llm_model_id": self.config["llm"]["model_id"],
             "llm_model_arn": self.config["llm"]["model_arn"],
             "cognito_pool_name": self.config["frontend"]["cognito_pool_name"],
+            "existing_vpc_id": self.config["frontend"].get("vpc_id", ""),
         }
 
         return props
