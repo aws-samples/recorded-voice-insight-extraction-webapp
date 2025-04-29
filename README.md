@@ -158,14 +158,19 @@ The only resource not automatically removed is the Cognito user pool, to preserv
 # 🚪 Frontend Replacement
 This application has been designed to make the frontend easily replaceable, as end users may want to replace Streamlit with something more production-grade whilst preserving the backend. Besides the frontend being deployed as a separate stack, it also connects to the backend exclusively through a REST API hosted by API Gateway and a Websocket API hosted by API Gateway. 
 
+Comprehensive API documentation is available in the `docs` directory:
+- [API_README.md](docs/API_README.md) - General API documentation and usage examples
+- [REST_openAPI_spec.yaml](docs/REST_openAPI_spec.yaml) - OpenAPI specification for the REST API
+
 At a high level, the steps to replace the frontend are:
 
 1. Determine an OAuth provider or other way to authorize the new frontend to access the API Gateway via bearer token. Currently, Cognito is used.
 2. Connect the new frontend to the `/s3-presigned` endpoint. This endpoint will generate presigned urls for the frontend to `POST` and `GET` files to and from s3.
-3. Connect the new frontend to the three `POST` REST API endpoints: `/llm`, `/ddb`, `/kb` to access large language models, dynamodb, and knowledge bases respectively.
-4. Leverage the `FullQAnswer` pydantic model (defined in `frontend/schemas/qa_response.py`) to parse the LLM responses in the chat application. This model includes citations which reference specific timestamps in media files.
+3. Connect the new frontend to the three `POST` REST API endpoints: `/llm`, `/ddb`, `/kb-job-deletion` to access large language models, dynamodb, and knowledge base job deletion respectively.
+4. Connect to the WebSocket API for streaming responses from the knowledge base queries. This is essential for the chat functionality to provide real-time streaming responses with citations.
+5. Leverage the `FullQAnswer` pydantic model (defined in `frontend/schemas/qa_response.py`) to parse the LLM responses in the chat application. This model includes citations which reference specific timestamps in media files.
 
-If the new frontend is written in Python, it is recommend to re-use the `frontend/components/` which is where most of the REST API calls are made.
+If the new frontend is written in Python, it is recommended to re-use the `frontend/components/` which is where most of the REST API calls are made. In particular, `bedrock_utils.py` contains the implementation for the WebSocket streaming functionality.
 
 # 🔒️ Security
 
