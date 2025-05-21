@@ -155,8 +155,47 @@ class ReVIEWBackendStack(NestedStack):
                             resources=[
                                 f"{self.bucket.bucket_arn}/{self.props['s3_transcripts_prefix']}/*",
                                 f"{self.bucket.bucket_arn}/{self.props['s3_text_transcripts_prefix']}/*",
+                                f"{self.bucket.bucket_arn}/{self.props['s3_bda_raw_output_prefix']}/*",
+                                f"{self.bucket.bucket_arn}/{self.props['s3_bda_processed_output_prefix']}/*",
                             ],
                         )
+                    ]
+                ),
+                "BedrockDataAutomation": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            sid="BDACreatePermissions",
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "bedrock:CreateDataAutomationProject",
+                                "bedrock:CreateBlueprint",
+                            ],
+                            resources=["*"],
+                        ),
+                        iam.PolicyStatement(
+                            sid="BDAOProjectsPermissions",
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "bedrock:CreateDataAutomationProject",
+                                "bedrock:UpdateDataAutomationProject",
+                                "bedrock:GetDataAutomationProject",
+                                "bedrock:GetDataAutomationStatus",
+                                "bedrock:ListDataAutomationProjects",
+                                "bedrock:InvokeDataAutomationAsync",
+                            ],
+                            resources=["arn:aws:bedrock:::data-automation-project/*"],
+                        ),
+                        iam.PolicyStatement(
+                            sid="BDACrossRegionInference",
+                            effect=iam.Effect.ALLOW,
+                            actions=["bedrock:InvokeDataAutomationAsync"],
+                            resources=[
+                                "arn:aws:bedrock:us-east-1:account_id:data-automation-profile/us.data-automation-v1",
+                                "arn:aws:bedrock:us-east-2:account_id:data-automation-profile/us.data-automation-v1",
+                                "arn:aws:bedrock:us-west-1:account_id:data-automation-profile/us.data-automation-v1",
+                                "arn:aws:bedrock:us-west-2:account_id:data-automation-profile/us.data-automation-v1",
+                            ],
+                        ),
                     ]
                 ),
             },
@@ -285,6 +324,7 @@ class ReVIEWBackendStack(NestedStack):
             code=_lambda.Code.from_asset("lambdas"),
             environment={
                 "DYNAMO_TABLE_NAME": self.props["ddb_table_name"],
+                "BDA_MAP_DYNAMO_TABLE_NAME": self.props["bda_map_ddb_table_name"],
             },
             timeout=Duration.seconds(15),
             role=self.ddb_lambda_execution_role,
@@ -331,6 +371,31 @@ class ReVIEWBackendStack(NestedStack):
             source_arn=self.bucket.bucket_arn,
         )
 
+        self.process_media_with_bda_lambda = _lambda.Function(
+            self,
+            f"{self.props['stack_name_base']}-ProcessMediaBDA",
+            description=f"Stack {self.props['stack_name_base']} Function ProcessMediaBDA",
+            function_name=f"{self.props['stack_name_base']}-ProcessMediaBDA",
+            handler="preprocessing.generate-bda-lambda.lambda_handler",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            memory_size=128,
+            code=_lambda.Code.from_asset("lambdas"),
+            environment={
+                "DESTINATION_PREFIX": self.props["s3_bda_raw_output_prefix"],
+                "S3_BUCKET": self.bucket.bucket_name,
+                "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
+            },
+            timeout=Duration.seconds(15),
+            role=self.backend_lambda_execution_role,
+        )
+
+        self.process_media_with_bda_lambda.add_permission(
+            "ProcessMediaWithBDAInvokePermission",
+            principal=iam.ServicePrincipal("s3.amazonaws.com"),
+            action="lambda:InvokeFunction",
+            source_arn=self.bucket.bucket_arn,
+        )
+
         self.postprocess_transcript_lambda = _lambda.Function(
             self,
             f"{self.props['stack_name_base']}-PostProcessTranscript",
@@ -344,6 +409,35 @@ class ReVIEWBackendStack(NestedStack):
                 "DESTINATION_PREFIX": self.props["s3_text_transcripts_prefix"],
                 "S3_BUCKET": self.bucket.bucket_name,
                 "SOURCE_PREFIX": self.props["s3_transcripts_prefix"],
+                "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
+            },
+            layers=[vtt_dependency_layer],
+            timeout=Duration.seconds(15),
+            role=self.backend_lambda_execution_role,
+        )
+
+        self.postprocess_transcript_lambda.add_permission(
+            "PostProcessSTranscriptionInvokePermission",
+            principal=iam.ServicePrincipal("s3.amazonaws.com"),
+            action="lambda:InvokeFunction",
+            source_arn=self.bucket.bucket_arn,
+        )
+
+        # BDA postprocessing
+        self.postprocess_bda_lambda = _lambda.Function(
+            self,
+            f"{self.props['stack_name_base']}-PostProcessBDA",
+            description=f"Stack {self.props['stack_name_base']} Function PostProcessBDA",
+            function_name=f"{self.props['stack_name_base']}-PostProcessBDA",
+            handler="preprocessing.postprocess-bda-lambda.lambda_handler",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            memory_size=128,
+            code=_lambda.Code.from_asset("lambdas"),
+            environment={
+                "DESTINATION_PREFIX": self.props["s3_text_transcripts_prefix"],
+                "BDA_DESTINATION_PREFIX": self.props["s3_bda_processed_output_prefix"],
+                "VTT_DESTINATION_PREFIX": self.props["s3_transcripts_prefix"],
+                "S3_BUCKET": self.bucket.bucket_name,
                 "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
             },
             layers=[vtt_dependency_layer],
@@ -424,6 +518,14 @@ class ReVIEWBackendStack(NestedStack):
             s3n.LambdaDestination(self.generate_media_transcript_lambda),
             s3.NotificationKeyFilter(prefix=f"{self.props['s3_recordings_prefix']}/"),
         )
+        # Event to process uploaded file with BDA (Bedrock Data Automation)
+        self.bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(self.process_media_with_bda_lambda),
+            s3.NotificationKeyFilter(
+                prefix=f"{self.props['s3_bda_recordings_prefix']}/"
+            ),
+        )
         # Event to convert vtt transcript to txt file once it lands in s3
         self.bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED,
@@ -431,6 +533,15 @@ class ReVIEWBackendStack(NestedStack):
             s3.NotificationKeyFilter(
                 prefix=f"{self.props['s3_transcripts_prefix']}/",
                 suffix=".vtt",
+            ),
+        )
+        # Event to convert BDA output to vtt and txt files once it lands in s3
+        self.bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3n.LambdaDestination(self.postprocess_bda_lambda),
+            s3.NotificationKeyFilter(
+                prefix=f"{self.props['s3_bda_raw_output_prefix']}/",
+                suffix="standard_output/0/result.json",
             ),
         )
 
@@ -449,6 +560,20 @@ class ReVIEWBackendStack(NestedStack):
             ),
             sort_key=dynamodb.Attribute(
                 name="UUID", type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        # This table maps BDA-assigned UUID to ReVIEW-app-assigned UUID
+        # Sort key is BDA-UUID, other fields are UUID and username
+        self.bda_uuid_mapping_table = dynamodb.Table(
+            self,
+            f"{self.props['stack_name_base']}-BDAUUIDMapTable",
+            table_name=self.props["bda_map_ddb_table_name"],
+            partition_key=dynamodb.Attribute(
+                name="BDA-UUID", type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,

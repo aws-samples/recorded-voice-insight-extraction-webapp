@@ -64,7 +64,7 @@ def lambda_handler(event, context):
     logger.debug(f"{output_key=}")
 
     try:
-        # Download vtt_uri from s3 to tmp dir, read it in
+        # Download vtt_uri from s3
         full_vtt = (
             s3.get_object(Bucket=S3_BUCKET, Key=vtt_transcript_key)["Body"]
             .read()

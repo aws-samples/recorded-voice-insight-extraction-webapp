@@ -18,6 +18,39 @@
 import os
 
 
+BDA_PROJECT_NAME = "ReVIEW-app-bda-project"
+
+BDA_OUTPUT_CONFIG = {
+    "video": {
+        "extraction": {
+            "category": {
+                "state": "ENABLED",
+                "types": ["TEXT_DETECTION", "TRANSCRIPT"],
+            },
+            "boundingBox": {"state": "DISABLED"},
+        },
+        "generativeField": {
+            "state": "ENABLED",
+            "types": ["VIDEO_SUMMARY", "CHAPTER_SUMMARY", "IAB"],
+        },
+    },
+    "audio": {
+        "extraction": {
+            "category": {
+                "state": "ENABLED",
+                "types": [
+                    "TRANSCRIPT",
+                ],
+            }
+        },
+        "generativeField": {
+            "state": "ENABLED",
+            "types": ["AUDIO_SUMMARY", "TOPIC_SUMMARY", "IAB"],
+        },
+    },
+}
+
+
 def extract_username_from_s3_URI(uri: str) -> str:
     """URIs are like s3://bucket/blah/username/file_they_uploaded.mp4
     Return username
@@ -34,6 +67,14 @@ def extract_uuid_from_s3_URI(uri: str) -> str:
 def build_kb_metadata_json(username: str, media_name: str) -> dict:
     """Custom metadata for bedrock knowledge base to grab and include in OpenSearch for filtering"""
     return {"metadataAttributes": {"username": username, "media_name": media_name}}
+
+
+def get_bda_project_arn_by_project_name(bda_client, bda_project_name):
+    """Given BDA project name, return ARN. If project doesn't exist, return empty string"""
+    for project in bda_client.list_data_automation_projects()["projects"]:
+        if project["projectName"] == bda_project_name:
+            return project["projectArn"]
+    return ""
 
 
 def build_simplified_bda_video_string(bda_output: dict) -> str:
