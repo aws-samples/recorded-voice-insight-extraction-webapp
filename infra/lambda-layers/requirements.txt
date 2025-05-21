@@ -1,5 +1,5 @@
 aws-lambda-powertools
-boto3
+boto3>=1.38.20
 requests
 requests-aws4auth
 opensearch-py
