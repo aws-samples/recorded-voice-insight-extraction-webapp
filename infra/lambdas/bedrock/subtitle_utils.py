@@ -20,8 +20,8 @@ import boto3
 from lambda_utils.vtt_utils import time_to_seconds
 from botocore.config import Config
 
-logger = logging.getLogger()
-logger.setLevel("INFO")
+logger = logging.getLogger(__name__)
+
 config = Config(retries={"total_max_attempts": 3, "mode": "standard"})
 bedrock_client = boto3.client("bedrock-runtime", config=config)
 
@@ -95,7 +95,7 @@ def translate_vtt(
     }
     llm_response = bedrock_client.converse(**converse_kwargs)
     translated_vtt_string = llm_response["output"]["message"]["content"][0]["text"]
-
+    logger.debug(f"LLM generated vtt string translated: {translated_vtt_string}")
     # Create a dict of line_index : translated_caption
     translated_lines = {}
     for translated_line in translated_vtt_string.split("\n"):
@@ -123,5 +123,6 @@ def translate_vtt(
     for i, translated_line in translated_lines.items():
         translated_vtt_object[i].text = translated_line
 
+    logger.debug("Full translated VTT: {translated_vtt_object.content}")
     # Return vtt object dumped to string
     return translated_vtt_object.content

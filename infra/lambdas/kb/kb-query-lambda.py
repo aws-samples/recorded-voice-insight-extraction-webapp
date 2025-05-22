@@ -49,7 +49,7 @@ api_client = boto3.client(
 s3_client = boto3.client("s3")
 
 logger = logging.getLogger()
-logger.setLevel("INFO")
+logger.setLevel("DEBUG")
 
 
 def stream_lambda_handler(event, context):
