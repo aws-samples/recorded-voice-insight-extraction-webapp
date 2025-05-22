@@ -31,7 +31,7 @@ from lambda_utils.invoke_lambda import invoke_lambda
 from schemas.job_status import JobStatus
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 S3_BUCKET = os.environ.get("S3_BUCKET")
 DESTINATION_PREFIX = os.environ.get("DESTINATION_PREFIX")
@@ -74,15 +74,9 @@ def lambda_handler(event, context):
     )
 
     # Read in BDA result, dump vtt and two txt files
-    vtt_output_key = os.path.join(
-        S3_BUCKET, VTT_DESTINATION_PREFIX, username, job_id + ".vtt"
-    )
-    txt_output_key = os.path.join(
-        S3_BUCKET, DESTINATION_PREFIX, username, job_id + ".txt"
-    )
-    bda_txt_output_key = os.path.join(
-        S3_BUCKET, BDA_DESTINATION_PREFIX, username, job_id + ".txt"
-    )
+    vtt_output_key = os.path.join(VTT_DESTINATION_PREFIX, username, job_id + ".vtt")
+    txt_output_key = os.path.join(DESTINATION_PREFIX, username, job_id + ".txt")
+    bda_txt_output_key = os.path.join(BDA_DESTINATION_PREFIX, username, job_id + ".txt")
 
     logger.debug(f"{vtt_output_key=} {txt_output_key=} {bda_txt_output_key=}")
 

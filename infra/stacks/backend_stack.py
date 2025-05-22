@@ -164,17 +164,12 @@ class ReVIEWBackendStack(NestedStack):
                 "BedrockDataAutomation": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
-                            sid="BDACreatePermissions",
-                            effect=iam.Effect.ALLOW,
                             actions=[
                                 "bedrock:CreateDataAutomationProject",
-                                "bedrock:CreateBlueprint",
                             ],
                             resources=["*"],
                         ),
                         iam.PolicyStatement(
-                            sid="BDAOProjectsPermissions",
-                            effect=iam.Effect.ALLOW,
                             actions=[
                                 "bedrock:CreateDataAutomationProject",
                                 "bedrock:UpdateDataAutomationProject",
@@ -183,17 +178,12 @@ class ReVIEWBackendStack(NestedStack):
                                 "bedrock:ListDataAutomationProjects",
                                 "bedrock:InvokeDataAutomationAsync",
                             ],
-                            resources=["arn:aws:bedrock:::data-automation-project/*"],
+                            resources=["arn:aws:bedrock:*:*:data-automation-project/*"],
                         ),
                         iam.PolicyStatement(
-                            sid="BDACrossRegionInference",
-                            effect=iam.Effect.ALLOW,
                             actions=["bedrock:InvokeDataAutomationAsync"],
                             resources=[
-                                "arn:aws:bedrock:us-east-1:account_id:data-automation-profile/us.data-automation-v1",
-                                "arn:aws:bedrock:us-east-2:account_id:data-automation-profile/us.data-automation-v1",
-                                "arn:aws:bedrock:us-west-1:account_id:data-automation-profile/us.data-automation-v1",
-                                "arn:aws:bedrock:us-west-2:account_id:data-automation-profile/us.data-automation-v1",
+                                "arn:aws:bedrock:*:*:data-automation-profile/us.data-automation-v1",
                             ],
                         ),
                     ]
@@ -227,7 +217,10 @@ class ReVIEWBackendStack(NestedStack):
                                 "dynamodb:BatchGetItem",
                                 "dynamodb:BatchWriteItem",
                             ],
-                            resources=[self.dynamodb_table.table_arn],
+                            resources=[
+                                self.dynamodb_table.table_arn,
+                                self.bda_uuid_mapping_table.table_arn,
+                            ],
                         )
                     ]
                 )
@@ -333,16 +326,26 @@ class ReVIEWBackendStack(NestedStack):
         # Some lambdas need webvtt as a dependency (subtitles)
         vtt_dependency_layer = PythonLayerVersion(
             self,
-            "dependency_layer",
-            entry="lambda-layers",  # directory containing requirements.txt for lambda dependency layer
+            "vtt_dependency_layer",
+            entry="lambda-layers/vtt-layer",  # directory containing requirements.txt for vtt lambda dependency layer
             compatible_runtimes=[
-                _lambda.Runtime.PYTHON_3_8,
-                _lambda.Runtime.PYTHON_3_9,
                 _lambda.Runtime.PYTHON_3_10,
                 _lambda.Runtime.PYTHON_3_12,
             ],
             license="Apache-2.0",
             description="dependency_layer including webvtt dependency",
+        )
+
+        # Some lambdas need specific version of boto3 (BDA)
+        bda_dependency_layer = PythonLayerVersion(
+            self,
+            "bda_dependency_layer",
+            entry="lambda-layers/bda-layer",  # directory containing requirements.txt for bda lambda dependency layer
+            compatible_runtimes=[
+                _lambda.Runtime.PYTHON_3_12,
+            ],
+            license="Apache-2.0",
+            description="dependency_layer including specific boto3 version",
         )
 
         self.generate_media_transcript_lambda = _lambda.Function(
@@ -386,6 +389,7 @@ class ReVIEWBackendStack(NestedStack):
                 "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
             },
             timeout=Duration.seconds(15),
+            layers=[bda_dependency_layer],
             role=self.backend_lambda_execution_role,
         )
 
@@ -417,7 +421,7 @@ class ReVIEWBackendStack(NestedStack):
         )
 
         self.postprocess_transcript_lambda.add_permission(
-            "PostProcessSTranscriptionInvokePermission",
+            "PostProcessTranscriptionInvokePermission",
             principal=iam.ServicePrincipal("s3.amazonaws.com"),
             action="lambda:InvokeFunction",
             source_arn=self.bucket.bucket_arn,
@@ -445,8 +449,8 @@ class ReVIEWBackendStack(NestedStack):
             role=self.backend_lambda_execution_role,
         )
 
-        self.postprocess_transcript_lambda.add_permission(
-            "PostProcessSTranscriptionInvokePermission",
+        self.postprocess_bda_lambda.add_permission(
+            "PostProcessBDAInvokePermission",
             principal=iam.ServicePrincipal("s3.amazonaws.com"),
             action="lambda:InvokeFunction",
             source_arn=self.bucket.bucket_arn,

@@ -23,7 +23,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 S3_BUCKET = os.environ.get("S3_BUCKET")
 RECORDINGS_PREFIX = os.environ.get("RECORDINGS_PREFIX")

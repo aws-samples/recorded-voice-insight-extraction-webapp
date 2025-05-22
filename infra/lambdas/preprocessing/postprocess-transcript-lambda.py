@@ -28,7 +28,7 @@ from lambda_utils.invoke_lambda import invoke_lambda
 from schemas.job_status import JobStatus
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 S3_BUCKET = os.environ.get("S3_BUCKET")
 SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX")

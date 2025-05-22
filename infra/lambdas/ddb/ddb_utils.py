@@ -163,11 +163,11 @@ def _delete_job_by_id(table, username: str, job_id: str):
     return response
 
 
-def _create_bda_map_entry(table, uuid: str, bda_uuid: str, username: str):
+def _create_bda_map_entry(table, job_id: str, bda_uuid: str, username: str):
     """Create a new entry in BDA-uuid : App-uuid table"""
 
     return table.put_item(
-        Item={"UUID": uuid, "BDA_UUID": bda_uuid, "username": username}
+        Item={"UUID": job_id, "BDA-UUID": bda_uuid, "username": username}
     )
 
 

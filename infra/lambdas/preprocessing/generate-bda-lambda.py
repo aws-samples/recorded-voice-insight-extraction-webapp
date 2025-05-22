@@ -106,15 +106,20 @@ def lambda_handler(event, context):
 
     # Launch a BDA job
     try:
-        response = bda_runtime_client.invoke_data_automation_async(
-            inputConfiguration={"s3Uri": media_uri},
-            outputConfiguration={"s3Uri": os.path.join(S3_BUCKET, DESTINATION_PREFIX)},
-            dataAutomationConfiguration={
+        bda_async_kwargs = {
+            "inputConfiguration": {"s3Uri": media_uri},
+            "outputConfiguration": {
+                "s3Uri": os.path.join("s3://", S3_BUCKET, DESTINATION_PREFIX)
+            },
+            "dataAutomationConfiguration": {
                 "dataAutomationProjectArn": project_arn,
                 "stage": "LIVE",
             },
-            dataAutomationProfileArn=f"arn:aws:bedrock:{REGION}:{account_id}:data-automation-profile/us.data-automation-v1",
-        )
+            "dataAutomationProfileArn": f"arn:aws:bedrock:{REGION}:{account_id}:data-automation-profile/us.data-automation-v1",
+        }
+        logger.debug(f"Launching invoke_data_automation_async with {bda_async_kwargs=}")
+        response = bda_runtime_client.invoke_data_automation_async(**bda_async_kwargs)
+        logger.debug(f"BDA async response = {response}")
         bda_invocation_arn = response["invocationArn"]
         # BDA-assigned UUID is the end of the arn
         bda_uuid = bda_invocation_arn.split("/")[-1]
