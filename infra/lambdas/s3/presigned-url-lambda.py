@@ -75,9 +75,10 @@ def lambda_handler(event, context):
                 f"{RECORDINGS_PREFIX}/{username}/{media_file_name}",
                 f"{BDA_RECORDINGS_PREFIX}/{username}/{media_file_name}",
             )
+
             for key in possible_keys:
                 if check_if_file_exists(bucket_name=S3_BUCKET, key=key):
-                    return s3_client.generate_presigned_url(
+                    response = s3_client.generate_presigned_url(
                         "get_object",
                         Params={
                             "Bucket": S3_BUCKET,
@@ -85,9 +86,15 @@ def lambda_handler(event, context):
                         },
                         ExpiresIn=PRESIGNED_URL_EXPIRATION_SECONDS,
                     )
-            raise boto3.exceptions.ClientError(
-                f"Requested download of file {media_file_name} that DNE."
-            )
+                    break
+            else:
+                # This else clause executes if the for loop completes without a break
+                # (i.e., if no file was found)
+                logging.error(f"Requested download of file {media_file_name} that does not exist.")
+                return {
+                    "statusCode": 404,
+                    "body": json.dumps(f"File {media_file_name} not found")
+                }
         except ClientError as e:
             logging.error(e)
             return None
