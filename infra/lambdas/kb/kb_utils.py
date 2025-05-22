@@ -22,7 +22,11 @@ import re
 from typing import Generator, Dict, Any
 
 from bedrock.bedrock_utils import get_bedrock_client
-from kb.kb_qa_prompt import KB_QA_MESSAGE_TEMPLATE, KB_QA_SYSTEM_PROMPT
+from kb.kb_qa_prompt import (
+    KB_QA_MESSAGE_TEMPLATE,
+    KB_QA_SYSTEM_PROMPT,
+    BDA_BLOCK_TEMPLATE,
+)
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -88,11 +92,16 @@ class LLMGenerator:
         self.bedrock_client = get_bedrock_client(region=region_name, agent=False)
 
     def generate(
-        self, messages: list, retrieval_response: dict, prompt_builder: "PromptBuilder"
+        self,
+        messages: list,
+        retrieval_response: dict,
+        prompt_builder: "PromptBuilder",
+        bda_output: str = "",
     ):
         message_content = prompt_builder.build_full_prompt(
             query=messages[-1]["content"][0]["text"],
             chunks=prompt_builder.build_chunks_string(retrieval_response),
+            bda_string=bda_output,
             # conversation_context=prompt_builder.build_conversation_context(messages),
         )
 
@@ -101,11 +110,16 @@ class LLMGenerator:
         return response["output"]["message"]["content"][0]["text"]
 
     def generate_stream(
-        self, messages: list, retrieval_response: dict, prompt_builder: "PromptBuilder"
+        self,
+        messages: list,
+        retrieval_response: dict,
+        prompt_builder: "PromptBuilder",
+        bda_output: str = "",
     ):
         message_content = prompt_builder.build_full_prompt(
             query=messages[-1]["content"][0]["text"],
             chunks=prompt_builder.build_chunks_string(retrieval_response),
+            bda_string=bda_output,
             # conversation_context=prompt_builder.build_conversation_context(messages),
         )
 
@@ -135,10 +149,15 @@ class PromptBuilder:
         return chunks_string
 
     @staticmethod
-    def build_full_prompt(query: str, chunks: str) -> str:
+    def build_full_prompt(query: str, chunks: str, bda_string: str = "") -> str:
+        # If bda_string is provided, include the BDA block in the prompt
+        if bda_string:
+            bda_block = BDA_BLOCK_TEMPLATE.format(bda_string=bda_string)
+        else:
+            bda_block = ""
+
         return KB_QA_MESSAGE_TEMPLATE.format(
-            query=query,
-            chunks=chunks,
+            query=query, chunks=chunks, bda_block=bda_block
         )
 
 
@@ -270,6 +289,7 @@ class KBQARAG:
         media_names: list[str] = [],
         strategy: RetrievalStrategy = ChunkingStrategy(),
         full_transcript: str = None,
+        bda_output: str = "",
     ) -> Generator[dict, None, None]:
         query = messages[-1]["content"][0]["text"]
 
@@ -278,14 +298,18 @@ class KBQARAG:
         )
 
         generation_response = self.generator.generate_stream(
-            messages, retrieval_response, self.prompt_builder
+            messages, retrieval_response, self.prompt_builder, bda_output
         )
         return self.response_processor.postprocess_generation_stream(
             generation_response
         )
 
     def generate_answer_no_chunking_stream(
-        self, messages: list, media_name: str, full_transcript: str
+        self,
+        messages: list,
+        media_name: str,
+        full_transcript: str,
+        bda_output: str = "",
     ) -> Generator[dict, None, None]:
         strategy = NoChunkingStrategy()
         return self.retrieve_and_generate_answer_stream(
@@ -294,4 +318,5 @@ class KBQARAG:
             [media_name],
             strategy=strategy,
             full_transcript=full_transcript,
+            bda_output=bda_output,
         )

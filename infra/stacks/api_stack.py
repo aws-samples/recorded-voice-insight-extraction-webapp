@@ -358,6 +358,7 @@ class ReVIEWAPIStack(NestedStack):
                 "NUM_CHUNKS": self.props["kb_num_chunks"],
                 "S3_BUCKET": self.bucket.bucket_name,
                 "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
+                "BDA_OUTPUT_PREFIX": self.props["s3_bda_processed_output_prefix"],
             },
             role=self.create_query_lambda_role(knowledge_base=knowledge_base),
         )
