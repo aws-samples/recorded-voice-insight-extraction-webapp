@@ -489,6 +489,7 @@ class ReVIEWBackendStack(NestedStack):
             environment={
                 "S3_BUCKET": self.bucket.bucket_name,
                 "RECORDINGS_PREFIX": self.props["s3_recordings_prefix"],
+                "BDA_RECORDINGS_PREFIX": self.props["s3_bda_recordings_prefix"],
                 "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
             },
             timeout=Duration.seconds(30),

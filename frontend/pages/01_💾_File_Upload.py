@@ -41,6 +41,7 @@ api_auth_id_token = st.session_state["auth_id_token"]
 display_sidebar()
 
 uploaded_file = st.file_uploader("File Uploader", label_visibility="hidden")
+use_bda = st.checkbox("Analyze file with Bedrock Data Automation")
 if uploaded_file is not None:
     if not check_valid_file_extension(uploaded_file.name):
         st.error(
@@ -56,6 +57,7 @@ if uploaded_file is not None:
         filename=url_encoded_filename,
         username=username,
         api_auth_id_token=api_auth_id_token,
+        use_bda=use_bda,
     )
     if upload_successful:
         st.success(
