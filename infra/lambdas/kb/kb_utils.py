@@ -29,7 +29,7 @@ from kb.kb_qa_prompt import (
 )
 
 logger = logging.getLogger()
-logger.setLevel("INFO")
+logger.setLevel("DEBUG")
 
 
 class KBRetriever:
@@ -122,13 +122,12 @@ class LLMGenerator:
             bda_string=bda_output,
             # conversation_context=prompt_builder.build_conversation_context(messages),
         )
-
         converse_kwargs = self._build_converse_kwargs(messages, message_content)
         response = self.bedrock_client.converse_stream(**converse_kwargs)
         return response.get("stream")
 
     def _build_converse_kwargs(self, messages: list, message_content: str):
-        return {
+        converse_kwargs = {
             "system": [{"text": KB_QA_SYSTEM_PROMPT}],
             "modelId": self.foundation_model,
             "messages": messages[:-1]
@@ -138,6 +137,8 @@ class LLMGenerator:
                 "maxTokens": self.max_tokens,
             },
         }
+        logger.debug(f"Debugging converse kwargs: {converse_kwargs}")
+        return converse_kwargs
 
 
 class PromptBuilder:
