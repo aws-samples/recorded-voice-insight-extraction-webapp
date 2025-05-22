@@ -24,7 +24,7 @@ import json
 llm = LLM()
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 
 def lambda_handler(event, context):

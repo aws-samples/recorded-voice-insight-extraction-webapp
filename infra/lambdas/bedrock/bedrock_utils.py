@@ -25,7 +25,7 @@ import boto3
 from botocore.config import Config
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 
 def get_bedrock_client(

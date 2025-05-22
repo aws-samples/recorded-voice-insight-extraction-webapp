@@ -31,6 +31,7 @@ Additionally, this application includes the capability to use an LLM to analyze 
 - User authentication is provided by Amazon Cognito.
 - Upload any audio or video recording file through a user friendly frontend.
 - Files automatically get transcribed in [any language supported by Amazon Transcribe](https://docs.aws.amazon.com/transcribe/latest/dg/supported-languages.html), with status that can be viewed in the frontend.
+- Optional processing with Bedrock Data Automation (e.g. to extract visible text in video frames, break videos into chapters, and summarize videos) available.
 - Interactive chat-with-your-media function provides an AI assistant who will answer specific questions about one media file or a collection of multiple media files. The AI assistant will:
   - **Identify timestamps in the media files when the answer was provided. The media automatically gets played back starting at that timestamp, with clickable citations if multiple sources are relevant to the answer.**
   - Stream a continuous response back to the frontend for an optimal user experience.
@@ -49,13 +50,13 @@ Below is a screenshot of the chat functionality. Here, the user asked whether an
 # 🏗️ Architecture
 Here is an overview of the architecture for the solution.
 <p align="center">
-    <img src=diagram/ReVIEW-architecture-20241223.png alt="architecture" width="90%">
+    <img src=diagram/ReVIEW-architecture-20250522.png alt="architecture" width="90%">
 </p>
 
 * **(1)** Users connect to a CloudFront distribution which forwards traffic to the application load balancer via HTTPS with a custom header. 
 * **(2)** The containerized Streamlit application running in ECS connects to Amazon Cognito to authenticate users and to get a bearer token for API Gateway authentication.
-* **(3 and 4)** The frontend uploads media files to an S3 bucket by first requesting a presigned URL and then POSTing the file to it. The media files then automatically transcribed. Once transcripts are created in s3, an EventBridge notification triggers an AWS Step Functions workflow to asynchronously sync the transcripts (and track the sync job status) with a Bedrock Knowledge Base. The Knowledge Base handles chunking, embedding, and later retrieval. 
-* **(5)** The application functionality leverages Large Language Models in Bedrock to analyze transcripts (or chunks of transcripts retrieved from the knowledge base **(6)**) and identify timestamps at which to replay media to the users. 
+* **(3 and 4)** The frontend uploads media files to an S3 bucket by first requesting a presigned URL and then POSTing the file to it. The media files then automatically transcribed and/or processed with Bedrock Data Automation. Once transcripts are created in s3, an EventBridge notification triggers an AWS Step Functions workflow to asynchronously sync the transcripts (and track the sync job status) with a Bedrock Knowledge Base. The Knowledge Base handles chunking, embedding, and later retrieval. 
+* **(5)** The application functionality leverages Large Language Models in Bedrock to analyze transcripts (or chunks of transcripts retrieved from the knowledge base **(6)**) and identify timestamps at which to replay media to the users. This pathway is also used for translating subtitles from one language to another.
 * **(7)** DynamoDB is used to track job processing statuses and cache previous LLM responses.
 
 Here are the details of the [AWS Step Functions](https://aws.amazon.com/step-functions/) workflow for knowledge base sync and checking sync status, which gets triggered initially via [Amazon Event Bridge](https://aws.amazon.com/eventbridge/) by a transcript appearing in s3:
@@ -63,6 +64,8 @@ Here are the details of the [AWS Step Functions](https://aws.amazon.com/step-fun
     <img src=diagram/step-functions-kb-sync-workflow.png alt="Knowledge Base Sync Step Functions Workflow" width="80%">
 </p>
 The workflow is triggered by an Event Bridge notifications in the transcripts s3 bucket.
+
+Note that the metadata extracted from videos when Bedrock Data Automation is used which includes text extracted from the frames of the video, chapter boundaries, etc is only used when chatting with a single video; this information is not stored in the knowledge base for semantic retrieval.
 
 # 🔧 Deployment
 

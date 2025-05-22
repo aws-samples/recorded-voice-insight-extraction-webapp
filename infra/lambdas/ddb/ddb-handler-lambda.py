@@ -27,8 +27,10 @@ logger = logging.getLogger()
 logger.setLevel("INFO")
 
 TABLE_NAME = os.environ["DYNAMO_TABLE_NAME"]
+BDA_UUID_MAP_TABLE_NAME = os.environ["BDA_MAP_DYNAMO_TABLE_NAME"]
 dyn_resource = boto3.resource("dynamodb")
 table = dyn_resource.Table(name=TABLE_NAME)
+bda_uuid_map_table = dyn_resource.Table(name=BDA_UUID_MAP_TABLE_NAME)
 
 
 def lambda_handler(event, context):
@@ -110,6 +112,22 @@ def lambda_handler(event, context):
         username = event["username"]
         result = ddb_utils._delete_job_by_id(
             table=table, username=username, job_id=job_id
+        )
+        # TODO: delete from bda_mapping table if entry exists
+    elif action == "store_bda_mapping":
+        job_id = event["job_id"]
+        bda_uuid = event["bda_uuid"]
+        username = event["username"]
+        result = ddb_utils._create_bda_map_entry(
+            table=bda_uuid_map_table,
+            bda_uuid=bda_uuid,
+            job_id=job_id,
+            username=username,
+        )
+    elif action == "retrieve_jobid_and_username_by_bda_uuid":
+        bda_uuid = event["bda_uuid"]
+        result = ddb_utils._retrieve_jobid_and_username_by_bda_uuid(
+            table=bda_uuid_map_table, bda_uuid=bda_uuid
         )
     else:
         return {"statusCode": 400, "body": json.dumps("Invalid action")}

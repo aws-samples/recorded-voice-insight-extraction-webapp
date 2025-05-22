@@ -25,7 +25,7 @@ import botocore.exceptions
 from .subtitle_utils import translate_vtt
 
 logger = logging.getLogger()
-logger.setLevel("INFO")
+logger.setLevel("DEBUG")
 
 S3_BUCKET = os.environ.get("S3_BUCKET")
 TRANSCRIPTS_PREFIX = os.environ.get("TRANSCRIPTS_PREFIX")
@@ -67,7 +67,7 @@ def lambda_handler(event, context):
         translation_destination_language,
     ].count(None)
     assert none_count == 0 or none_count == 3, (
-        "Translation parameters must be either all provided or all omitted"
+        f"Translation parameters must be either all provided or all omitted: {translation_start_time=} {translation_duration=} {translation_destination_language=}"
     )
 
     # Retrieve the full_transcript from s3 via the job_id

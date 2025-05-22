@@ -21,8 +21,10 @@ from enum import Enum
 
 class JobStatus(Enum):
     TRANSCRIBING = "Transcribing"
+    BDA_PROCESSING = "BDA Processing"
     INDEXING = "Indexing"
     TRANSCRIPTION_COMPLETE = "Transcription Complete"
+    BDA_PROCESSING_COMPLETE = "BDA Analysis Complete"
     COMPLETED = "Completed"
     FAILED = "Failed"
-    IN_TRANSCRIPTION_QUEUE = "In Transcription Queue"
+    IN_TRANSCRIPTION_QUEUE = "In Processing Queue"
