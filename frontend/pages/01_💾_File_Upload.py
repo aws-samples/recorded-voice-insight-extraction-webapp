@@ -16,7 +16,10 @@
 
 import streamlit as st
 from components.cognito_utils import login
-from components.streamlit_utils import display_sidebar, show_cover
+from components.streamlit_utils import (
+    display_sidebar,
+    show_cover,
+)
 from components.s3_utils import upload_to_s3
 from components.io_utils import check_valid_file_extension
 import urllib.parse
@@ -38,11 +41,19 @@ if not st.session_state.get("auth_username", None):
 username = st.session_state["auth_username"]
 api_auth_id_token = st.session_state["auth_id_token"]
 
+# Used as a workaround to prevent re-uploading files each time
+# the use_bda checkbox is toggled on and off
+if "last_file_uploaded" not in st.session_state:
+    st.session_state["last_file_uploaded"] = ""
+
 display_sidebar()
 
 uploaded_file = st.file_uploader("File Uploader", label_visibility="hidden")
 use_bda = st.checkbox("Analyze file with Bedrock Data Automation")
-if uploaded_file is not None:
+if (
+    uploaded_file is not None
+    and st.session_state["last_file_uploaded"] != uploaded_file.name
+):
     if not check_valid_file_extension(uploaded_file.name):
         st.error(
             'Invalid file extension. Allowed extensions are: "mp3", "mp4", "wav", "flac", "ogg", "amr", "webm", "m4a".'
@@ -59,9 +70,20 @@ if uploaded_file is not None:
         api_auth_id_token=api_auth_id_token,
         use_bda=use_bda,
     )
+
     if upload_successful:
-        st.success(
-            f"{url_encoded_filename} successfully uploaded and submitted for transcription. Check its progress on the Job Status page."
+        success_message = (
+            "{url_encoded_filename} successfully uploaded and submitted for {analysis_type}. "
+            "Check its progress on the Job Status page."
         )
+        st.success(
+            success_message.format(
+                url_encoded_filename=url_encoded_filename,
+                analysis_type="transcription"
+                if not use_bda
+                else "Bedrock Data Automation analysis",
+            )
+        )
+        st.session_state["last_file_uploaded"] = uploaded_file.name
     else:
         st.error(f"File {uploaded_file.name} not found.")
