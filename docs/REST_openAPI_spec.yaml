@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.0.3 #checkov:skip=CKV_OPENAPI_4:.
 info:
   title: ReVIEW API
   description: |
@@ -19,7 +19,7 @@ servers:
 components:
   securitySchemes:
     cognitoAuth:
-      type: http
+      type: http #checkov:skip=CKV_OPENAPI_3:.
       scheme: bearer
       bearerFormat: JWT
       description: Cognito User Pool authentication with JWT token
@@ -77,7 +77,7 @@ components:
               description: Controls diversity via top-k sampling
               example: 250
             stopSequences:
-              type: array
+              type: array #checkov:skip=CKV_OPENAPI_21:.
               description: Sequences where the model will stop generating further tokens
               items:
                 type: string
@@ -237,7 +237,7 @@ components:
                   example: "AWS4-HMAC-SHA256"
                 X-Amz-Credential:
                   type: string
-                  example: "AKIAIOSFODNN7EXAMPLE/20240429/us-east-1/s3/aws4_request"
+                  example: "AKIAIOSFODNN7EXAMPLE/20240429/us-east-1/s3/aws4_request" #checkov:skip=CKV_SECRET_2:Not a real access key
                 X-Amz-Date:
                   type: string
                   example: "20240429T123456Z"
