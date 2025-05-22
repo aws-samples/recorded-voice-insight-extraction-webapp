@@ -34,7 +34,7 @@ Here are captions from a video, presented line by line.
 
 # Instructions:
 Your task is to translate these captions from the original language to {NEW_LANGUAGE}. 
-You MUST preserve the line-by-line structure.
+You MUST preserve the line-by-line structure and original timestamps.
 Read through these captions line by line, and for each line, translate it to {NEW_LANGUAGE} before proceeding to the next line. 
 The number of lines in the original captions MUST equal the number of lines in the translated captions.
 
@@ -42,6 +42,7 @@ The number of lines in the original captions MUST equal the number of lines in t
 
 
 def translate_vtt(
+    foundation_model_id: str,
     vtt_string: str,
     target_language: str,
     start_time_seconds: float = 0,
@@ -81,7 +82,7 @@ def translate_vtt(
 
     converse_kwargs = {
         "system": [{"text": SYSTEM_PROMPT_CONTENT}],
-        "modelId": "us.amazon.nova-pro-v1:0",
+        "modelId": foundation_model_id,
         # Full messages list, minus the latest user message, replaced by the full prompt
         "messages": [
             {"role": "user", "content": [{"text": USER_MESSAGE_CONTENT}]},

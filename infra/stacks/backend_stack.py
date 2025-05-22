@@ -507,6 +507,7 @@ class ReVIEWBackendStack(NestedStack):
             environment={
                 "S3_BUCKET": self.bucket.bucket_name,
                 "TRANSCRIPTS_PREFIX": self.props["s3_transcripts_prefix"],
+                "FOUNDATION_MODEL_ID": self.props["llm_model_id"],
             },
             layers=[vtt_dependency_layer],
             timeout=Duration.minutes(2),
