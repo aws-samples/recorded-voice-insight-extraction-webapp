@@ -76,31 +76,38 @@ def lambda_handler(event, context):
                     "new_status": JobStatus.COMPLETED.value,
                 },
             )
-        # Special case, transcript is empty (video file with no audio) so ingestion into KB will fail,
-        # but with BDA this entire file shouldn't be considered "failed"
-        elif is_s3_file_empty(transcript_txt_file_uri):
-            _ = invoke_lambda(
-                lambda_client=lambda_client,
-                lambda_function_name=DDB_LAMBDA_NAME,
-                action="update_job_status",
-                params={
-                    "job_id": ddb_uuid,
-                    "username": username,
-                    "new_status": JobStatus.BDA_PROCESSING_COMPLETE.value,
-                },
-            )
-            job_status = "INDEXED"  # Not actually indexed, marking this variable to have state machine continue
+
         elif job_status == "FAILED":
-            _ = invoke_lambda(
-                lambda_client=lambda_client,
-                lambda_function_name=DDB_LAMBDA_NAME,
-                action="update_job_status",
-                params={
-                    "job_id": ddb_uuid,
-                    "username": username,
-                    "new_status": JobStatus.FAILED.value,
-                },
-            )
+            # Special case, transcript is empty (video file with no audio) so ingestion into KB will fail,
+            # but with BDA this entire file shouldn't be considered "failed"
+            if is_s3_file_empty(transcript_txt_file_uri):
+                logger.info(
+                    f"File {transcript_txt_file_uri} was empty, marking status as BDA_PROCESSING_COMPLETE."
+                )
+                _ = invoke_lambda(
+                    lambda_client=lambda_client,
+                    lambda_function_name=DDB_LAMBDA_NAME,
+                    action="update_job_status",
+                    params={
+                        "job_id": ddb_uuid,
+                        "username": username,
+                        "new_status": JobStatus.BDA_PROCESSING_COMPLETE.value,
+                    },
+                )
+                job_status = (
+                    "INDEXED"  # Mark as INDEXED so state machine completes successfully
+                )
+            else:
+                _ = invoke_lambda(
+                    lambda_client=lambda_client,
+                    lambda_function_name=DDB_LAMBDA_NAME,
+                    action="update_job_status",
+                    params={
+                        "job_id": ddb_uuid,
+                        "username": username,
+                        "new_status": JobStatus.FAILED.value,
+                    },
+                )
         # Return the job status regardless
 
         # "status" is tracked by the state machine like this:

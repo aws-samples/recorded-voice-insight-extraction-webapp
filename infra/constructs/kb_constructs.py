@@ -337,6 +337,18 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
                     "AmazonDynamoDBFullAccess"
                 ),
             ],
+            inline_policies={
+                "S3Write": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:GetObject"],
+                            resources=[
+                                f"{self.source_bucket.bucket_arn}/*",
+                            ],
+                        )
+                    ]
+                )
+            },
         )
         job_status_lambda_role.add_to_policy(
             iam.PolicyStatement(
