@@ -48,7 +48,9 @@ stu.display_sidebar(current_page="Chat With Your Media")
 job_df = retrieve_all_items(
     username=username, max_rows=None, api_auth_id_token=api_auth_id_token
 )
-completed_jobs = job_df[job_df.job_status == "Completed"]
+completed_jobs = job_df[
+    (job_df.job_status == "Completed") | (job_df.job_status == "BDA Analysis Complete")
+]
 
 CHAT_WITH_ALL_STRING = "Chat with all media files"
 selected_media_names = st.multiselect(  # This is an empty list if nothing is selected
