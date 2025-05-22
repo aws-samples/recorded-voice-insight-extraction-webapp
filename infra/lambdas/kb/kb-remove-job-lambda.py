@@ -27,7 +27,9 @@ DDB_LAMBDA_NAME = os.environ.get("DDB_LAMBDA_NAME")
 SOURCE_BUCKET = os.environ.get("S3_BUCKET")
 TEXT_TRANSCRIPTS_PREFIX = os.environ.get("TEXT_TRANSCRIPTS_PREFIX")
 RECORDINGS_PREFIX = os.environ.get("RECORDINGS_PREFIX")
+BDA_RECORDINGS_PREFIX = os.environ.get("BDA_RECORDINGS_PREFIX")
 TRANSCRIPTS_PREFIX = os.environ.get("TRANSCRIPTS_PREFIX")
+BDA_TEXT_OUTPUT_PREFIX = os.environ.get("BDA_TEXT_OUTPUT_PREFIX")
 
 bedrock_agent_client = boto3.client("bedrock-agent", region_name=AWS_REGION)
 s3_client = boto3.client("s3")
@@ -95,17 +97,23 @@ def lambda_handler(event, context):
         logger.info(f"Deleting from s3: {media_name=} {UUID=}")
 
         # Delete media and transcript files from s3
+        # Attempt to delete files even if they don't exist, ignore exception
         keys_to_delete = [
             f"{RECORDINGS_PREFIX}/{username}/{media_name}",
+            f"{BDA_RECORDINGS_PREFIX}/{username}/{media_name}",
             ## We don't delete these two files ever. See above comment block
             ## for explanation why.
             # f"{TEXT_TRANSCRIPTS_PREFIX}/{username}/{UUID}.txt",
             # f"{TEXT_TRANSCRIPTS_PREFIX}/{username}/{UUID}.txt.metadata.json",
             f"{TRANSCRIPTS_PREFIX}/{username}/{UUID}.json",
             f"{TRANSCRIPTS_PREFIX}/{username}/{UUID}.vtt",
+            f"{BDA_TEXT_OUTPUT_PREFIX}/{username}/{UUID}.txt",
         ]
         for key_to_delete in keys_to_delete:
-            _ = s3_client.delete_object(Bucket=SOURCE_BUCKET, Key=key_to_delete)
+            try:
+                _ = s3_client.delete_object(Bucket=SOURCE_BUCKET, Key=key_to_delete)
+            except Exception:
+                pass
 
         # Delete row from ddb
         logger.info(f"Deleting row from ddb: {username=} {UUID=}")

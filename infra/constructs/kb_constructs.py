@@ -511,6 +511,8 @@ class ReVIEWKnowledgeBaseSyncConstruct(Construct):
                 TRANSCRIPTS_PREFIX=self.props["s3_transcripts_prefix"],
                 TEXT_TRANSCRIPTS_PREFIX=self.props["s3_text_transcripts_prefix"],
                 DDB_LAMBDA_NAME=self.ddb_handler_lambda.function_name,
+                BDA_RECORDINGS_PREFIX=self.props["s3_bda_recordings_prefix"],
+                BDA_TEXT_OUTPUT_PREFIX=self.props["s3_bda_processed_output_prefix"],
             ),
             role=self.create_deletion_lambda_role(knowledge_base),
         )

@@ -113,6 +113,7 @@ def lambda_handler(event, context):
         result = ddb_utils._delete_job_by_id(
             table=table, username=username, job_id=job_id
         )
+        # TODO: delete from bda_mapping table if entry exists
     elif action == "store_bda_mapping":
         job_id = event["job_id"]
         bda_uuid = event["bda_uuid"]
