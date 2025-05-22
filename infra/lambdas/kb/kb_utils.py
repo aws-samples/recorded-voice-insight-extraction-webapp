@@ -28,8 +28,7 @@ from kb.kb_qa_prompt import (
     BDA_BLOCK_TEMPLATE,
 )
 
-logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger = logging.getLogger(__name__)
 
 
 class KBRetriever:

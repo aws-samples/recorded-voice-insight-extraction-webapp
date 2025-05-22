@@ -76,7 +76,7 @@ def lambda_handler(event, context):
                 f"{BDA_RECORDINGS_PREFIX}/{username}/{media_file_name}",
             )
             for key in possible_keys:
-                if check_if_file_exists(bucket=S3_BUCKET, key=key):
+                if check_if_file_exists(bucket_name=S3_BUCKET, key=key):
                     return s3_client.generate_presigned_url(
                         "get_object",
                         Params={
