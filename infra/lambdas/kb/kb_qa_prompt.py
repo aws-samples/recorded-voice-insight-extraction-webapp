@@ -66,6 +66,17 @@ KB_QA_SYSTEM_PROMPT = """You are an intelligent AI which attempts to answer ques
 # Now write your answer:
 # """
 
+# This is only included if BDA was run on this video, currently only supported for one-video-at-a-time analysis
+# (not the full knowledge base RAG workflow)
+BDA_BLOCK_TEMPLATE = """
+In addition to the raw transcript, there is additional information available about some chunks which may aide in answering the user's question. This information was previously extracted from the video in the form of chapters, including text shown in frames of the video, summaries of each chapter, etc. Each chapter and the information within also contains timestamps which should be referenced in your answer wherever possible.
+
+Here is the additional information extracted:
+<additional_information>
+{bda_string}
+</additional_information>
+"""
+
 # This one works well for Nova Pro
 KB_QA_MESSAGE_TEMPLATE = """
 I will provide you with retrieved chunks of transcripts. The user will provide you with a question. Using only information in the provided transcript chunks, you will attempt to answer the user's question with an answer broken into potentially multiple parts, each with citations. Always answer the users question in the same language the question was asked.
@@ -77,6 +88,8 @@ Here are the retrieved chunks of transcripts in numbered order:
 <transcript_chunks>
 {chunks}
 </transcript_chunks>
+
+{bda_block}
 
 When you answer the question, your answer must include a parsable json string contained within <json></json> tags. The json should have one top level key, "answer", whose value is a list. Each element in the list represents a portion of the full answer, and should have two keys: "partial_answer", is a human readable part of your answer to the user's question, and "citations" which is a list of dicts which contain a "media_name" key and a "timestamp" key, which correspond to the resources used to answer that part of the question. For example, if you got this partial_answer from only one chunk, then the "citations" list will be only one element long, with the media_name of the chunk from which you got the partial_answer, and the relevant timestamp within that chunk's transcript. If you used information from three chunks for this partial_answer, the "citations" list will be three elements long. For multi-part answers, the partial_answer list will be multiple elements long. Each partial_answer should be no more than a few sentences long. Try to break up answers into multiple parts, each having a few citations, rather than leaving an answer as one part with a large number of citations. This makes the answer more useful for the user. The partial_answer strings should be human readable, should contain only information contained in the provided transcript_chunks, and should not include timestamps in them (those are included in the citation block of the dictionary you are generating).
 

@@ -28,7 +28,7 @@ from lambda_utils.invoke_lambda import invoke_lambda
 from schemas.job_status import JobStatus
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 S3_BUCKET = os.environ.get("S3_BUCKET")
 SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX")
@@ -64,7 +64,7 @@ def lambda_handler(event, context):
     logger.debug(f"{output_key=}")
 
     try:
-        # Download vtt_uri from s3 to tmp dir, read it in
+        # Download vtt_uri from s3
         full_vtt = (
             s3.get_object(Bucket=S3_BUCKET, Key=vtt_transcript_key)["Body"]
             .read()

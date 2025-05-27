@@ -22,7 +22,7 @@ import logging
 cognito = boto3.client("cognito-idp")
 
 logger = logging.getLogger()
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 
 def lambda_handler(event, context):

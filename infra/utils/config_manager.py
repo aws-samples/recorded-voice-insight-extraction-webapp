@@ -27,6 +27,15 @@ class ConfigManager:
         self.s3_recordings_prefix = "recordings"
         self.s3_transcripts_prefix = "transcripts"
         self.s3_text_transcripts_prefix = "transcripts-txt"
+        self.s3_bda_recordings_prefix = (
+            "bda-recordings"  # Recordings here will be processed with BDA
+        )
+        self.s3_bda_raw_output_prefix = (
+            "bda-output-raw"  # Raw output of BDA (json) is here
+        )
+        self.s3_bda_processed_output_prefix = (
+            "bda-output-processed"  # Processed BDA output (simpler txt file) is here
+        )
 
     def _validate_config(self):
         # Ensure stack name is not empty
@@ -47,6 +56,7 @@ class ConfigManager:
         stack_name_base = self.config["stack_name_base"]
 
         dynamo_db_table_name = f"{stack_name_base}-app-table"
+        bda_map_ddb_table_name = f"{stack_name_base}-bda-map-table"
         oss_collection_name = f"{stack_name_base}-collection"
         oss_index_name = f"{stack_name_base}-idx"
         props = {
@@ -54,7 +64,11 @@ class ConfigManager:
             "s3_recordings_prefix": self.s3_recordings_prefix,
             "s3_transcripts_prefix": self.s3_transcripts_prefix,
             "s3_text_transcripts_prefix": self.s3_text_transcripts_prefix,
+            "s3_bda_recordings_prefix": self.s3_bda_recordings_prefix,
+            "s3_bda_raw_output_prefix": self.s3_bda_raw_output_prefix,
+            "s3_bda_processed_output_prefix": self.s3_bda_processed_output_prefix,
             "ddb_table_name": dynamo_db_table_name,
+            "bda_map_ddb_table_name": bda_map_ddb_table_name,
             "oss_collection_name": oss_collection_name,
             "oss_index_name": oss_index_name,
             "embedding_model_id": self.config["embedding"]["model_id"],

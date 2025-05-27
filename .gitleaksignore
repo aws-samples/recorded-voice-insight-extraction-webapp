@@ -3,3 +3,7 @@
 48e7d48751e6e4d6c35d5280425456f8c93c276b:projects/meeting-auto-summarizer/notebooks/dynamodb-sandbox.ipynb:generic-api-key:172
 1bbf50f57872d24af3c7f0a50b609e9de902d6c8:frontend/components/cognito_utils.py:generic-api-key:18
 48e7d48751e6e4d6c35d5280425456f8c93c276b:projects/meeting-auto-summarizer/notebooks/dynamodb-sandbox.ipynb:generic-api-key:313
+945601f74edd94cf9ce5e8d75228cab76a1015cd:docs/REST_openAPI_spec.yaml:aws-access-token:601
+945601f74edd94cf9ce5e8d75228cab76a1015cd:docs/REST_openAPI_spec.yaml:aws-access-token:240
+945601f74edd94cf9ce5e8d75228cab76a1015cd:docs/REST_openAPI_spec.yaml:aws-access-token:593
+db12441a8970b7f03c8333dc1e5458f3ba10e9a4:docs/REST_openAPI_spec.yaml:aws-access-token:240

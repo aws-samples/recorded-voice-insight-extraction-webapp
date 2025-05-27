@@ -142,7 +142,9 @@ def retrieve_media_url(media_name: str, username: str, api_auth_id_token: str) -
     return presigned_url
 
 
-def upload_to_s3(fileobj, filename: str, username: str, api_auth_id_token: str) -> bool:
+def upload_to_s3(
+    fileobj, filename: str, username: str, api_auth_id_token: str, use_bda: bool = False
+) -> bool:
     """Get presigned URL to upload to s3, then upload"""
     # Upload media file workflow
 
@@ -151,7 +153,9 @@ def upload_to_s3(fileobj, filename: str, username: str, api_auth_id_token: str) 
         "action": "upload_media_file",
         "username": username,
         "media_file_name": filename,
+        "use_bda": str(use_bda),
     }
+
     response = requests.post(
         BACKEND_API_URL + "/s3-presigned",
         json=json_body,

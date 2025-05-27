@@ -17,6 +17,7 @@
 """Lambda to handle interactions with Bedrock Knowledge Base"""
 
 import boto3
+import botocore
 import os
 from kb.kb_utils import KBQARAG
 import logging
@@ -29,6 +30,7 @@ FOUNDATION_MODEL = os.environ["FOUNDATION_MODEL_ID"]
 WEBSOCKET_API_URL = os.environ["WS_API_URL"]
 S3_BUCKET = os.environ.get("S3_BUCKET")
 TEXT_TRANSCRIPTS_PREFIX = os.environ.get("TEXT_TRANSCRIPTS_PREFIX")
+BDA_OUTPUT_PREFIX = os.environ.get("BDA_OUTPUT_PREFIX")
 
 # Class to handle connections to Bedrock and QA RAG workflow processes
 kbqarag = KBQARAG(
@@ -47,7 +49,7 @@ api_client = boto3.client(
 s3_client = boto3.client("s3")
 
 logger = logging.getLogger()
-logger.setLevel("INFO")
+logger.setLevel("DEBUG")
 
 
 def stream_lambda_handler(event, context):
@@ -113,10 +115,26 @@ def stream_lambda_handler(event, context):
                 .read()
                 .decode("utf-8")
             )
+            # Check if any BDA output exists (for video files processed with BDA)
+            try:
+                bda_output = (
+                    s3_client.get_object(
+                        Bucket=S3_BUCKET,
+                        Key=f"{BDA_OUTPUT_PREFIX}/{username}/{transcript_job_id}.txt",
+                    )["Body"]
+                    .read()
+                    .decode("utf-8")
+                )
+            except botocore.exceptions.ClientError:
+                # No BDA output exists
+                logger.info(f"No BDA output exists for {transcript_job_id=}")
+                bda_output = ""
+
             generation_stream = kbqarag.generate_answer_no_chunking_stream(
                 messages=messages,
                 media_name=media_names[0],  # media_name is a string here
                 full_transcript=full_transcript_from_s3,
+                bda_output=bda_output,
             )
             for generation_event in generation_stream:
                 # Serialize the dictionary to a JSON string and encode to bytes

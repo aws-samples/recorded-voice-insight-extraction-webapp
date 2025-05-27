@@ -20,8 +20,8 @@ import boto3
 from lambda_utils.vtt_utils import time_to_seconds
 from botocore.config import Config
 
-logger = logging.getLogger()
-logger.setLevel("INFO")
+logger = logging.getLogger(__name__)
+
 config = Config(retries={"total_max_attempts": 3, "mode": "standard"})
 bedrock_client = boto3.client("bedrock-runtime", config=config)
 
@@ -34,7 +34,7 @@ Here are captions from a video, presented line by line.
 
 # Instructions:
 Your task is to translate these captions from the original language to {NEW_LANGUAGE}. 
-You MUST preserve the line-by-line structure.
+You MUST preserve the line-by-line structure and original timestamps.
 Read through these captions line by line, and for each line, translate it to {NEW_LANGUAGE} before proceeding to the next line. 
 The number of lines in the original captions MUST equal the number of lines in the translated captions.
 
@@ -42,6 +42,7 @@ The number of lines in the original captions MUST equal the number of lines in t
 
 
 def translate_vtt(
+    foundation_model_id: str,
     vtt_string: str,
     target_language: str,
     start_time_seconds: float = 0,
@@ -81,7 +82,7 @@ def translate_vtt(
 
     converse_kwargs = {
         "system": [{"text": SYSTEM_PROMPT_CONTENT}],
-        "modelId": "us.amazon.nova-pro-v1:0",
+        "modelId": foundation_model_id,
         # Full messages list, minus the latest user message, replaced by the full prompt
         "messages": [
             {"role": "user", "content": [{"text": USER_MESSAGE_CONTENT}]},
@@ -94,7 +95,7 @@ def translate_vtt(
     }
     llm_response = bedrock_client.converse(**converse_kwargs)
     translated_vtt_string = llm_response["output"]["message"]["content"][0]["text"]
-
+    logger.debug(f"LLM generated vtt string translated: {translated_vtt_string}")
     # Create a dict of line_index : translated_caption
     translated_lines = {}
     for translated_line in translated_vtt_string.split("\n"):
@@ -122,5 +123,6 @@ def translate_vtt(
     for i, translated_line in translated_lines.items():
         translated_vtt_object[i].text = translated_line
 
+    logger.debug("Full translated VTT: {translated_vtt_object.content}")
     # Return vtt object dumped to string
     return translated_vtt_object.content

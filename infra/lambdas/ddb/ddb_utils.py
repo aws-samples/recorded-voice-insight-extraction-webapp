@@ -161,3 +161,25 @@ def _delete_job_by_id(table, username: str, job_id: str):
     response = table.delete_item(Key={"username": username, "UUID": job_id})
 
     return response
+
+
+def _create_bda_map_entry(table, job_id: str, bda_uuid: str, username: str):
+    """Create a new entry in BDA-uuid : App-uuid table"""
+
+    return table.put_item(
+        Item={"UUID": job_id, "BDA-UUID": bda_uuid, "username": username}
+    )
+
+
+def _retrieve_jobid_and_username_by_bda_uuid(table, bda_uuid: str):
+    """Retrieve ReVIEW app job id from BDA assigned job id"""
+
+    # Query items with the username as partition key and filter by media_name
+    response = table.query(KeyConditionExpression=Key("BDA-UUID").eq(bda_uuid))
+
+    # Check if any items were returned
+    if response["Count"] > 0:
+        # Return the first matching UUID along with username
+        return response["Items"][0]["UUID"], response["Items"][0]["username"]
+    else:
+        return None

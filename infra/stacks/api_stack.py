@@ -15,6 +15,7 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 import boto3
 import os
+from aws_cdk import Aws
 from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy, aws_logs
 from aws_cdk import aws_apigateway as apigw
 from aws_cdk import aws_apigatewayv2 as apigwv2
@@ -52,6 +53,7 @@ class ReVIEWAPIStack(NestedStack):
 
         self.bucket = source_bucket
         self.setup_cognito_pool()
+        self.enable_API_GW_logging()
         self.create_REST_gateway()
         self.associate_lambda_with_gateway(llm_lambda, "llm")
         self.associate_lambda_with_gateway(ddb_lambda, "ddb")
@@ -118,6 +120,36 @@ class ReVIEWAPIStack(NestedStack):
         if not found_existing_pool:
             # Create a new user pool
             self.cognito_user_pool = cognito.UserPool(self, **user_pool_common_config)
+
+    def enable_API_GW_logging(self):
+        cloud_watch_role = iam.Role(
+            self,
+            "ApiGatewayCloudWatchLoggingRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            inline_policies={
+                f"{self.props['stack_name_base']}-CloudWatchLogsPolicy": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:DescribeLogGroups",
+                                "logs:DescribeLogStreams",
+                                "logs:PutLogEvents",
+                                "logs:GetLogEvents",
+                                "logs:FilterLogEvents",
+                            ],
+                            resources=[f"arn:aws:logs:{Aws.REGION}:{Aws.ACCOUNT_ID}:*"],
+                        )
+                    ]
+                )
+            },
+        )
+
+        apigw_account = apigw.CfnAccount(
+            self, "ApiGatewayAccount", cloud_watch_role_arn=cloud_watch_role.role_arn
+        )
 
     def create_REST_gateway(self):
         # Create API Gateway and Cognito authorizer
@@ -358,6 +390,7 @@ class ReVIEWAPIStack(NestedStack):
                 "NUM_CHUNKS": self.props["kb_num_chunks"],
                 "S3_BUCKET": self.bucket.bucket_name,
                 "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
+                "BDA_OUTPUT_PREFIX": self.props["s3_bda_processed_output_prefix"],
             },
             role=self.create_query_lambda_role(knowledge_base=knowledge_base),
         )

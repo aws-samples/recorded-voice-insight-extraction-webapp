@@ -116,6 +116,7 @@ def retrieve_and_generate_answer_stream(
     """Query knowledge base and generate an answer (streaming WS API).
     If media_names is an empty list, all videos from this user are queried.
     If media_names is a list of length 1, no retrieval is done, entire transcript is imputed into LLM.
+        Additionally, BDA metadata is imputed into the LLM if available.
     If media_names is len > 1, retrieval is done across those files only.
 
     messages is list like [{"role": "user", "content": [{"text": "blah"}]}, {"role": "assistant", "content": ...}],
