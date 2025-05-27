@@ -228,8 +228,8 @@ class ReVIEWOSSConstruct(Construct):
 
         dependency_layer = PythonLayerVersion(
             self,
-            "dependency_layer",
-            entry="lambda-layers",  # directory containing requirements.txt for lambda dependency layer
+            "oss_dependency_layer",
+            entry="lambda-layers/oss-layer",  # directory containing requirements.txt for lambda dependency layer
             compatible_runtimes=[
                 _lambda.Runtime.PYTHON_3_8,
                 _lambda.Runtime.PYTHON_3_9,
