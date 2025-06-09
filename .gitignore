@@ -79,3 +79,4 @@ temp/
 assets/streamlit/temp/
 notebooks/tmp/
 frontend-react/public/aws-exports.json
+frontend-react/node_modules*

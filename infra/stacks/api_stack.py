@@ -147,7 +147,7 @@ class ReVIEWAPIStack(NestedStack):
             },
         )
 
-        apigw_account = apigw.CfnAccount(
+        apigw_account = apigw.CfnAccount(  # noqa
             self, "ApiGatewayAccount", cloud_watch_role_arn=cloud_watch_role.role_arn
         )
 

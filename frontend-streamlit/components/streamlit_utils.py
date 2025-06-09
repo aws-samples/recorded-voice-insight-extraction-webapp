@@ -197,7 +197,7 @@ def display_video_at_timestamp(
                 translation_duration=translation_duration,
                 translation_destination_language=translation_destination_language,
             )
-        except RequestException as e:
+        except RequestException:
             # Throttling errors on translation... warn user, retrieve non-translated subtitles.
             st.toast(
                 "Error translating subtitles. Please try again in a few seconds.",

@@ -17,7 +17,6 @@
 """Utilities related to accessing s3"""
 
 import os
-import json
 import requests
 from requests.exceptions import RequestException
 

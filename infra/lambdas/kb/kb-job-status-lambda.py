@@ -19,7 +19,6 @@ import logging
 import boto3
 from schemas.job_status import JobStatus
 from lambda_utils.invoke_lambda import invoke_lambda
-from botocore.exceptions import ClientError
 
 KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
 DDB_LAMBDA_NAME = os.environ.get("DDB_LAMBDA_NAME")
