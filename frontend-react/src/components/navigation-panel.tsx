@@ -22,6 +22,11 @@ export default function NavigationPanel() {
         href: "/",
       },
       {
+        type: "link",
+        text: "Job Status",
+        href: "/job-status",
+      },
+      {
         type: "section",
         text: "Section 1",
         items: [{ type: "link", text: "Items", href: "/section1" }],
