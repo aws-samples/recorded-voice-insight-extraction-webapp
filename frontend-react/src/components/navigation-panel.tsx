@@ -27,18 +27,9 @@ export default function NavigationPanel() {
         href: "/job-status",
       },
       {
-        type: "section",
-        text: "Section 1",
-        items: [{ type: "link", text: "Items", href: "/section1" }],
-      },
-      {
-        type: "section",
-        text: "Section 2",
-        items: [
-          { type: "link", text: "Item 1", href: "/section2/item1" },
-          { type: "link", text: "Item 2", href: "/section2/item2" },
-          { type: "link", text: "Item 2", href: "/section2/item3" },
-        ],
+        type: "link",
+        text: "Analyze Your Media",
+        href: "/analyze",
       },
     ];
 
@@ -47,7 +38,7 @@ export default function NavigationPanel() {
       {
         type: "link",
         text: "Documentation",
-        href: "https://github.com/aws-samples/cloudscape-examples",
+        href: "https://github.com/aws-samples/recorded-voice-insight-extraction-webapp",
         external: true,
       }
     );

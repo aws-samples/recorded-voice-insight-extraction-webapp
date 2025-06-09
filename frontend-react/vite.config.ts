@@ -12,7 +12,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         secure: true,
-      },
-    },
-  },
+        headers: {
+          'Origin': 'http://localhost:3000'
+        }
+      }
+    }
+  }
 });
