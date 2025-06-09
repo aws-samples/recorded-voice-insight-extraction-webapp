@@ -6,5 +6,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    proxy: {
+      '/api': {
+        target: 'https://c6qkojr4uk.execute-api.us-east-1.amazonaws.com/prod',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        secure: true,
+      },
+    },
   },
 });
