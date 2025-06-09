@@ -96,7 +96,7 @@ const JobStatusTable: React.FC<JobStatusTableProps> = ({
     <SpaceBetween size="l">
       <Header
         variant="h1"
-        description="Check Transcription Job Status"
+        description="Monitor the status of your transcription jobs"
         actions={
           <Button onClick={onRefresh} loading={loading}>
             Refresh Table

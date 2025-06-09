@@ -74,16 +74,7 @@ const JobStatus: React.FC = () => {
   return (
     <BaseAppLayout
       content={
-        <ContentLayout
-          header={
-            <Header
-              variant="h1"
-              description="Monitor the status of your transcription jobs"
-            >
-              Job Status
-            </Header>
-          }
-        >
+        <ContentLayout>
           <JobStatusTable
             jobs={jobs}
             loading={loading}

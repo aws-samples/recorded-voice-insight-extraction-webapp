@@ -182,11 +182,9 @@ export async function runAnalysis(
     main_prompt: template.template_prompt.replace('{transcript}', transcript),
     bedrock_kwargs: {
       temperature: 0.1,
-      max_tokens: 2000,  // Changed from maxTokens to max_tokens to match backend
+      max_tokens: 2000,
     },
   };
-
-  console.log('Sending LLM request:', JSON.stringify(requestBody, null, 2)); // Debug log
 
   try {
     const response = await apiRequest<string>('/llm', {
