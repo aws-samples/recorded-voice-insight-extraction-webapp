@@ -18,9 +18,10 @@ export default function NavigationPanel() {
     const items: SideNavigationProps.Item[] = [
       {
         type: "link",
-        text: "Dashboard",
+        text: "Admin Dashboard",
         href: "/",
       },
+      { type: "divider" },
       {
         type: "link",
         text: "Job Status",

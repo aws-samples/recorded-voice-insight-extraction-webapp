@@ -7,7 +7,6 @@ import {
 import { useOnFollow } from "../../common/hooks/use-on-follow";
 import BaseAppLayout from "../../components/base-app-layout";
 import DashboardHeader from "./dashboard-header";
-import ItemsTable from "./items-table";
 import StatisticsBlock from "./statistics-block";
 
 export default function DashboardPage() {
@@ -30,7 +29,6 @@ export default function DashboardPage() {
         <ContentLayout header={<DashboardHeader />}>
           <SpaceBetween size="l">
             <StatisticsBlock />
-            <ItemsTable />
           </SpaceBetween>
         </ContentLayout>
       }
