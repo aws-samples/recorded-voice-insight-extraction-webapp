@@ -24,6 +24,11 @@ export default function NavigationPanel() {
       { type: "divider" },
       {
         type: "link",
+        text: "File Upload",
+        href: "/file-upload",
+      },
+      {
+        type: "link",
         text: "Job Status",
         href: "/job-status",
       },

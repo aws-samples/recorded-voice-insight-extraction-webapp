@@ -7,6 +7,7 @@ import {
 import { USE_BROWSER_ROUTER } from "./common/constants";
 import GlobalHeader from "./components/global-header";
 import DashboardPage from "./pages/dashboard/dashboard-page";
+import FileUploadPage from "./pages/FileUpload";
 import JobStatus from "./pages/JobStatus";
 import Analyze from "./pages/Analyze";
 import NotFound from "./pages/not-found";
@@ -23,6 +24,7 @@ export default function App() {
         <div>
           <Routes>
             <Route index path="/" element={<DashboardPage />} />
+            <Route path="/file-upload" element={<FileUploadPage />} />
             <Route path="/job-status" element={<JobStatus />} />
             <Route path="/analyze" element={<Analyze />} />
             <Route path="*" element={<NotFound />} />
