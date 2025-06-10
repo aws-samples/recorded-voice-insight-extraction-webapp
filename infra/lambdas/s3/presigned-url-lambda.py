@@ -50,7 +50,7 @@ def lambda_handler(event, context):
     if action == "upload_media_file":  # POST
         username = event["username"]
         media_file_name = event["media_file_name"]
-        use_bda = event["use_bda"] == "True"
+        use_bda = event.get("use_bda", "false").lower() == "true"
         try:
             key = (
                 f"{RECORDINGS_PREFIX}/{username}/{media_file_name}"
