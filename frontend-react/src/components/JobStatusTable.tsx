@@ -33,7 +33,7 @@ const JobStatusTable: React.FC<JobStatusTableProps> = ({
     if (status === 'Failed') {
       return 'text-status-error';
     }
-    if (status?.includes('Queue') || status?.includes('Transcribing') || status?.includes('Indexing')) {
+    if (status?.includes('Queue') || status?.includes('Transcribing') || status?.includes('Indexing') || status?.includes('Processing')) {
       return 'text-status-info';
     }
     return 'text-body-default';
