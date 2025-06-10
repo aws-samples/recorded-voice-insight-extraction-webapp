@@ -10,6 +10,7 @@ import DashboardPage from "./pages/dashboard/dashboard-page";
 import FileUploadPage from "./pages/FileUpload";
 import JobStatus from "./pages/JobStatus";
 import Analyze from "./pages/Analyze";
+import FileManagementPage from "./pages/FileManagement";
 import NotFound from "./pages/not-found";
 import "./styles/app.scss";
 
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="/file-upload" element={<FileUploadPage />} />
             <Route path="/job-status" element={<JobStatus />} />
             <Route path="/analyze" element={<Analyze />} />
+            <Route path="/file-management" element={<FileManagementPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>

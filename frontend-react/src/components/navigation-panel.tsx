@@ -37,6 +37,11 @@ export default function NavigationPanel() {
         text: "Analyze Your Media",
         href: "/analyze",
       },
+      {
+        type: "link",
+        text: "File Management",
+        href: "/file-management",
+      },
     ];
 
     items.push(
