@@ -1,4 +1,4 @@
-import { Citation } from '../types/chat';
+import { Citation, PartialAnswer } from '../types/chat';
 
 export interface ProcessedCitation extends Citation {
   id: number;
@@ -28,99 +28,95 @@ export function processCitations(citations: Citation[]): ProcessedCitation[] {
 }
 
 /**
- * Insert citation markers at the end of sentences or logical breaks in the text
- * This approach adds citations at the end since the backend doesn't provide specific insertion points
- * @param text The text content to process
- * @param citations Array of processed citations
- * @returns Array of text parts and citation references
+ * Process partial answers with their individual citations for markdown rendering
+ * This creates a markdown string with citation markers that can be rendered
+ * @param partialAnswers Array of partial answers from the FullQAnswer
+ * @returns Object with markdown content and citation mapping
  */
-export function insertCitationMarkers(
-  text: string, 
-  citations: ProcessedCitation[]
-): Array<{ type: 'text' | 'citation'; content: string; citation?: ProcessedCitation }> {
-  if (!citations.length) {
-    return [{ type: 'text', content: text }];
-  }
-
-  // For now, we'll add all citations at the end of the text
-  // This is a simple approach that works when the backend doesn't specify insertion points
-  const parts: Array<{ type: 'text' | 'citation'; content: string; citation?: ProcessedCitation }> = [];
-  
-  // Add the main text
-  parts.push({ type: 'text', content: text });
-  
-  // Add each citation marker
-  citations.forEach((citation, index) => {
-    if (index === 0) {
-      parts.push({ type: 'text', content: ' ' }); // Add space before first citation
+export function processPartialAnswersForMarkdown(
+  partialAnswers: PartialAnswer[]
+): { markdownContent: string; citationMap: Map<number, ProcessedCitation> } {
+  // First, collect all citations and deduplicate them
+  const allCitations: Citation[] = [];
+  partialAnswers.forEach(partialAnswer => {
+    if (partialAnswer.citations) {
+      allCitations.push(...partialAnswer.citations);
     }
-    parts.push({
-      type: 'citation',
-      content: citation.displayText,
-      citation: citation
+  });
+  
+  // Create deduplicated citation list with proper IDs
+  const uniqueCitations = processCitations(allCitations);
+  const citationMap = new Map<number, ProcessedCitation>();
+  uniqueCitations.forEach(citation => {
+    citationMap.set(citation.id, citation);
+  });
+  
+  console.log(`🔄 Processing ${partialAnswers.length} partial answers with ${uniqueCitations.length} unique citations`);
+
+  // Now build markdown content, mapping duplicate citations to their unique IDs
+  let markdownContent = '';
+  
+  partialAnswers.forEach((partialAnswer, answerIndex) => {
+    const text = partialAnswer.partial_answer || '';
+    const citations = partialAnswer.citations || [];
+
+    console.log(`  📄 Partial answer ${answerIndex + 1}:`, {
+      text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+      citationCount: citations.length,
+      citations: citations.map(c => `${c.media_name}@${c.timestamp}s`)
     });
+
+    // Add the text part (fix escaped newlines)
+    if (text.trim()) {
+      // Replace escaped newlines with actual newlines for proper markdown rendering
+      const cleanedText = text.replace(/\\n/g, '\n');
+      markdownContent += cleanedText;
+    }
+
+    // Add citations for this partial answer, mapping to unique citation IDs
+    citations.forEach((citation) => {
+      // Find the unique citation ID for this citation
+      const uniqueCitation = uniqueCitations.find(uc => 
+        uc.media_name === citation.media_name && 
+        Math.abs(uc.timestamp - citation.timestamp) < 1
+      );
+      
+      if (uniqueCitation) {
+        console.log(`    📎 Adding citation [${uniqueCitation.id}]: ${citation.media_name} @ ${citation.timestamp}s`);
+        markdownContent += `[${uniqueCitation.id}]`;
+      }
+    });
+
+    // Add space between partial answers (except for the last one)
+    if (answerIndex < partialAnswers.length - 1 && text.trim()) {
+      markdownContent += ' ';
+    }
   });
 
-  return parts;
+  console.log(`✅ Generated markdown content:`, {
+    contentPreview: markdownContent.substring(0, 200) + (markdownContent.length > 200 ? '...' : ''),
+    totalUniqueCitations: citationMap.size,
+    citationIds: Array.from(citationMap.keys())
+  });
+  
+  return { markdownContent, citationMap };
 }
 
 /**
- * Alternative approach: Insert citations at sentence boundaries
- * This distributes citations throughout the text more naturally
+ * Extract all unique citations from partial answers for the sources section
+ * @param partialAnswers Array of partial answers from the FullQAnswer
+ * @returns Array of processed citations with global IDs
  */
-export function insertCitationsAtSentences(
-  text: string,
-  citations: ProcessedCitation[]
-): Array<{ type: 'text' | 'citation'; content: string; citation?: ProcessedCitation }> {
-  if (!citations.length) {
-    return [{ type: 'text', content: text }];
-  }
-
-  const parts: Array<{ type: 'text' | 'citation'; content: string; citation?: ProcessedCitation }> = [];
+export function extractAllCitations(partialAnswers: PartialAnswer[]): ProcessedCitation[] {
+  const allCitations: Citation[] = [];
   
-  // Split text into sentences (simple approach)
-  const sentences = text.split(/([.!?]+\s+)/).filter(s => s.trim().length > 0);
-  
-  if (sentences.length <= 1) {
-    // If no clear sentence breaks, add citations at the end
-    return insertCitationMarkers(text, citations);
-  }
-
-  // Distribute citations across sentences
-  const citationsPerSentence = Math.ceil(citations.length / Math.max(1, sentences.length - 1));
-  let citationIndex = 0;
-
-  sentences.forEach((sentence, index) => {
-    parts.push({ type: 'text', content: sentence });
-    
-    // Add citations after some sentences (not the last one)
-    if (index < sentences.length - 1 && citationIndex < citations.length) {
-      const citationsToAdd = Math.min(citationsPerSentence, citations.length - citationIndex);
-      
-      for (let i = 0; i < citationsToAdd; i++) {
-        if (citationIndex < citations.length) {
-          parts.push({
-            type: 'citation',
-            content: citations[citationIndex].displayText,
-            citation: citations[citationIndex]
-          });
-          citationIndex++;
-        }
-      }
+  partialAnswers.forEach(partialAnswer => {
+    if (partialAnswer.citations) {
+      allCitations.push(...partialAnswer.citations);
     }
   });
 
-  // Add any remaining citations at the end
-  while (citationIndex < citations.length) {
-    parts.push({
-      type: 'citation',
-      content: citations[citationIndex].displayText,
-      citation: citations[citationIndex]
-    });
-    citationIndex++;
-  }
-
-  return parts;
+  return processCitations(allCitations);
 }
 
 /**

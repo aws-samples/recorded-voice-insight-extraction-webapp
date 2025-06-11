@@ -5,7 +5,8 @@ import {
   SpaceBetween,
 } from '@cloudscape-design/components';
 import { ChatMessage as ChatMessageType } from '../types/chat';
-import { ProcessedCitation, processCitations, insertCitationsAtSentences, formatTimestamp } from '../utils/citationUtils';
+import { ProcessedCitation, processPartialAnswersForMarkdown, extractAllCitations, formatTimestamp } from '../utils/citationUtils';
+import MarkdownWithCitations from './MarkdownWithCitations';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -22,44 +23,52 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   
   // Process citations if this is an assistant message with full_answer
   let processedContent: React.ReactNode = messageText;
-  let citations: ProcessedCitation[] = [];
+  let allCitations: ProcessedCitation[] = [];
   
-  if (!isUser && message.full_answer && onCitationClick) {
-    // Extract all citations from the full answer
-    const allCitations = message.full_answer.answer.flatMap(part => part.citations || []);
-    
-    if (allCitations.length > 0) {
-      citations = processCitations(allCitations);
-      console.log(`📝 Processing ${citations.length} citations for message`);
+  if (!isUser) {
+    // For assistant messages, always render as markdown
+    if (message.full_answer && onCitationClick) {
+      const partialAnswers = message.full_answer.answer || [];
       
-      // Insert citation markers into the text
-      const textParts = insertCitationsAtSentences(messageText, citations);
-      
-      processedContent = textParts.map((part, index) => {
-        if (part.type === 'citation' && part.citation) {
-          return (
-            <button
-              key={`citation-${part.citation.id}-${index}`}
-              onClick={() => onCitationClick(part.citation!)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#0073bb',
-                textDecoration: 'underline',
-                cursor: 'pointer',
-                padding: '0 2px',
-                font: 'inherit',
-                fontWeight: 'bold'
-              }}
-              title={`${part.citation.media_name} at ${formatTimestamp(part.citation.timestamp)}`}
-            >
-              {part.content}
-            </button>
-          );
-        } else {
-          return <span key={`text-${index}`}>{part.content}</span>;
-        }
-      });
+      if (partialAnswers.length > 0) {
+        console.log(`📝 Processing ${partialAnswers.length} partial answers with citations for markdown`);
+        
+        // Process partial answers for markdown rendering
+        const { markdownContent, citationMap } = processPartialAnswersForMarkdown(partialAnswers);
+        
+        // Extract all citations for the sources section
+        allCitations = extractAllCitations(partialAnswers);
+        
+        console.log(`📚 Total citations found: ${allCitations.length}`);
+        console.log(`📄 Markdown content preview: ${markdownContent.substring(0, 100)}...`);
+        
+        // Render markdown with citations
+        processedContent = (
+          <MarkdownWithCitations
+            content={markdownContent}
+            citationMap={citationMap}
+            onCitationClick={onCitationClick}
+          />
+        );
+      } else {
+        // Fallback to plain markdown if no partial answers but we have full_answer
+        processedContent = (
+          <MarkdownWithCitations
+            content={messageText}
+            citationMap={new Map()}
+            onCitationClick={onCitationClick}
+          />
+        );
+      }
+    } else {
+      // For assistant messages without full_answer or citations, still render as markdown
+      processedContent = (
+        <MarkdownWithCitations
+          content={messageText}
+          citationMap={new Map()}
+          onCitationClick={onCitationClick || (() => {})}
+        />
+      );
     }
   }
 
@@ -79,27 +88,21 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       >
         <SpaceBetween size="s">
           <Box 
-            variant="p" 
+            variant="div" 
             margin={{ top: 'xs' }}
             color={isUser ? 'inherit' : 'text-body-secondary'}
           >
-            {Array.isArray(processedContent) ? (
-              processedContent.map((part, index) => (
-                <React.Fragment key={index}>{part}</React.Fragment>
-              ))
-            ) : (
-              processedContent
-            )}
+            {isUser ? messageText : processedContent}
           </Box>
           
           {/* Show citation summary for assistant messages */}
-          {!isUser && citations.length > 0 && (
+          {!isUser && allCitations.length > 0 && (
             <div style={{ borderTop: '1px solid #e9ebed', paddingTop: '8px' }}>
               <Box 
                 variant="small" 
                 color="text-body-secondary"
               >
-                <strong>Sources:</strong> {citations.map(citation => (
+                <strong>Sources:</strong> {allCitations.map(citation => (
                   <span key={citation.id}>
                     {citation.id > 1 && ', '}
                     <button

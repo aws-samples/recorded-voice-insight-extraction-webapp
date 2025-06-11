@@ -45,6 +45,8 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
       
       // Get presigned URL for the media file
       const url = await onGetPresignedUrl(citation.media_name);
+      console.log(`🔗 Received presigned URL: ${url.substring(0, 100)}...`);
+      
       setMediaUrl(url);
       
       // Determine media type based on file extension
@@ -54,15 +56,19 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
       
       if (videoExtensions.includes(extension || '')) {
         setMediaType('video');
+        console.log(`📹 Detected video file: ${extension}`);
       } else if (audioExtensions.includes(extension || '')) {
         setMediaType('audio');
+        console.log(`🎵 Detected audio file: ${extension}`);
       } else {
         setMediaType('video'); // Default to video
+        console.log(`❓ Unknown file type: ${extension}, defaulting to video`);
       }
       
     } catch (err) {
-      console.error('Error loading media:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load media');
+      console.error('❌ Error loading media:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load media';
+      setError(`Failed to load media: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }

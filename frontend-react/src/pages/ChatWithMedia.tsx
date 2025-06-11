@@ -161,26 +161,29 @@ const ChatWithMediaPage: React.FC = () => {
       for await (const partialResponse of responseGenerator) {
         lastFullQAnswer = partialResponse;
         
+        // Don't build fullAnswer from concatenated text - let the ChatMessage component
+        // handle the markdown rendering directly from the partialResponse structure
         if (partialResponse.answer && partialResponse.answer.length > 0) {
-          const latestPartial = partialResponse.answer[partialResponse.answer.length - 1];
-          if (latestPartial.partial_answer) {
-            fullAnswer = partialResponse.answer
-              .map(part => part.partial_answer)
-              .join('');
-          }
+          // Build display text for the content field (this is mainly for debugging/fallback)
+          fullAnswer = partialResponse.answer
+            .map(part => part.partial_answer || '')
+            .join('');
         }
 
+        // Update the message with the streaming partialResponse
+        // The ChatMessage component will handle markdown rendering from this structure
         setMessages(prev => prev.map(msg => 
           msg.id === assistantMessageId 
             ? {
                 ...msg,
-                content: [{ text: fullAnswer }],
-                full_answer: partialResponse
+                content: [{ text: fullAnswer }], // Keep this for fallback, but ChatMessage uses full_answer
+                full_answer: partialResponse     // This is what drives the markdown rendering
               }
             : msg
         ));
       }
 
+      // Final update is the same since we're already including full_answer during streaming
       if (lastFullQAnswer) {
         setMessages(prev => prev.map(msg => 
           msg.id === assistantMessageId 
