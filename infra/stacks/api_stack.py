@@ -245,7 +245,7 @@ class ReVIEWAPIStack(NestedStack):
             self,
             "web_socket_api_stage",
             web_socket_api=self.web_socket_api,
-            stage_name="dev",
+            stage_name="prod",  # Changed from "dev" to "prod" to match React frontend URL
             auto_deploy=True,
         )
 

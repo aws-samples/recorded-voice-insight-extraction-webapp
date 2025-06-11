@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ContentLayout,
   Header,
@@ -17,10 +17,12 @@ import { retrieveAllItems } from '../api/database';
 import { JobData, ChatMessage as ChatMessageType } from '../types/chat';
 import ChatContainer from '../components/ChatContainer';
 import ChatInput from '../components/ChatInput';
+import { chatWebSocketService, WebSocketTimeoutError } from '../api/websocket';
 
 const ChatWithMediaPage: React.FC = () => {
   const [username, setUsername] = useState<string>('');
-  const [authToken, setAuthToken] = useState<string>('');
+  const [idToken, setIdToken] = useState<string>(''); // For REST API calls
+  const [accessToken, setAccessToken] = useState<string>(''); // For WebSocket calls (raw token)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [jobData, setJobData] = useState<JobData[]>([]);
@@ -29,16 +31,29 @@ const ChatWithMediaPage: React.FC = () => {
   const [dataError, setDataError] = useState<string>('');
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [isSending, setIsSending] = useState<boolean>(false);
+  const [streamingError, setStreamingError] = useState<string>('');
 
   useEffect(() => {
     const initAuth = async () => {
       try {
         const user = await getCurrentUser();
         const session = await fetchAuthSession();
+        console.log('Access token type check:', session.tokens.accessToken.toString().substring(0, 50));
         
-        if (user.username && session.tokens?.idToken) {
+        if (user.username && session.tokens?.idToken && session.tokens?.accessToken) {
           setUsername(user.username);
-          setAuthToken(`Bearer ${session.tokens.idToken.toString()}`);
+          // Store both tokens for different API types
+          setIdToken(`Bearer ${session.tokens.idToken.toString()}`); // For REST API
+          setAccessToken(session.tokens.accessToken.toString()); // For WebSocket API (no Bearer prefix)
+          
+          // DEBUG: Log tokens for testing
+          console.log('=== TOKEN DEBUG INFO ===');
+          console.log('ACCESS TOKEN (for WebSocket):', session.tokens.accessToken.toString());
+          console.log('ACCESS TOKEN Length:', session.tokens.accessToken.toString().length);
+          console.log('ID TOKEN (for REST API):', session.tokens.idToken.toString());
+          console.log('ID TOKEN Length:', session.tokens.idToken.toString().length);
+          console.log('========================');
+          
           setIsAuthenticated(true);
         } else {
           setAuthError('Authentication required. Please log in.');
@@ -56,11 +71,12 @@ const ChatWithMediaPage: React.FC = () => {
 
   useEffect(() => {
     const fetchJobData = async () => {
-      if (!isAuthenticated || !username || !authToken) return;
+      if (!isAuthenticated || !username || !idToken) return;
 
       try {
         setDataError('');
-        const data = await retrieveAllItems(username, authToken);
+        // Use ID token for REST API calls
+        const data = await retrieveAllItems(username, idToken);
         
         // Filter for completed jobs only (matching Streamlit behavior)
         const completedJobs = data.filter(
@@ -75,7 +91,7 @@ const ChatWithMediaPage: React.FC = () => {
     };
 
     fetchJobData();
-  }, [isAuthenticated, username, authToken]);
+  }, [isAuthenticated, username, idToken]);
 
   const handleMediaSelectionChange = ({ detail }: { detail: MultiselectProps.ChangeDetail }) => {
     // If user changes media selection while in conversation, clear the conversation
@@ -85,8 +101,11 @@ const ChatWithMediaPage: React.FC = () => {
     setSelectedMediaNames(detail.selectedOptions);
   };
 
-  const handleSendMessage = async (messageText: string) => {
+  const handleSendMessage = useCallback(async (messageText: string) => {
     if (!messageText.trim() || isSending) return;
+
+    // Clear any previous streaming errors
+    setStreamingError('');
 
     // Add user message to chat
     const userMessage: ChatMessageType = {
@@ -98,23 +117,91 @@ const ChatWithMediaPage: React.FC = () => {
     setMessages(prev => [...prev, userMessage]);
     setIsSending(true);
 
+    // Create assistant message placeholder for streaming
+    const assistantMessageId = (Date.now() + 1).toString();
+    const assistantMessage: ChatMessageType = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: [{ text: '' }],
+    };
+
+    setMessages(prev => [...prev, assistantMessage]);
+
     try {
-      // TODO: Implement WebSocket streaming in Phase 4
-      // For now, just add a placeholder assistant response
-      setTimeout(() => {
-        const assistantMessage: ChatMessageType = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: [{ text: 'This is a placeholder response. WebSocket streaming will be implemented in Phase 4.' }],
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-        setIsSending(false);
-      }, 1000);
+      // Connect to WebSocket if not already connected (use access token)
+      await chatWebSocketService.connect(accessToken);
+
+      // Get selected media names
+      const mediaNames = selectedMediaNames.map(option => option.value as string);
+      
+      // Send message and get streaming response
+      const responseGenerator = await chatWebSocketService.sendMessage(
+        [...messages, userMessage],
+        username,
+        mediaNames
+      );
+
+      let fullAnswer = '';
+      let lastFullQAnswer = null;
+
+      // Process streaming responses
+      for await (const partialResponse of responseGenerator) {
+        lastFullQAnswer = partialResponse;
+        
+        // Extract text from the response
+        if (partialResponse.answer && partialResponse.answer.length > 0) {
+          const latestPartial = partialResponse.answer[partialResponse.answer.length - 1];
+          if (latestPartial.partial_answer) {
+            fullAnswer = partialResponse.answer
+              .map(part => part.partial_answer)
+              .join('');
+          }
+        }
+
+        // Update the assistant message with streaming content
+        setMessages(prev => prev.map(msg => 
+          msg.id === assistantMessageId 
+            ? {
+                ...msg,
+                content: [{ text: fullAnswer }],
+                full_answer: partialResponse
+              }
+            : msg
+        ));
+      }
+
+      // Final update with complete response
+      if (lastFullQAnswer) {
+        setMessages(prev => prev.map(msg => 
+          msg.id === assistantMessageId 
+            ? {
+                ...msg,
+                content: [{ text: fullAnswer }],
+                full_answer: lastFullQAnswer
+              }
+            : msg
+        ));
+      }
+
     } catch (error) {
       console.error('Error sending message:', error);
+      
+      let errorMessage = 'An error occurred while processing your request.';
+      
+      if (error instanceof WebSocketTimeoutError) {
+        errorMessage = 'Request timed out. Please try again with a shorter question or fewer media files.';
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
+      setStreamingError(errorMessage);
+
+      // Remove the empty assistant message on error
+      setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
+    } finally {
       setIsSending(false);
     }
-  };
+  }, [isSending, accessToken, selectedMediaNames, messages, username]);
 
   const handleClearConversation = () => {
     setMessages([]);
@@ -200,6 +287,12 @@ const ChatWithMediaPage: React.FC = () => {
                 {dataError}
               </Alert>
             )}
+
+            {streamingError && (
+              <Alert type="error" dismissible onDismiss={() => setStreamingError('')}>
+                {streamingError}
+              </Alert>
+            )}
             
             <Box>
               <Header variant="h3" description="Select media files to analyze">
@@ -212,6 +305,7 @@ const ChatWithMediaPage: React.FC = () => {
                 placeholder="Chat with all media files"
                 empty="No completed media files available"
                 filteringType="auto"
+                disabled={isSending}
               />
               {selectedMediaNames.length > 0 && (
                 <Box variant="small" margin={{ top: "xs" }} color="text-body-secondary">
@@ -227,8 +321,14 @@ const ChatWithMediaPage: React.FC = () => {
             <Box>
               <ChatInput
                 onSendMessage={handleSendMessage}
-                disabled={isSending}
-                placeholder={isSending ? "Sending..." : "Enter your question here"}
+                disabled={isSending || selectedMediaNames.length === 0}
+                placeholder={
+                  selectedMediaNames.length === 0
+                    ? "Select media files to start chatting"
+                    : isSending
+                    ? "Processing..."
+                    : "Enter your question here"
+                }
               />
             </Box>
           </SpaceBetween>
