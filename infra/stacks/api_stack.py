@@ -24,6 +24,7 @@ from aws_cdk import aws_apigatewayv2_authorizers as authorizers
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as _lambda
+from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk.aws_bedrock import CfnKnowledgeBase
 import aws_cdk.aws_s3 as s3
 
@@ -62,14 +63,14 @@ class ReVIEWAPIStack(NestedStack):
         self.associate_lambda_with_gateway(kb_job_deletion_lambda, "kb-job-deletion")
         self.associate_lambda_with_gateway(subtitle_lambda, "subtitles")
 
+        # Create DynamoDB table for WebSocket session management
+        self.websocket_session_table = self.create_websocket_session_table()
+
         # Create lambda to query knowledge base (and stream responses to websocket)
         self.kb_query_lambda = self.create_query_lambda(knowledge_base)
 
-        # Create a lambda to authorize access to websocket API (via cognito bearer token)
-        self.ws_authorizer_lambda = self.create_ws_authorizer_lambda()
-
-        # Create the websocket API
-        self.create_WS_gateway(self.kb_query_lambda, self.ws_authorizer_lambda)
+        # Create the websocket API (without authorizer - auth moved to message body)
+        self.create_WS_gateway(self.kb_query_lambda)
 
         # Add WS GW URL to KB lambda as env variable
         # Lambda needs https://* url
@@ -178,6 +179,28 @@ class ReVIEWAPIStack(NestedStack):
             results_cache_ttl=Duration.seconds(0),  # Disable caching
         )
 
+    def create_websocket_session_table(self) -> dynamodb.Table:
+        """Create DynamoDB table for WebSocket session management and message chunking"""
+        table = dynamodb.Table(
+            self,
+            f"{self.props['stack_name_base']}-WebSocketSessionTable",
+            table_name=f"{self.props['stack_name_base']}-websocket-sessions",
+            partition_key=dynamodb.Attribute(
+                name="ConnectionId",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="MessagePartId",
+                type=dynamodb.AttributeType.NUMBER
+            ),
+            # TTL for automatic cleanup of expired sessions
+            time_to_live_attribute="expire",
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        
+        return table
+
     def associate_lambda_with_gateway(
         self, my_lambda: _lambda.Function, resource_name: str
     ):
@@ -195,44 +218,9 @@ class ReVIEWAPIStack(NestedStack):
             authorization_type=apigw.AuthorizationType.COGNITO,
         )
 
-    def create_ws_authorizer_lambda(self):
-        ### Create authorizer lambda role
-        ws_authorizer_lambda_role = iam.Role(
-            self,
-            f"{self.props['stack_name_base']}-WSAuthorizerLambdaRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "CloudWatchLogsFullAccess"
-                ),
-            ],
-        )
-        ws_authorizer_lambda_role.add_to_policy(
-            iam.PolicyStatement(
-                actions=["cognito-idp:GetUser"],
-                resources=["*"],
-            )
-        )
-        ws_authorizer_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
-
-        ### Create authorizer lambda
-        ws_authorizer_lambda = _lambda.Function(
-            self,
-            self.props["stack_name_base"] + "-WSAuthorizerLambda",
-            function_name=f"{self.props['stack_name_base']}-WSAuthorizerLambda",
-            description="Function for ReVIEW to authorize Websocket API",
-            runtime=_lambda.Runtime.PYTHON_3_10,
-            handler="websockets.ws-authorizer-lambda.lambda_handler",
-            code=_lambda.Code.from_asset("lambdas"),
-            timeout=Duration.minutes(5),
-            role=ws_authorizer_lambda_role,
-        )
-
-        return ws_authorizer_lambda
-
-    def create_WS_gateway(self, kb_query_lambda, ws_authorizer_lambda):
+    def create_WS_gateway(self, kb_query_lambda):
         self.web_socket_api = apigwv2.WebSocketApi(
-            self, "web_socket_api", route_selection_expression="$request.body.action"
+            self, "web_socket_api", route_selection_expression="$request.body.step"
         )
         # Create a log group for WebSocket API access logs
         log_group = aws_logs.LogGroup(
@@ -294,7 +282,7 @@ class ReVIEWAPIStack(NestedStack):
             timeout=Duration.seconds(600),
         )
 
-        # Default route is kb query streaming response
+        # Default route handles all WebSocket messages (START, BODY, END steps)
         self.web_socket_api.add_route(
             "$default",
             integration=integrations.WebSocketLambdaIntegration(
@@ -307,9 +295,7 @@ class ReVIEWAPIStack(NestedStack):
             integration=integrations.WebSocketLambdaIntegration(
                 "connect", handler=connect_lambda
             ),
-            authorizer=authorizers.WebSocketLambdaAuthorizer(
-                "WS_Lambda_Authorizer", ws_authorizer_lambda
-            ),
+            # No authorizer - auth moved to message body
             return_response=True,
         )
         self.web_socket_api.add_route(
@@ -368,6 +354,25 @@ class ReVIEWAPIStack(NestedStack):
                 resources=["*"],  # Needs access to all LLMs
             )
         )
+        # Add DynamoDB permissions for WebSocket session management
+        query_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:DeleteItem",
+                ],
+                resources=[self.websocket_session_table.table_arn],
+            )
+        )
+        # Add Cognito permissions for token verification
+        query_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["cognito-idp:GetUser"],
+                resources=["*"],
+            )
+        )
 
         query_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
         return query_lambda_role
@@ -379,9 +384,9 @@ class ReVIEWAPIStack(NestedStack):
             self,
             self.props["stack_name_base"] + "-KBQueryLambda",
             function_name=f"{self.props['stack_name_base']}-KBQueryLambda",
-            description="Function for ReVIEW to query Knowledge Base",
+            description="Function for ReVIEW to query Knowledge Base with chunked WebSocket support",
             runtime=_lambda.Runtime.PYTHON_3_10,
-            handler="kb.kb-query-lambda.stream_lambda_handler",
+            handler="websockets.chunked_ws_handler.handler",
             code=_lambda.Code.from_asset("lambdas"),
             timeout=Duration.minutes(5),
             environment={
@@ -391,6 +396,7 @@ class ReVIEWAPIStack(NestedStack):
                 "S3_BUCKET": self.bucket.bucket_name,
                 "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
                 "BDA_OUTPUT_PREFIX": self.props["s3_bda_processed_output_prefix"],
+                "WEBSOCKET_SESSION_TABLE_NAME": self.websocket_session_table.table_name,
             },
             role=self.create_query_lambda_role(knowledge_base=knowledge_base),
         )
