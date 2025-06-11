@@ -14,15 +14,18 @@ import { getCurrentUser } from 'aws-amplify/auth';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import BaseAppLayout from '../components/base-app-layout';
 import { retrieveAllItems } from '../api/database';
+import { getMediaPresignedUrl } from '../api/s3';
 import { JobData, ChatMessage as ChatMessageType } from '../types/chat';
+import { ProcessedCitation } from '../utils/citationUtils';
 import ChatContainer from '../components/ChatContainer';
 import ChatInput from '../components/ChatInput';
+import MediaPlayer from '../components/MediaPlayer';
 import { chatWebSocketService, WebSocketTimeoutError } from '../api/websocket';
 
 const ChatWithMediaPage: React.FC = () => {
   const [username, setUsername] = useState<string>('');
   const [idToken, setIdToken] = useState<string>(''); // For REST API calls
-  const [accessToken, setAccessToken] = useState<string>(''); // For WebSocket calls (raw token)
+  const [accessToken, setAccessToken] = useState<string>(''); // For WebSocket calls
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [jobData, setJobData] = useState<JobData[]>([]);
@@ -32,6 +35,8 @@ const ChatWithMediaPage: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [isSending, setIsSending] = useState<boolean>(false);
   const [streamingError, setStreamingError] = useState<string>('');
+  const [selectedCitation, setSelectedCitation] = useState<ProcessedCitation | null>(null);
+  const [isMediaPlayerVisible, setIsMediaPlayerVisible] = useState<boolean>(false);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -42,18 +47,8 @@ const ChatWithMediaPage: React.FC = () => {
         
         if (user.username && session.tokens?.idToken && session.tokens?.accessToken) {
           setUsername(user.username);
-          // Store both tokens for different API types
-          setIdToken(`Bearer ${session.tokens.idToken.toString()}`); // For REST API
-          setAccessToken(session.tokens.accessToken.toString()); // For WebSocket API (no Bearer prefix)
-          
-          // DEBUG: Log tokens for testing
-          console.log('=== TOKEN DEBUG INFO ===');
-          console.log('ACCESS TOKEN (for WebSocket):', session.tokens.accessToken.toString());
-          console.log('ACCESS TOKEN Length:', session.tokens.accessToken.toString().length);
-          console.log('ID TOKEN (for REST API):', session.tokens.idToken.toString());
-          console.log('ID TOKEN Length:', session.tokens.idToken.toString().length);
-          console.log('========================');
-          
+          setIdToken(`Bearer ${session.tokens.idToken.toString()}`);
+          setAccessToken(session.tokens.accessToken.toString());
           setIsAuthenticated(true);
         } else {
           setAuthError('Authentication required. Please log in.');
@@ -75,10 +70,8 @@ const ChatWithMediaPage: React.FC = () => {
 
       try {
         setDataError('');
-        // Use ID token for REST API calls
         const data = await retrieveAllItems(username, idToken);
         
-        // Filter for completed jobs only (matching Streamlit behavior)
         const completedJobs = data.filter(
           job => job.job_status === 'Completed' || job.job_status === 'BDA Analysis Complete'
         );
@@ -94,20 +87,31 @@ const ChatWithMediaPage: React.FC = () => {
   }, [isAuthenticated, username, idToken]);
 
   const handleMediaSelectionChange = ({ detail }: any) => {
-    // If user changes media selection while in conversation, clear the conversation
     if (messages.length > 0) {
       setMessages([]);
     }
     setSelectedMediaNames(detail.selectedOptions);
   };
 
+  const handleCitationClick = (citation: ProcessedCitation) => {
+    setSelectedCitation(citation);
+    setIsMediaPlayerVisible(true);
+  };
+
+  const handleGetPresignedUrl = useCallback(async (mediaName: string) => {
+    try {
+      return await getMediaPresignedUrl(mediaName, username, idToken);
+    } catch (error) {
+      console.error('Error getting presigned URL:', error);
+      throw new Error('Failed to get media URL. Please try again.');
+    }
+  }, [username, idToken]);
+
   const handleSendMessage = useCallback(async (messageText: string) => {
     if (!messageText.trim() || isSending) return;
 
-    // Clear any previous streaming errors
     setStreamingError('');
 
-    // Add user message to chat
     const userMessage: ChatMessageType = {
       id: Date.now().toString(),
       role: 'user',
@@ -117,7 +121,6 @@ const ChatWithMediaPage: React.FC = () => {
     setMessages(prev => [...prev, userMessage]);
     setIsSending(true);
 
-    // Create assistant message placeholder for streaming
     const assistantMessageId = (Date.now() + 1).toString();
     const assistantMessage: ChatMessageType = {
       id: assistantMessageId,
@@ -128,16 +131,13 @@ const ChatWithMediaPage: React.FC = () => {
     setMessages(prev => [...prev, assistantMessage]);
 
     try {
-      // Connect to WebSocket if not already connected (use access token)
       await chatWebSocketService.connect(accessToken);
 
-      // Get selected media names and determine transcript job ID
       const mediaNames = selectedMediaNames.map(option => option.value as string);
       
       // For single media file selection, we need to pass the transcript job ID (UUID)
       let transcriptJobId: string | undefined = undefined;
       if (mediaNames.length === 1) {
-        // Find the job data for the selected media file
         const selectedJob = jobData.find(job => job.media_name === mediaNames[0]);
         if (selectedJob) {
           transcriptJobId = selectedJob.UUID;
@@ -147,23 +147,20 @@ const ChatWithMediaPage: React.FC = () => {
         }
       }
       
-      // Send message and get streaming response
       const responseGenerator = await chatWebSocketService.sendMessage(
         [...messages, userMessage],
         username,
-        accessToken, // Pass the access token for authentication
+        accessToken,
         mediaNames,
-        transcriptJobId  // Pass the job ID for single file queries
+        transcriptJobId
       );
 
       let fullAnswer = '';
       let lastFullQAnswer = null;
 
-      // Process streaming responses
       for await (const partialResponse of responseGenerator) {
         lastFullQAnswer = partialResponse;
         
-        // Extract text from the response
         if (partialResponse.answer && partialResponse.answer.length > 0) {
           const latestPartial = partialResponse.answer[partialResponse.answer.length - 1];
           if (latestPartial.partial_answer) {
@@ -173,7 +170,6 @@ const ChatWithMediaPage: React.FC = () => {
           }
         }
 
-        // Update the assistant message with streaming content
         setMessages(prev => prev.map(msg => 
           msg.id === assistantMessageId 
             ? {
@@ -185,7 +181,6 @@ const ChatWithMediaPage: React.FC = () => {
         ));
       }
 
-      // Final update with complete response
       if (lastFullQAnswer) {
         setMessages(prev => prev.map(msg => 
           msg.id === assistantMessageId 
@@ -210,25 +205,22 @@ const ChatWithMediaPage: React.FC = () => {
       }
 
       setStreamingError(errorMessage);
-
-      // Remove the empty assistant message on error
       setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
     } finally {
       setIsSending(false);
     }
-  }, [isSending, accessToken, selectedMediaNames, messages, username]);
+  }, [isSending, accessToken, selectedMediaNames, messages, username, jobData]);
 
   const handleClearConversation = () => {
     setMessages([]);
   };
 
-  // Create options for the multiselect from job data
   const mediaOptions: MultiselectProps.Option[] = jobData
     .map(job => ({
       label: job.media_name,
       value: job.media_name,
     }))
-    .sort((a, b) => a.label.localeCompare(b.label)); // Sort alphabetically
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   if (isLoading) {
     return (
@@ -330,7 +322,10 @@ const ChatWithMediaPage: React.FC = () => {
             </Box>
             
             <Box>
-              <ChatContainer messages={messages} />
+              <ChatContainer 
+                messages={messages} 
+                onCitationClick={handleCitationClick}
+              />
             </Box>
             
             <Box>
@@ -347,6 +342,16 @@ const ChatWithMediaPage: React.FC = () => {
               />
             </Box>
           </SpaceBetween>
+
+          <MediaPlayer
+            citation={selectedCitation}
+            isVisible={isMediaPlayerVisible}
+            onClose={() => {
+              setIsMediaPlayerVisible(false);
+              setSelectedCitation(null);
+            }}
+            onGetPresignedUrl={handleGetPresignedUrl}
+          />
         </ContentLayout>
       }
     />

@@ -1,20 +1,37 @@
-const API_BASE_URL = '/api';
+/**
+ * Functions for interacting with S3 via API Gateway
+ */
 
-export const retrieveTranscriptByJobId = async (
-  jobId: string,
+/**
+ * Get a presigned URL for a media file
+ * @param mediaName The name of the media file
+ * @param username The current user's username
+ * @param authToken The authentication token
+ * @returns Promise resolving to the presigned URL
+ */
+export async function getMediaPresignedUrl(
+  mediaName: string,
   username: string,
   authToken: string
-): Promise<string> => {
-  const response = await fetch(`${API_BASE_URL}/s3/transcript/${jobId}`, {
-    method: 'GET',
+): Promise<string> {
+  const response = await fetch('/api/s3-presigned', {
+    method: 'POST',
     headers: {
-      'Authorization': authToken,
+      'Content-Type': 'application/json',
+      'Authorization': authToken
     },
+    body: JSON.stringify({
+      operation: 'GET',
+      media_name: mediaName,
+      username: username,
+      media_type: 'recordings'  // This is the S3 prefix for media files
+    })
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to retrieve transcript: ${response.status} ${response.statusText}`);
+    throw new Error(`Failed to get presigned URL: ${response.statusText}`);
   }
 
-  return response.text();
-};
+  const data = await response.json();
+  return data.url;
+}

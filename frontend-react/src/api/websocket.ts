@@ -302,7 +302,7 @@ export class ChatWebSocketService {
         if (parsedResponse.answer && parsedResponse.answer.length > 0) {
           const latestAnswer = parsedResponse.answer[parsedResponse.answer.length - 1];
           if (latestAnswer.citations && latestAnswer.citations.length > 0) {
-            console.log('📚 Citations:', latestAnswer.citations.map(c => 
+            console.log('📚 Citations:', latestAnswer.citations.map((c: any) => 
               `${c.media_name} @ ${c.timestamp}s`
             ).join(', '));
           }
