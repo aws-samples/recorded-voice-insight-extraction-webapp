@@ -5,7 +5,7 @@ import {
   SpaceBetween,
 } from '@cloudscape-design/components';
 import { ChatMessage as ChatMessageType } from '../types/chat';
-import { ProcessedCitation, processCitations, parseCitationText, formatTimestamp } from '../utils/citationUtils';
+import { ProcessedCitation, processCitations, insertCitationsAtSentences, formatTimestamp } from '../utils/citationUtils';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -30,7 +30,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     
     if (allCitations.length > 0) {
       citations = processCitations(allCitations);
-      const textParts = parseCitationText(messageText, citations);
+      console.log(`📝 Processing ${citations.length} citations for message`);
+      
+      // Insert citation markers into the text
+      const textParts = insertCitationsAtSentences(messageText, citations);
       
       processedContent = textParts.map((part, index) => {
         if (part.type === 'citation' && part.citation) {
@@ -44,8 +47,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 color: '#0073bb',
                 textDecoration: 'underline',
                 cursor: 'pointer',
-                padding: 0,
-                font: 'inherit'
+                padding: '0 2px',
+                font: 'inherit',
+                fontWeight: 'bold'
               }}
               title={`${part.citation.media_name} at ${formatTimestamp(part.citation.timestamp)}`}
             >
@@ -112,7 +116,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                       }}
                       title={`${citation.media_name} at ${formatTimestamp(citation.timestamp)}`}
                     >
-                      {citation.media_name} ({formatTimestamp(citation.timestamp)})
+                      {citation.displayText} {citation.media_name} ({formatTimestamp(citation.timestamp)})
                     </button>
                   </span>
                 ))}

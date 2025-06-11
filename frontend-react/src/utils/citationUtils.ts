@@ -28,12 +28,13 @@ export function processCitations(citations: Citation[]): ProcessedCitation[] {
 }
 
 /**
- * Parse text and identify citation markers
+ * Insert citation markers at the end of sentences or logical breaks in the text
+ * This approach adds citations at the end since the backend doesn't provide specific insertion points
  * @param text The text content to process
  * @param citations Array of processed citations
  * @returns Array of text parts and citation references
  */
-export function parseCitationText(
+export function insertCitationMarkers(
   text: string, 
   citations: ProcessedCitation[]
 ): Array<{ type: 'text' | 'citation'; content: string; citation?: ProcessedCitation }> {
@@ -41,46 +42,85 @@ export function parseCitationText(
     return [{ type: 'text', content: text }];
   }
 
+  // For now, we'll add all citations at the end of the text
+  // This is a simple approach that works when the backend doesn't specify insertion points
   const parts: Array<{ type: 'text' | 'citation'; content: string; citation?: ProcessedCitation }> = [];
-  let lastIndex = 0;
   
-  // Look for citation patterns in the text (e.g., [1], [2])
-  const citationRegex = /\[(\d+)\]/g;
-  let match;
+  // Add the main text
+  parts.push({ type: 'text', content: text });
   
-  while ((match = citationRegex.exec(text)) !== null) {
-    const citationNumber = parseInt(match[1]);
-    const citation = citations.find(c => c.id === citationNumber);
-    
-    if (citation) {
-      // Add text before citation
-      if (match.index > lastIndex) {
-        parts.push({
-          type: 'text',
-          content: text.substring(lastIndex, match.index)
-        });
-      }
-      
-      // Add citation reference
-      parts.push({
-        type: 'citation',
-        content: citation.displayText,
-        citation: citation
-      });
-      
-      lastIndex = match.index + match[0].length;
+  // Add each citation marker
+  citations.forEach((citation, index) => {
+    if (index === 0) {
+      parts.push({ type: 'text', content: ' ' }); // Add space before first citation
     }
-  }
-  
-  // Add remaining text
-  if (lastIndex < text.length) {
     parts.push({
-      type: 'text',
-      content: text.substring(lastIndex)
+      type: 'citation',
+      content: citation.displayText,
+      citation: citation
     });
+  });
+
+  return parts;
+}
+
+/**
+ * Alternative approach: Insert citations at sentence boundaries
+ * This distributes citations throughout the text more naturally
+ */
+export function insertCitationsAtSentences(
+  text: string,
+  citations: ProcessedCitation[]
+): Array<{ type: 'text' | 'citation'; content: string; citation?: ProcessedCitation }> {
+  if (!citations.length) {
+    return [{ type: 'text', content: text }];
   }
+
+  const parts: Array<{ type: 'text' | 'citation'; content: string; citation?: ProcessedCitation }> = [];
   
-  return parts.length > 0 ? parts : [{ type: 'text', content: text }];
+  // Split text into sentences (simple approach)
+  const sentences = text.split(/([.!?]+\s+)/).filter(s => s.trim().length > 0);
+  
+  if (sentences.length <= 1) {
+    // If no clear sentence breaks, add citations at the end
+    return insertCitationMarkers(text, citations);
+  }
+
+  // Distribute citations across sentences
+  const citationsPerSentence = Math.ceil(citations.length / Math.max(1, sentences.length - 1));
+  let citationIndex = 0;
+
+  sentences.forEach((sentence, index) => {
+    parts.push({ type: 'text', content: sentence });
+    
+    // Add citations after some sentences (not the last one)
+    if (index < sentences.length - 1 && citationIndex < citations.length) {
+      const citationsToAdd = Math.min(citationsPerSentence, citations.length - citationIndex);
+      
+      for (let i = 0; i < citationsToAdd; i++) {
+        if (citationIndex < citations.length) {
+          parts.push({
+            type: 'citation',
+            content: citations[citationIndex].displayText,
+            citation: citations[citationIndex]
+          });
+          citationIndex++;
+        }
+      }
+    }
+  });
+
+  // Add any remaining citations at the end
+  while (citationIndex < citations.length) {
+    parts.push({
+      type: 'citation',
+      content: citations[citationIndex].displayText,
+      citation: citations[citationIndex]
+    });
+    citationIndex++;
+  }
+
+  return parts;
 }
 
 /**
