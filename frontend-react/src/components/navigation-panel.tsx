@@ -34,6 +34,11 @@ export default function NavigationPanel() {
       },
       {
         type: "link",
+        text: "Chat With Your Media",
+        href: "/chat-with-media",
+      },
+      {
+        type: "link",
         text: "Analyze Your Media",
         href: "/analyze",
       },
