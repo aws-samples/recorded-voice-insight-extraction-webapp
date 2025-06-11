@@ -1,5 +1,16 @@
 import { FullQAnswer, ChatMessage } from '../types/chat';
 
+// WebSocket message size limit for API Gateway (32KB)
+const CHUNK_SIZE = 32 * 1024;
+
+// WebSocket message steps
+enum WebSocketStep {
+  START = 'START',
+  BODY = 'BODY',
+  END = 'END'
+}
+
+// Error class for WebSocket timeouts
 export class WebSocketTimeoutError extends Error {
   constructor(message: string) {
     super(message);
@@ -7,59 +18,76 @@ export class WebSocketTimeoutError extends Error {
   }
 }
 
-interface WebSocketMessage {
-  action: string;
+// Interface for chat input message
+interface ChatInput {
   messages: string;
   username: string;
   media_names?: string;
   transcript_job_id?: string;
 }
 
+// Interface for START message
+interface StartMessage {
+  step: WebSocketStep.START;
+  token: string;
+}
+
+// Interface for BODY message
+interface BodyMessage {
+  step: WebSocketStep.BODY;
+  index: number;
+  part: string;
+}
+
+// Interface for END message
+interface EndMessage {
+  step: WebSocketStep.END;
+  token: string;
+}
+
+// Remove unused WebSocketMessage type since we have specific types
+// type WebSocketMessage = StartMessage | BodyMessage | EndMessage;
 export class ChatWebSocketService {
   private ws: WebSocket | null = null;
   private wsUrl: string;
+  private receivedCount: number = 0;
+  private expectedChunks: number = 0;
 
   constructor() {
-    // Use environment variable or fallback to hardcoded URL
-    // For local development, this should point to the actual WebSocket API Gateway URL
-    this.wsUrl = import.meta.env.VITE_WS_API_URL || 'wss://qabuyr9e0i.execute-api.us-east-1.amazonaws.com/prod';
+    // Use environment variable or fallback URL
+    // @ts-ignore - Vite handles this at build time
+    this.wsUrl = import.meta.env?.VITE_WS_API_URL || 'wss://qabuyr9e0i.execute-api.us-east-1.amazonaws.com/prod';
   }
 
   async connect(authToken: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        // For browser WebSocket, we can't set headers directly
-        // Pass auth token via query params (backend modified to support this for React compatibility)
-        // Remove "Bearer " prefix if present since we'll pass the raw token
+        // Clean token (remove Bearer prefix if present)
         const cleanToken = authToken.startsWith('Bearer ') ? authToken.substring(7) : authToken;
-        const wsUrlWithAuth = `${this.wsUrl}?authorization=${cleanToken}`;
         
         console.log('Connecting to WebSocket:', this.wsUrl);
         console.log('Token length:', cleanToken.length);
-        console.log('Full token:', cleanToken)
-        console.log('Token starts with:', cleanToken.substring(0, 20) + '...');
-        console.log('Token parts count:', cleanToken.split('.').length);
-        console.log('Token parts count:', cleanToken.split('.').length);
-        console.log('Full WebSocket URL (first 100 chars):', wsUrlWithAuth.substring(0, 100) + '...');
         
-        this.ws = new WebSocket(wsUrlWithAuth);
+        // Connect without auth in URL - auth moved to message body
+        this.ws = new WebSocket(this.wsUrl);
 
         this.ws.onopen = () => {
           console.log('WebSocket connected successfully');
-          resolve();
+          // Send START message with token for authentication
+          this.sendStartMessage(cleanToken)
+            .then(() => resolve())
+            .catch(reject);
         };
 
         this.ws.onerror = (error) => {
           console.error('WebSocket error:', error);
-          console.error('WebSocket URL:', this.wsUrl);
-          console.error('WebSocket readyState:', this.ws?.readyState);
           reject(new Error('WebSocket connection failed'));
         };
 
         this.ws.onclose = (event) => {
           console.log('WebSocket closed:', event.code, event.reason);
           if (event.code === 1006) {
-            console.error('WebSocket closed abnormally - likely authentication or network issue');
+            console.error('WebSocket closed abnormally - likely network issue');
           }
         };
 
@@ -70,9 +98,117 @@ export class ChatWebSocketService {
     });
   }
 
+  private async sendStartMessage(token: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket is not connected'));
+        return;
+      }
+
+      const startMessage: StartMessage = {
+        step: WebSocketStep.START,
+        token: token
+      };
+
+      // Set up one-time message listener for START response
+      const handleStartResponse = (event: MessageEvent) => {
+        this.ws!.removeEventListener('message', handleStartResponse);
+        
+        if (event.data === 'Session started.') {
+          console.log('✅ Authentication successful - session started');
+          resolve();
+        } else {
+          console.error('❌ Authentication failed:', event.data);
+          reject(new Error(`Authentication failed: ${event.data}`));
+        }
+      };
+
+      this.ws.addEventListener('message', handleStartResponse);
+      this.ws.send(JSON.stringify(startMessage));
+      console.log('📤 Sent START message with authentication token');
+    });
+  }
+  private async sendChunkedMessage(chatInput: ChatInput, token: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket is not connected'));
+        return;
+      }
+
+      // Convert chat input to string
+      const payloadString = JSON.stringify(chatInput);
+      
+      // Split into chunks
+      const chunks: string[] = [];
+      const chunkCount = Math.ceil(payloadString.length / CHUNK_SIZE);
+      
+      for (let i = 0; i < chunkCount; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, payloadString.length);
+        chunks.push(payloadString.substring(start, end));
+      }
+
+      console.log(`📦 Splitting message into ${chunks.length} chunks`);
+      
+      this.receivedCount = 0;
+      this.expectedChunks = chunks.length;
+
+      // Set up message listener for chunk acknowledgments
+      const handleChunkResponse = (event: MessageEvent) => {
+        if (event.data === 'Message part received.') {
+          this.receivedCount++;
+          console.log(`✅ Chunk ${this.receivedCount}/${this.expectedChunks} acknowledged`);
+          
+          if (this.receivedCount === this.expectedChunks) {
+            // All chunks sent, now send END message
+            this.ws!.removeEventListener('message', handleChunkResponse);
+            this.sendEndMessage(token)
+              .then(() => resolve())
+              .catch(reject);
+          }
+        } else {
+          this.ws!.removeEventListener('message', handleChunkResponse);
+          reject(new Error(`Unexpected chunk response: ${event.data}`));
+        }
+      };
+
+      this.ws.addEventListener('message', handleChunkResponse);
+
+      // Send all chunks
+      chunks.forEach((chunk, index) => {
+        const bodyMessage: BodyMessage = {
+          step: WebSocketStep.BODY,
+          index: index,
+          part: chunk
+        };
+        
+        this.ws!.send(JSON.stringify(bodyMessage));
+        console.log(`📤 Sent chunk ${index + 1}/${chunks.length}`);
+      });
+    });
+  }
+
+  private async sendEndMessage(token: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket is not connected'));
+        return;
+      }
+
+      const endMessage: EndMessage = {
+        step: WebSocketStep.END,
+        token: token
+      };
+
+      this.ws.send(JSON.stringify(endMessage));
+      console.log('📤 Sent END message - starting to receive responses');
+      resolve();
+    });
+  }
   async sendMessage(
     messages: ChatMessage[],
     username: string,
+    token: string,
     mediaNames: string[] = [],
     transcriptJobId?: string
   ): Promise<AsyncGenerator<FullQAnswer, void, unknown>> {
@@ -83,24 +219,30 @@ export class ChatWebSocketService {
     // Clean messages similar to the Python implementation
     const cleanedMessages = this.cleanMessages(messages);
 
-    const messageBody: WebSocketMessage = {
-      action: '$default',
+    // Prepare chat input
+    const chatInput: ChatInput = {
       messages: JSON.stringify(cleanedMessages),
       username,
     };
 
     // Add media_names if provided
     if (mediaNames.length > 0) {
-      messageBody.media_names = JSON.stringify(mediaNames);
+      chatInput.media_names = JSON.stringify(mediaNames);
+      console.log(`📁 Selected media files: ${mediaNames.join(', ')}`);
     }
 
     // Add transcript_job_id for single file queries
     if (transcriptJobId) {
-      messageBody.transcript_job_id = transcriptJobId;
+      chatInput.transcript_job_id = transcriptJobId;
+      console.log(`🔑 Using transcript job ID: ${transcriptJobId}`);
+    } else {
+      console.log('ℹ️ No transcript job ID provided (using RAG over all files)');
     }
 
-    this.ws.send(JSON.stringify(messageBody));
+    // Send message using chunked protocol
+    await this.sendChunkedMessage(chatInput, token);
 
+    // Return generator for streaming responses
     return this.createResponseGenerator();
   }
 
@@ -137,11 +279,33 @@ export class ChatWebSocketService {
       }
 
       try {
+        // Handle completion messages that aren't JSON
+        if (message === 'Message sent.' || message.trim() === '') {
+          console.log('✅ Message processing completed');
+          break;
+        }
+
         const parsedResponse = JSON.parse(message);
 
         // Check for timeout error
         if (parsedResponse.message === 'Endpoint request timed out') {
           throw new WebSocketTimeoutError('Endpoint request timed out');
+        }
+
+        // Check for error status
+        if (parsedResponse.status === 'ERROR') {
+          console.error('❌ Server error:', parsedResponse.reason);
+          throw new Error(parsedResponse.reason || 'Unknown error from server');
+        }
+
+        // Log successful response
+        if (parsedResponse.answer && parsedResponse.answer.length > 0) {
+          const latestAnswer = parsedResponse.answer[parsedResponse.answer.length - 1];
+          if (latestAnswer.citations && latestAnswer.citations.length > 0) {
+            console.log('📚 Citations:', latestAnswer.citations.map(c => 
+              `${c.media_name} @ ${c.timestamp}s`
+            ).join(', '));
+          }
         }
 
         // Yield the parsed FullQAnswer
@@ -152,8 +316,9 @@ export class ChatWebSocketService {
           throw error;
         }
         
-        if (message.trim() === '') {
-          // Empty message indicates end of stream
+        // Handle non-JSON completion messages
+        if (message === 'Message sent.' || message.trim() === '') {
+          console.log('✅ Message processing completed');
           break;
         }
         
@@ -184,7 +349,7 @@ export class ChatWebSocketService {
         resolve(null);
       };
 
-      const handleError = (error: Event) => {
+      const handleError = (_error: Event) => {
         this.ws!.removeEventListener('message', handleMessage);
         this.ws!.removeEventListener('close', handleClose);
         this.ws!.removeEventListener('error', handleError);

@@ -38,7 +38,7 @@ const ChatWithMediaPage: React.FC = () => {
       try {
         const user = await getCurrentUser();
         const session = await fetchAuthSession();
-        console.log('Access token type check:', session.tokens.accessToken.toString().substring(0, 50));
+        console.log('Access token type check:', session.tokens?.accessToken?.toString().substring(0, 50));
         
         if (user.username && session.tokens?.idToken && session.tokens?.accessToken) {
           setUsername(user.username);
@@ -93,7 +93,7 @@ const ChatWithMediaPage: React.FC = () => {
     fetchJobData();
   }, [isAuthenticated, username, idToken]);
 
-  const handleMediaSelectionChange = ({ detail }: { detail: MultiselectProps.ChangeDetail }) => {
+  const handleMediaSelectionChange = ({ detail }: any) => {
     // If user changes media selection while in conversation, clear the conversation
     if (messages.length > 0) {
       setMessages([]);
@@ -131,14 +131,29 @@ const ChatWithMediaPage: React.FC = () => {
       // Connect to WebSocket if not already connected (use access token)
       await chatWebSocketService.connect(accessToken);
 
-      // Get selected media names
+      // Get selected media names and determine transcript job ID
       const mediaNames = selectedMediaNames.map(option => option.value as string);
+      
+      // For single media file selection, we need to pass the transcript job ID (UUID)
+      let transcriptJobId: string | undefined = undefined;
+      if (mediaNames.length === 1) {
+        // Find the job data for the selected media file
+        const selectedJob = jobData.find(job => job.media_name === mediaNames[0]);
+        if (selectedJob) {
+          transcriptJobId = selectedJob.UUID;
+          console.log(`Selected single media file: ${mediaNames[0]}, Job ID: ${transcriptJobId}`);
+        } else {
+          console.error(`Could not find job data for selected media: ${mediaNames[0]}`);
+        }
+      }
       
       // Send message and get streaming response
       const responseGenerator = await chatWebSocketService.sendMessage(
         [...messages, userMessage],
         username,
-        mediaNames
+        accessToken, // Pass the access token for authentication
+        mediaNames,
+        transcriptJobId  // Pass the job ID for single file queries
       );
 
       let fullAnswer = '';
