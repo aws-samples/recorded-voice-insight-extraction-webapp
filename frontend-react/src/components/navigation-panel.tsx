@@ -83,13 +83,15 @@ export default function NavigationPanel() {
       header={{ href: "/", text: APP_NAME }}
       activeHref={location.pathname}
       items={items.map((value, idx) => {
-        if (value.type === "section") {
+        const item = { ...value };
+        
+        if (item.type === "section") {
           const collapsed =
             navigationPanelState.collapsedSections?.[idx] === true;
-          value.defaultExpanded = !collapsed;
+          item.defaultExpanded = !collapsed;
         }
 
-        return value;
+        return item;
       })}
     />
   );

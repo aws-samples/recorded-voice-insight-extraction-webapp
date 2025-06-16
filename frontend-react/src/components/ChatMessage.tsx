@@ -107,6 +107,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       >
         <SpaceBetween size="s">
           <Box 
+            key="message-content"
             variant="div" 
             margin={{ top: 'xs' }}
             color={isUser ? 'inherit' : 'text-body-secondary'}
@@ -116,14 +117,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           
           {/* Show citation summary for assistant messages */}
           {!isUser && allCitations.length > 0 && (
-            <div style={{ borderTop: '1px solid #e9ebed', paddingTop: '8px' }}>
+            <div key="citation-sources" style={{ borderTop: '1px solid #e9ebed', paddingTop: '8px' }}>
               <Box 
                 variant="small" 
                 color="text-body-secondary"
               >
-                <strong>Sources:</strong> {allCitations.map(citation => (
-                  <span key={citation.id}>
-                    {citation.id > 1 && ', '}
+                <strong>Sources:</strong> {allCitations.map((citation, index) => (
+                  <span key={`citation-${citation.id}-${citation.media_name}-${citation.timestamp}`}>
+                    {index > 0 && ', '}
                     <button
                       onClick={() => onCitationClick?.(citation)}
                       style={{

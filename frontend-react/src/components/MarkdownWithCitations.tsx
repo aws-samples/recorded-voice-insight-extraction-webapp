@@ -128,7 +128,7 @@ const MarkdownWithCitations: React.FC<MarkdownWithCitationsProps> = ({
           if (textBefore.trim()) {
             parts.push(
               <ReactMarkdown
-                key={`text-${lastIndex}`}
+                key={`text-before-${match.index}`}
                 skipHtml={true}
                 components={{
                   p: ({ children }) => <span>{children}</span>, // Inline rendering
@@ -170,7 +170,7 @@ const MarkdownWithCitations: React.FC<MarkdownWithCitationsProps> = ({
       if (remainingText.trim()) {
         parts.push(
           <ReactMarkdown
-            key={`text-${lastIndex}`}
+            key={`text-remaining-${lastIndex}`}
             skipHtml={true}
             components={{
               p: ({ children }) => <span>{children}</span>, // Inline rendering
@@ -293,7 +293,10 @@ const MarkdownWithCitations: React.FC<MarkdownWithCitationsProps> = ({
       if (citation) {
         // Add text before citation
         if (match.index > lastIndex) {
-          parts.push(cleanedContent.substring(lastIndex, match.index));
+          const textBefore = cleanedContent.substring(lastIndex, match.index);
+          parts.push(
+            <span key={`fallback-text-${lastIndex}`}>{textBefore}</span>
+          );
         }
         
         // Add clickable citation
@@ -307,7 +310,10 @@ const MarkdownWithCitations: React.FC<MarkdownWithCitationsProps> = ({
     
     // Add remaining text
     if (lastIndex < cleanedContent.length) {
-      parts.push(cleanedContent.substring(lastIndex));
+      const remainingText = cleanedContent.substring(lastIndex);
+      parts.push(
+        <span key={`fallback-remaining-${lastIndex}`}>{remainingText}</span>
+      );
     }
     
     return <div style={{ whiteSpace: 'pre-wrap' }}>{parts.length > 0 ? parts : cleanedContent}</div>;

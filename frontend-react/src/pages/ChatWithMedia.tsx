@@ -43,7 +43,6 @@ const ChatWithMediaPage: React.FC = () => {
       try {
         const user = await getCurrentUser();
         const session = await fetchAuthSession();
-        console.log('Access token type check:', session.tokens?.accessToken?.toString().substring(0, 50));
         
         if (user.username && session.tokens?.idToken && session.tokens?.accessToken) {
           setUsername(user.username);
@@ -292,56 +291,58 @@ const ChatWithMediaPage: React.FC = () => {
           }
         >
           <SpaceBetween size="l">
-            {dataError && (
-              <Alert type="error" dismissible onDismiss={() => setDataError('')}>
-                {dataError}
-              </Alert>
-            )}
+            {[
+              dataError && (
+                <Alert key="data-error" type="error" dismissible onDismiss={() => setDataError('')}>
+                  {dataError}
+                </Alert>
+              ),
 
-            {streamingError && (
-              <Alert type="error" dismissible onDismiss={() => setStreamingError('')}>
-                {streamingError}
-              </Alert>
-            )}
-            
-            <Box>
-              <Header variant="h3" description="Select media files to analyze">
-                Pick media file to analyze:
-              </Header>
-              <Multiselect
-                selectedOptions={selectedMediaNames}
-                onChange={handleMediaSelectionChange}
-                options={mediaOptions}
-                placeholder="Chat with all media files"
-                empty="No completed media files available"
-                filteringType="auto"
-                disabled={isSending}
-              />
-              {selectedMediaNames.length > 0 && (
-                <Box variant="small" margin={{ top: "xs" }} color="text-body-secondary">
-                  Selected: {selectedMediaNames.map(option => option.label).join(', ')}
-                </Box>
-              )}
-            </Box>
-            
-            <Box>
-              <ChatContainer 
-                messages={messages} 
-                onCitationClick={handleCitationClick}
-              />
-            </Box>
-            
-            <Box>
-              <ChatInput
-                onSendMessage={handleSendMessage}
-                disabled={isSending}
-                placeholder={
-                  isSending
-                    ? "Processing..."
-                    : "Enter your question here"
-                }
-              />
-            </Box>
+              streamingError && (
+                <Alert key="streaming-error" type="error" dismissible onDismiss={() => setStreamingError('')}>
+                  {streamingError}
+                </Alert>
+              ),
+              
+              <Box key="media-selection">
+                <Header variant="h3" description="Select media files to analyze">
+                  Pick media file to analyze:
+                </Header>
+                <Multiselect
+                  selectedOptions={selectedMediaNames}
+                  onChange={handleMediaSelectionChange}
+                  options={mediaOptions}
+                  placeholder="Chat with all media files"
+                  empty="No completed media files available"
+                  filteringType="auto"
+                  disabled={isSending}
+                />
+                {selectedMediaNames.length > 0 && (
+                  <Box variant="small" margin={{ top: "xs" }} color="text-body-secondary">
+                    Selected: {selectedMediaNames.map(option => option.label).join(', ')}
+                  </Box>
+                )}
+              </Box>,
+              
+              <Box key="chat-container">
+                <ChatContainer 
+                  messages={messages} 
+                  onCitationClick={handleCitationClick}
+                />
+              </Box>,
+              
+              <Box key="chat-input">
+                <ChatInput
+                  onSendMessage={handleSendMessage}
+                  disabled={isSending}
+                  placeholder={
+                    isSending
+                      ? "Processing..."
+                      : "Enter your question here"
+                  }
+                />
+              </Box>
+            ].filter(Boolean)}
           </SpaceBetween>
 
           <MediaPlayer
