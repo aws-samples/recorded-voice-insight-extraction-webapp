@@ -19,17 +19,64 @@ const MarkdownWithCitations: React.FC<MarkdownWithCitationsProps> = ({
   // Create the citation button component
   const CitationButton: React.FC<{ citationNumber: number }> = ({ citationNumber }) => {
     const citation = citationMap.get(citationNumber);
+    const [hoverTimeout, setHoverTimeout] = React.useState<NodeJS.Timeout | null>(null);
+    const [lastTriggered, setLastTriggered] = React.useState<number>(0);
     
     if (!citation) {
       return <span>[{citationNumber}]</span>;
     }
     
+    const handleCitationTrigger = () => {
+      const now = Date.now();
+      const cooldownPeriod = 2000; // 2 seconds cooldown
+      
+      if (now - lastTriggered < cooldownPeriod) {
+        console.log(`🕒 Citation [${citationNumber}] still in cooldown period`);
+        return;
+      }
+      
+      console.log(`🎯 Citation [${citationNumber}] triggered!`);
+      setLastTriggered(now);
+      onCitationClick(citation);
+    };
+    
+    const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.style.background = '#d1e7f7';
+      e.currentTarget.style.transform = 'translateY(-1px)';
+      
+      // Set a delay before triggering the citation
+      const timeout = setTimeout(() => {
+        console.log(`🎯 Citation [${citationNumber}] hover delay completed - showing media!`);
+        handleCitationTrigger();
+      }, 500); // 500ms delay
+      
+      setHoverTimeout(timeout);
+    };
+    
+    const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.style.background = '#e8f4fd';
+      e.currentTarget.style.transform = 'translateY(0)';
+      
+      // Cancel the pending hover action if mouse leaves
+      if (hoverTimeout) {
+        console.log(`🚫 Citation [${citationNumber}] hover cancelled - mouse left before delay`);
+        clearTimeout(hoverTimeout);
+        setHoverTimeout(null);
+      }
+    };
+    
+    // Cleanup timeout on unmount
+    React.useEffect(() => {
+      return () => {
+        if (hoverTimeout) {
+          clearTimeout(hoverTimeout);
+        }
+      };
+    }, [hoverTimeout]);
+    
     return (
       <button
-        onClick={() => {
-          console.log(`🎯 Citation [${citationNumber}] clicked!`);
-          onCitationClick(citation);
-        }}
+        onClick={handleCitationTrigger}
         style={{
           background: '#e8f4fd',
           border: '1px solid #0073bb',
@@ -45,15 +92,9 @@ const MarkdownWithCitations: React.FC<MarkdownWithCitationsProps> = ({
           margin: '0 2px',
           transition: 'all 0.2s ease',
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#d1e7f7';
-          e.currentTarget.style.transform = 'translateY(-1px)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = '#e8f4fd';
-          e.currentTarget.style.transform = 'translateY(0)';
-        }}
-        title={`Click to play: ${citation.media_name} at ${formatTimestamp(citation.timestamp)}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        title={`Hover to preview: ${citation.media_name} at ${formatTimestamp(citation.timestamp)}`}
       >
         {citationNumber}
       </button>
