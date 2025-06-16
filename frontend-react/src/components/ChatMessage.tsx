@@ -40,34 +40,53 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         allCitations = extractAllCitations(partialAnswers);
         
         console.log(`📚 Total citations found: ${allCitations.length}`);
-        console.log(`📄 Markdown content preview: ${markdownContent.substring(0, 100)}...`);
+        console.log(`📄 Markdown content preview: ${markdownContent.substring(0, 500)}...`);
+        console.log(`🗺️ Citation map size: ${citationMap.size}`);
+        console.log(`🔗 Citation map keys: [${Array.from(citationMap.keys()).join(', ')}]`);
         
         // Render markdown with citations
         processedContent = (
-          <MarkdownWithCitations
-            content={markdownContent}
-            citationMap={citationMap}
-            onCitationClick={onCitationClick}
-          />
+          <div>
+            <div style={{ background: '#fff3cd', padding: '4px', fontSize: '12px', marginBottom: '8px' }}>
+              DEBUG: Using MarkdownWithCitations - Citations: {citationMap.size}, Content length: {markdownContent.length}
+            </div>
+            <MarkdownWithCitations
+              content={markdownContent}
+              citationMap={citationMap}
+              onCitationClick={onCitationClick}
+            />
+          </div>
         );
       } else {
+        console.log(`⚠️ No partial answers found, using fallback markdown`);
         // Fallback to plain markdown if no partial answers but we have full_answer
         processedContent = (
-          <MarkdownWithCitations
-            content={messageText}
-            citationMap={new Map()}
-            onCitationClick={onCitationClick}
-          />
+          <div>
+            <div style={{ background: '#f8d7da', padding: '4px', fontSize: '12px', marginBottom: '8px' }}>
+              DEBUG: Using fallback MarkdownWithCitations - No partial answers
+            </div>
+            <MarkdownWithCitations
+              content={messageText}
+              citationMap={new Map()}
+              onCitationClick={onCitationClick}
+            />
+          </div>
         );
       }
     } else {
+      console.log(`⚠️ No full_answer or onCitationClick, using basic markdown`);
       // For assistant messages without full_answer or citations, still render as markdown
       processedContent = (
-        <MarkdownWithCitations
-          content={messageText}
-          citationMap={new Map()}
-          onCitationClick={onCitationClick || (() => {})}
-        />
+        <div>
+          <div style={{ background: '#d1ecf1', padding: '4px', fontSize: '12px', marginBottom: '8px' }}>
+            DEBUG: Using basic MarkdownWithCitations - No full_answer
+          </div>
+          <MarkdownWithCitations
+            content={messageText}
+            citationMap={new Map()}
+            onCitationClick={onCitationClick || (() => {})}
+          />
+        </div>
       );
     }
   }

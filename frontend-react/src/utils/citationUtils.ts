@@ -61,7 +61,7 @@ export function processPartialAnswersForMarkdown(
     const citations = partialAnswer.citations || [];
 
     console.log(`  📄 Partial answer ${answerIndex + 1}:`, {
-      text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+      text: text.substring(0, 500) + (text.length > 500 ? '...' : ''),
       citationCount: citations.length,
       citations: citations.map(c => `${c.media_name}@${c.timestamp}s`)
     });

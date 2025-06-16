@@ -334,11 +334,9 @@ const ChatWithMediaPage: React.FC = () => {
             <Box>
               <ChatInput
                 onSendMessage={handleSendMessage}
-                disabled={isSending || selectedMediaNames.length === 0}
+                disabled={isSending}
                 placeholder={
-                  selectedMediaNames.length === 0
-                    ? "Select media files to start chatting"
-                    : isSending
+                  isSending
                     ? "Processing..."
                     : "Enter your question here"
                 }
