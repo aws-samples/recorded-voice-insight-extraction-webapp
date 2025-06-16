@@ -47,6 +47,9 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
   const [isLoadingSubtitles, setIsLoadingSubtitles] = useState<boolean>(false);
   const [subtitleError, setSubtitleError] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
+  const [lastTranslatedTimestamp, setLastTranslatedTimestamp] = useState<number>(-1);
+  const [isUserSeeking, setIsUserSeeking] = useState<boolean>(false);
+  const [wasPlayingBeforeTranslation, setWasPlayingBeforeTranslation] = useState<boolean>(false);
 
   const loadMedia = async () => {
     if (!citation) return;
@@ -88,8 +91,33 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
     }
   };
 
-  const loadSubtitles = async () => {
+  const loadSubtitles = async (startTime?: number, pauseVideo: boolean = false) => {
     if (!citation || !username || !idToken) return;
+
+    // Use provided startTime or citation timestamp
+    const translationStartTime = startTime !== undefined ? startTime : citation.timestamp;
+
+    // If we need to pause the video during translation
+    if (pauseVideo && videoRef.current && translationLanguage) {
+      const wasPlaying = !videoRef.current.paused;
+      setWasPlayingBeforeTranslation(wasPlaying);
+      
+      console.log(`🎬 Video state before translation: ${wasPlaying ? 'PLAYING' : 'PAUSED'}`);
+      
+      if (wasPlaying) {
+        videoRef.current.pause();
+        console.log(`⏸️ Paused video for subtitle translation`);
+      } else {
+        console.log(`⏸️ Video was already paused, no need to pause again`);
+      }
+      
+      // Temporarily hide existing subtitles by removing the track
+      const tracks = videoRef.current.textTracks;
+      for (let i = 0; i < tracks.length; i++) {
+        tracks[i].mode = 'hidden';
+      }
+      console.log(`👁️ Hidden ${tracks.length} subtitle tracks during translation`);
+    }
 
     setIsLoadingSubtitles(true);
     setSubtitleError('');
@@ -102,43 +130,103 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
         throw new Error(`Could not find job data for media: ${citation.media_name}`);
       }
 
-      console.log(`🎬 Loading subtitles for: ${citation.media_name} (Job ID: ${job.UUID})`);
+      console.log(`🎬 Loading subtitles for: ${citation.media_name} (Job ID: ${job.UUID}) at ${translationStartTime}s`);
       
-      let translationStartTime: number | undefined;
       let translationDuration: number | undefined;
       let translationDestinationLanguage: string | undefined;
 
       // If translation is requested, set parameters
       if (translationLanguage) {
-        translationStartTime = citation.timestamp;
-        translationDuration = 60; // seconds - translate 1 minute around the citation
+        // Start translation 5 seconds before current position (minimum 0)
+        const adjustedStartTime = Math.max(0, translationStartTime - 5);
+        translationDuration = 30; // seconds - translate 30 seconds from the adjusted start time
         translationDestinationLanguage = translationLanguage;
-        console.log(`🌐 Translating subtitles to ${translationLanguage} from ${translationStartTime}s for ${translationDuration}s`);
+        console.log(`🌐 Translating subtitles to ${translationLanguage} from ${adjustedStartTime}s (${translationStartTime - adjustedStartTime}s before current) for ${translationDuration}s`);
+        
+        // Use the adjusted start time for the API call
+        const vttContent = await retrieveSubtitles(
+          job.UUID,
+          username,
+          idToken,
+          adjustedStartTime,
+          translationDuration,
+          translationDestinationLanguage
+        );
+
+        // Create a blob URL for the VTT content
+        const blob = new Blob([vttContent], { type: 'text/vtt' });
+        const url = URL.createObjectURL(blob);
+        
+        // Clean up previous subtitle URL
+        if (subtitleUrl) {
+          URL.revokeObjectURL(subtitleUrl);
+        }
+        
+        setSubtitleUrl(url);
+        setLastTranslatedTimestamp(translationStartTime); // Still track the original timestamp for threshold calculations
+        console.log(`✅ Subtitles loaded successfully for timestamp ${translationStartTime}s (translated from ${adjustedStartTime}s)`);
+      } else {
+        // No translation needed, load original subtitles
+        const vttContent = await retrieveSubtitles(
+          job.UUID,
+          username,
+          idToken
+        );
+
+        // Create a blob URL for the VTT content
+        const blob = new Blob([vttContent], { type: 'text/vtt' });
+        const url = URL.createObjectURL(blob);
+        
+        // Clean up previous subtitle URL
+        if (subtitleUrl) {
+          URL.revokeObjectURL(subtitleUrl);
+        }
+        
+        setSubtitleUrl(url);
+        setLastTranslatedTimestamp(translationStartTime);
+        console.log(`✅ Original subtitles loaded successfully for timestamp ${translationStartTime}s`);
       }
 
-      const vttContent = await retrieveSubtitles(
-        job.UUID,
-        username,
-        idToken,
-        translationStartTime,
-        translationDuration,
-        translationDestinationLanguage
-      );
-
-      // Create a blob URL for the VTT content
-      const blob = new Blob([vttContent], { type: 'text/vtt' });
-      const url = URL.createObjectURL(blob);
-      
-      // Clean up previous subtitle URL
-      if (subtitleUrl) {
-        URL.revokeObjectURL(subtitleUrl);
+      // Re-enable subtitle tracks after new subtitles are loaded
+      if (pauseVideo && videoRef.current) {
+        // Small delay to ensure the new track is loaded
+        setTimeout(() => {
+          if (videoRef.current) {
+            const tracks = videoRef.current.textTracks;
+            for (let i = 0; i < tracks.length; i++) {
+              if (tracks[i].kind === 'subtitles') {
+                tracks[i].mode = 'showing';
+                console.log(`👁️ Re-enabled subtitle track ${i}`);
+              }
+            }
+          }
+        }, 200);
       }
-      
-      setSubtitleUrl(url);
-      console.log(`✅ Subtitles loaded successfully`);
+
+      // Resume video playback if it was playing before translation
+      // Capture the state in a local variable to avoid race conditions
+      const shouldResumePlayback = pauseVideo && videoRef.current && wasPlayingBeforeTranslation;
+      if (shouldResumePlayback) {
+        console.log(`🎬 Preparing to resume video playback (was playing: ${wasPlayingBeforeTranslation})`);
+        // Small delay to ensure subtitle track is loaded
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.play().then(() => {
+              console.log(`▶️ Successfully resumed video playback after subtitle translation`);
+            }).catch((error) => {
+              console.error(`❌ Failed to resume video playback:`, error);
+            });
+          }
+        }, 300); // Slightly longer delay to ensure subtitles are ready
+      } else if (pauseVideo) {
+        console.log(`⏸️ Video was paused before translation, not resuming playback`);
+      }
 
     } catch (err) {
       console.error('❌ Error loading subtitles:', err);
+      
+      // Capture the state for resuming playback even on error
+      const shouldResumePlaybackOnError = pauseVideo && videoRef.current && wasPlayingBeforeTranslation;
       
       if (err instanceof SubtitleThrottlingError) {
         setSubtitleError('Translation service is busy. Trying to load original subtitles...');
@@ -166,9 +254,24 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
       } else {
         setSubtitleError('Failed to load subtitles. Please try again.');
       }
+      
+      // Resume video playback even if subtitle loading failed
+      if (shouldResumePlaybackOnError) {
+        console.log(`🎬 Resuming video playback despite subtitle error (was playing: ${wasPlayingBeforeTranslation})`);
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.play().then(() => {
+              console.log(`▶️ Successfully resumed video playback after subtitle error`);
+            }).catch((playError) => {
+              console.error(`❌ Failed to resume video playback after error:`, playError);
+            });
+          }
+        }, 100); // Shorter delay since we're not waiting for subtitles
+      }
     } finally {
       setIsLoadingSubtitles(false);
       setIsTranslating(false);
+      setWasPlayingBeforeTranslation(false);
     }
   };
 
@@ -180,11 +283,14 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
   useEffect(() => {
     if (citation && isVisible && displaySubtitles && username && idToken) {
+      // Reset the last translated timestamp when citation changes
+      setLastTranslatedTimestamp(-1);
       loadSubtitles();
     } else {
       // Clear subtitles if not needed
       setSubtitleUrl('');
       setSubtitleError('');
+      setLastTranslatedTimestamp(-1);
     }
   }, [citation, isVisible, displaySubtitles, translationLanguage, username, idToken]);
 
@@ -197,11 +303,101 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
     };
   }, [subtitleUrl]);
 
+  // Enable subtitle tracks when subtitleUrl changes
+  useEffect(() => {
+    if (subtitleUrl && videoRef.current && displaySubtitles) {
+      // Small delay to ensure the track element is loaded
+      setTimeout(() => {
+        if (videoRef.current) {
+          const tracks = videoRef.current.textTracks;
+          for (let i = 0; i < tracks.length; i++) {
+            if (tracks[i].kind === 'subtitles') {
+              tracks[i].mode = 'showing';
+              console.log(`👁️ Enabled subtitle track ${i} after URL change`);
+            }
+          }
+        }
+      }, 100);
+    }
+  }, [subtitleUrl, displaySubtitles]);
+
   const handleMediaLoaded = () => {
     if (videoRef.current && citation) {
       // Set the current time to the citation timestamp
       videoRef.current.currentTime = citation.timestamp;
       console.log(`⏰ Set media time to ${citation.timestamp}s`);
+      
+      // Ensure subtitle tracks are enabled if subtitles are displayed
+      if (displaySubtitles && subtitleUrl) {
+        setTimeout(() => {
+          if (videoRef.current) {
+            const tracks = videoRef.current.textTracks;
+            for (let i = 0; i < tracks.length; i++) {
+              if (tracks[i].kind === 'subtitles') {
+                tracks[i].mode = 'showing';
+                console.log(`👁️ Enabled subtitle track ${i} on media load`);
+              }
+            }
+          }
+        }, 100);
+      }
+    }
+  };
+
+  const handleSeeking = () => {
+    setIsUserSeeking(true);
+    console.log(`🔍 User is seeking...`);
+  };
+
+  const handleSeeked = () => {
+    if (videoRef.current && translationLanguage && displaySubtitles) {
+      const currentTime = Math.floor(videoRef.current.currentTime);
+      console.log(`🎯 User seeked to ${currentTime}s (last translated: ${lastTranslatedTimestamp}s)`);
+      
+      // Calculate distance from last translated position
+      const distanceFromLastTranslation = Math.abs(currentTime - lastTranslatedTimestamp);
+      
+      // Reload subtitles if:
+      // 1. We've moved significantly (more than 15 seconds) OR
+      // 2. This is the first translation (lastTranslatedTimestamp is -1) OR  
+      // 3. We're outside the 30-second translation window from last position
+      const shouldReloadSubtitles = (
+        (lastTranslatedTimestamp === -1) || // First translation
+        (distanceFromLastTranslation > 15) || // Moved significantly
+        (currentTime < lastTranslatedTimestamp || currentTime > lastTranslatedTimestamp + 30) // Outside translation window
+      ) && !isLoadingSubtitles;
+      
+      if (shouldReloadSubtitles) {
+        console.log(`🔄 Reloading subtitles for new position: ${currentTime}s (distance: ${distanceFromLastTranslation}s)`);
+        loadSubtitles(currentTime, true); // Pass true to pause video during translation
+      } else {
+        console.log(`⏭️ Skipping subtitle reload - within acceptable range (distance: ${distanceFromLastTranslation}s)`);
+      }
+    }
+    setIsUserSeeking(false);
+  };
+
+  const handlePlay = () => {
+    if (videoRef.current && translationLanguage && displaySubtitles && !isUserSeeking) {
+      const currentTime = Math.floor(videoRef.current.currentTime);
+      console.log(`▶️ User pressed play at ${currentTime}s (last translated: ${lastTranslatedTimestamp}s)`);
+      
+      // Calculate distance from last translated position
+      const distanceFromLastTranslation = Math.abs(currentTime - lastTranslatedTimestamp);
+      
+      // Same logic as handleSeeked
+      const shouldReloadSubtitles = (
+        (lastTranslatedTimestamp === -1) || // First translation
+        (distanceFromLastTranslation > 15) || // Moved significantly
+        (currentTime < lastTranslatedTimestamp || currentTime > lastTranslatedTimestamp + 30) // Outside translation window
+      ) && !isLoadingSubtitles;
+      
+      if (shouldReloadSubtitles) {
+        console.log(`🔄 Reloading subtitles after play: ${currentTime}s (distance: ${distanceFromLastTranslation}s)`);
+        loadSubtitles(currentTime, true); // Pass true to pause video during translation
+      } else {
+        console.log(`⏭️ Skipping subtitle reload after play - within acceptable range (distance: ${distanceFromLastTranslation}s)`);
+      }
     }
   };
 
@@ -234,12 +430,6 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
       }
     >
       <SpaceBetween size="m">
-        <Box>
-          <Box variant="small" color="text-body-secondary">
-            Playing from timestamp: {Math.floor(citation.timestamp / 60)}:{(citation.timestamp % 60).toFixed(0).padStart(2, '0')}
-          </Box>
-        </Box>
-
         {isLoading && (
           <Box textAlign="center" padding="l">
             <Spinner size="large" />
@@ -261,8 +451,14 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
               <Box margin={{ bottom: "s" }}>
                 <SpaceBetween direction="horizontal" size="xs" alignItems="center">
                   <Spinner size="normal" />
-                  <Box variant="small" color="text-body-secondary">
-                    {isTranslating ? `Translating subtitles to ${translationLanguage}...` : 'Loading subtitles...'}
+                  <Box variant="h4" color="text-status-info">
+                    {isTranslating 
+                      ? `🌐 Translating subtitles to ${translationLanguage}...` 
+                      : 'Loading subtitles...'
+                    }
+                    {isTranslating && wasPlayingBeforeTranslation && (
+                      <span> - Video paused</span>
+                    )}
                   </Box>
                 </SpaceBetween>
               </Box>
@@ -278,50 +474,58 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
               </Alert>
             )}
 
-            {mediaType === 'video' ? (
-              <video
-                ref={videoRef}
-                controls
-                width="100%"
-                style={{ maxHeight: '400px' }}
-                onLoadedData={handleMediaLoaded}
-                onTimeUpdate={handleTimeUpdate}
-                preload="metadata"
-              >
-                <source src={mediaUrl} />
-                {subtitleUrl && (
-                  <track
-                    kind="subtitles"
-                    src={subtitleUrl}
-                    srcLang="en"
-                    label={translationLanguage ? `Subtitles (${translationLanguage})` : 'Subtitles'}
-                    default
-                  />
-                )}
-                Your browser does not support the video element.
-              </video>
-            ) : (
-              <audio
-                ref={videoRef as any}
-                controls
-                style={{ width: '100%' }}
-                onLoadedData={handleMediaLoaded}
-                onTimeUpdate={handleTimeUpdate}
-                preload="metadata"
-              >
-                <source src={mediaUrl} />
-                {subtitleUrl && (
-                  <track
-                    kind="subtitles"
-                    src={subtitleUrl}
-                    srcLang="en"
-                    label={translationLanguage ? `Subtitles (${translationLanguage})` : 'Subtitles'}
-                    default
-                  />
-                )}
-                Your browser does not support the audio element.
-              </audio>
-            )}
+            <Box style={{ position: 'relative' }}>
+              {mediaType === 'video' ? (
+                <video
+                  ref={videoRef}
+                  controls
+                  width="100%"
+                  style={{ maxHeight: '400px' }}
+                  onLoadedData={handleMediaLoaded}
+                  onTimeUpdate={handleTimeUpdate}
+                  onSeeking={handleSeeking}
+                  onSeeked={handleSeeked}
+                  onPlay={handlePlay}
+                  preload="metadata"
+                >
+                  <source src={mediaUrl} />
+                  {subtitleUrl && (
+                    <track
+                      kind="subtitles"
+                      src={subtitleUrl}
+                      srcLang="en"
+                      label={translationLanguage ? `Subtitles (${translationLanguage})` : 'Subtitles'}
+                      default
+                    />
+                  )}
+                  Your browser does not support the video element.
+                </video>
+              ) : (
+                <audio
+                  ref={videoRef as any}
+                  controls
+                  style={{ width: '100%' }}
+                  onLoadedData={handleMediaLoaded}
+                  onTimeUpdate={handleTimeUpdate}
+                  onSeeking={handleSeeking}
+                  onSeeked={handleSeeked}
+                  onPlay={handlePlay}
+                  preload="metadata"
+                >
+                  <source src={mediaUrl} />
+                  {subtitleUrl && (
+                    <track
+                      kind="subtitles"
+                      src={subtitleUrl}
+                      srcLang="en"
+                      label={translationLanguage ? `Subtitles (${translationLanguage})` : 'Subtitles'}
+                      default
+                    />
+                  )}
+                  Your browser does not support the audio element.
+                </audio>
+              )}
+            </Box>
           </Box>
         )}
 
