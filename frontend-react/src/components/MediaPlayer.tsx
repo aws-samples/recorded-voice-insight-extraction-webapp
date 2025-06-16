@@ -1,3 +1,6 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: MIT-0
+
 import React, { useRef, useEffect, useState } from 'react';
 import {
   Modal,
@@ -8,31 +11,42 @@ import {
   Spinner
 } from '@cloudscape-design/components';
 import { ProcessedCitation } from '../utils/citationUtils';
+import { retrieveSubtitles, SubtitleThrottlingError, SubtitleError } from '../api/subtitles';
+import { SupportedLanguage } from '../constants/languages';
+import { JobData } from '../types/chat';
 
 interface MediaPlayerProps {
   citation: ProcessedCitation | null;
   isVisible: boolean;
   onClose: () => void;
   onGetPresignedUrl: (mediaName: string) => Promise<string>;
+  displaySubtitles?: boolean;
+  translationLanguage?: SupportedLanguage;
+  username?: string;
+  idToken?: string;
+  jobData?: JobData[];
 }
 
 const MediaPlayer: React.FC<MediaPlayerProps> = ({
   citation,
   isVisible,
   onClose,
-  onGetPresignedUrl
+  onGetPresignedUrl,
+  displaySubtitles = false,
+  translationLanguage,
+  username,
+  idToken,
+  jobData = []
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [mediaUrl, setMediaUrl] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [mediaType, setMediaType] = useState<'video' | 'audio'>('video');
-
-  useEffect(() => {
-    if (citation && isVisible) {
-      loadMedia();
-    }
-  }, [citation, isVisible]);
+  const [subtitleUrl, setSubtitleUrl] = useState<string>('');
+  const [isLoadingSubtitles, setIsLoadingSubtitles] = useState<boolean>(false);
+  const [subtitleError, setSubtitleError] = useState<string>('');
+  const [isTranslating, setIsTranslating] = useState<boolean>(false);
 
   const loadMedia = async () => {
     if (!citation) return;
@@ -73,6 +87,115 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
       setIsLoading(false);
     }
   };
+
+  const loadSubtitles = async () => {
+    if (!citation || !username || !idToken) return;
+
+    setIsLoadingSubtitles(true);
+    setSubtitleError('');
+    setIsTranslating(!!translationLanguage);
+    
+    try {
+      // Find the job ID for this media file
+      const job = jobData.find(j => j.media_name === citation.media_name);
+      if (!job) {
+        throw new Error(`Could not find job data for media: ${citation.media_name}`);
+      }
+
+      console.log(`🎬 Loading subtitles for: ${citation.media_name} (Job ID: ${job.UUID})`);
+      
+      let translationStartTime: number | undefined;
+      let translationDuration: number | undefined;
+      let translationDestinationLanguage: string | undefined;
+
+      // If translation is requested, set parameters
+      if (translationLanguage) {
+        translationStartTime = citation.timestamp;
+        translationDuration = 60; // seconds - translate 1 minute around the citation
+        translationDestinationLanguage = translationLanguage;
+        console.log(`🌐 Translating subtitles to ${translationLanguage} from ${translationStartTime}s for ${translationDuration}s`);
+      }
+
+      const vttContent = await retrieveSubtitles(
+        job.UUID,
+        username,
+        idToken,
+        translationStartTime,
+        translationDuration,
+        translationDestinationLanguage
+      );
+
+      // Create a blob URL for the VTT content
+      const blob = new Blob([vttContent], { type: 'text/vtt' });
+      const url = URL.createObjectURL(blob);
+      
+      // Clean up previous subtitle URL
+      if (subtitleUrl) {
+        URL.revokeObjectURL(subtitleUrl);
+      }
+      
+      setSubtitleUrl(url);
+      console.log(`✅ Subtitles loaded successfully`);
+
+    } catch (err) {
+      console.error('❌ Error loading subtitles:', err);
+      
+      if (err instanceof SubtitleThrottlingError) {
+        setSubtitleError('Translation service is busy. Trying to load original subtitles...');
+        
+        // Try to load non-translated subtitles as fallback
+        try {
+          const job = jobData.find(j => j.media_name === citation.media_name);
+          if (job) {
+            const vttContent = await retrieveSubtitles(job.UUID, username, idToken);
+            const blob = new Blob([vttContent], { type: 'text/vtt' });
+            const url = URL.createObjectURL(blob);
+            
+            if (subtitleUrl) {
+              URL.revokeObjectURL(subtitleUrl);
+            }
+            
+            setSubtitleUrl(url);
+            setSubtitleError('Translation unavailable - showing original subtitles');
+          }
+        } catch (fallbackErr) {
+          setSubtitleError('Failed to load subtitles. Please try again later.');
+        }
+      } else if (err instanceof SubtitleError) {
+        setSubtitleError(err.message);
+      } else {
+        setSubtitleError('Failed to load subtitles. Please try again.');
+      }
+    } finally {
+      setIsLoadingSubtitles(false);
+      setIsTranslating(false);
+    }
+  };
+
+  useEffect(() => {
+    if (citation && isVisible) {
+      loadMedia();
+    }
+  }, [citation, isVisible]);
+
+  useEffect(() => {
+    if (citation && isVisible && displaySubtitles && username && idToken) {
+      loadSubtitles();
+    } else {
+      // Clear subtitles if not needed
+      setSubtitleUrl('');
+      setSubtitleError('');
+    }
+  }, [citation, isVisible, displaySubtitles, translationLanguage, username, idToken]);
+
+  // Clean up blob URLs when component unmounts or citation changes
+  useEffect(() => {
+    return () => {
+      if (subtitleUrl) {
+        URL.revokeObjectURL(subtitleUrl);
+      }
+    };
+  }, [subtitleUrl]);
 
   const handleMediaLoaded = () => {
     if (videoRef.current && citation) {
@@ -134,6 +257,27 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
         {mediaUrl && !isLoading && (
           <Box>
+            {isLoadingSubtitles && (
+              <Box margin={{ bottom: "s" }}>
+                <SpaceBetween direction="horizontal" size="xs" alignItems="center">
+                  <Spinner size="normal" />
+                  <Box variant="small" color="text-body-secondary">
+                    {isTranslating ? `Translating subtitles to ${translationLanguage}...` : 'Loading subtitles...'}
+                  </Box>
+                </SpaceBetween>
+              </Box>
+            )}
+
+            {subtitleError && (
+              <Alert 
+                type={subtitleError.includes('original subtitles') ? 'warning' : 'error'}
+                dismissible 
+                onDismiss={() => setSubtitleError('')}
+              >
+                {subtitleError}
+              </Alert>
+            )}
+
             {mediaType === 'video' ? (
               <video
                 ref={videoRef}
@@ -145,6 +289,15 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 preload="metadata"
               >
                 <source src={mediaUrl} />
+                {subtitleUrl && (
+                  <track
+                    kind="subtitles"
+                    src={subtitleUrl}
+                    srcLang="en"
+                    label={translationLanguage ? `Subtitles (${translationLanguage})` : 'Subtitles'}
+                    default
+                  />
+                )}
                 Your browser does not support the video element.
               </video>
             ) : (
@@ -157,6 +310,15 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 preload="metadata"
               >
                 <source src={mediaUrl} />
+                {subtitleUrl && (
+                  <track
+                    kind="subtitles"
+                    src={subtitleUrl}
+                    srcLang="en"
+                    label={translationLanguage ? `Subtitles (${translationLanguage})` : 'Subtitles'}
+                    default
+                  />
+                )}
                 Your browser does not support the audio element.
               </audio>
             )}

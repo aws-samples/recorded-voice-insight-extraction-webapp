@@ -9,6 +9,9 @@ import {
   Alert,
   Spinner,
   Button,
+  Checkbox,
+  Select,
+  SelectProps,
 } from '@cloudscape-design/components';
 import { getCurrentUser } from 'aws-amplify/auth';
 import { fetchAuthSession } from 'aws-amplify/auth';
@@ -21,6 +24,7 @@ import ChatContainer from '../components/ChatContainer';
 import ChatInput from '../components/ChatInput';
 import MediaPlayer from '../components/MediaPlayer';
 import { chatWebSocketService, WebSocketTimeoutError } from '../api/websocket';
+import { SUPPORTED_LANGUAGES, SupportedLanguage } from '../constants/languages';
 
 const ChatWithMediaPage: React.FC = () => {
   const [username, setUsername] = useState<string>('');
@@ -37,6 +41,8 @@ const ChatWithMediaPage: React.FC = () => {
   const [streamingError, setStreamingError] = useState<string>('');
   const [selectedCitation, setSelectedCitation] = useState<ProcessedCitation | null>(null);
   const [isMediaPlayerVisible, setIsMediaPlayerVisible] = useState<boolean>(false);
+  const [displaySubtitles, setDisplaySubtitles] = useState<boolean>(false);
+  const [translationLanguage, setTranslationLanguage] = useState<SelectProps.Option | null>(null);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -90,6 +96,17 @@ const ChatWithMediaPage: React.FC = () => {
       setMessages([]);
     }
     setSelectedMediaNames(detail.selectedOptions);
+  };
+
+  const handleSubtitleToggle = ({ detail }: any) => {
+    setDisplaySubtitles(detail.checked);
+    if (!detail.checked) {
+      setTranslationLanguage(null);
+    }
+  };
+
+  const handleLanguageChange = ({ detail }: any) => {
+    setTranslationLanguage(detail.selectedOption);
   };
 
   const handleCitationClick = (citation: ProcessedCitation) => {
@@ -308,20 +325,46 @@ const ChatWithMediaPage: React.FC = () => {
                 <Header variant="h3" description="Select media files to analyze">
                   Pick media file to analyze:
                 </Header>
-                <Multiselect
-                  selectedOptions={selectedMediaNames}
-                  onChange={handleMediaSelectionChange}
-                  options={mediaOptions}
-                  placeholder="Chat with all media files"
-                  empty="No completed media files available"
-                  filteringType="auto"
-                  disabled={isSending}
-                />
-                {selectedMediaNames.length > 0 && (
-                  <Box variant="small" margin={{ top: "xs" }} color="text-body-secondary">
-                    Selected: {selectedMediaNames.map(option => option.label).join(', ')}
-                  </Box>
-                )}
+                <SpaceBetween size="s">
+                  <Multiselect
+                    selectedOptions={selectedMediaNames}
+                    onChange={handleMediaSelectionChange}
+                    options={mediaOptions}
+                    placeholder="Chat with all media files"
+                    empty="No completed media files available"
+                    filteringType="auto"
+                    disabled={isSending}
+                  />
+                  {selectedMediaNames.length > 0 && (
+                    <Box variant="small" margin={{ top: "xs" }} color="text-body-secondary">
+                      Selected: {selectedMediaNames.map(option => option.label).join(', ')}
+                    </Box>
+                  )}
+                  
+                  <SpaceBetween size="s" direction="horizontal">
+                    <Checkbox
+                      checked={displaySubtitles}
+                      onChange={handleSubtitleToggle}
+                      disabled={isSending}
+                    >
+                      Display subtitles in videos
+                    </Checkbox>
+                    
+                    {displaySubtitles && (
+                      <Select
+                        selectedOption={translationLanguage}
+                        onChange={handleLanguageChange}
+                        options={SUPPORTED_LANGUAGES.map(lang => ({
+                          label: lang,
+                          value: lang
+                        }))}
+                        placeholder="Translate subtitles?"
+                        disabled={isSending}
+                        expandToViewport
+                      />
+                    )}
+                  </SpaceBetween>
+                </SpaceBetween>
               </Box>,
               
               <Box key="chat-container">
@@ -353,6 +396,11 @@ const ChatWithMediaPage: React.FC = () => {
               setSelectedCitation(null);
             }}
             onGetPresignedUrl={handleGetPresignedUrl}
+            displaySubtitles={displaySubtitles}
+            translationLanguage={translationLanguage?.value as SupportedLanguage}
+            username={username}
+            idToken={idToken}
+            jobData={jobData}
           />
         </ContentLayout>
       }
