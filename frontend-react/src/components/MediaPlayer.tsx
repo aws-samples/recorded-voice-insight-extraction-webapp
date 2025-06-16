@@ -97,14 +97,17 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
     // Use provided startTime or citation timestamp
     const translationStartTime = startTime !== undefined ? startTime : citation.timestamp;
 
+    // Capture the playing state early to avoid race conditions
+    let wasVideoPlayingBeforeTranslation = false;
+
     // If we need to pause the video during translation
     if (pauseVideo && videoRef.current && translationLanguage) {
-      const wasPlaying = !videoRef.current.paused;
-      setWasPlayingBeforeTranslation(wasPlaying);
+      wasVideoPlayingBeforeTranslation = !videoRef.current.paused;
+      setWasPlayingBeforeTranslation(wasVideoPlayingBeforeTranslation);
       
-      console.log(`🎬 Video state before translation: ${wasPlaying ? 'PLAYING' : 'PAUSED'}`);
+      console.log(`🎬 Video state before translation: ${wasVideoPlayingBeforeTranslation ? 'PLAYING' : 'PAUSED'}`);
       
-      if (wasPlaying) {
+      if (wasVideoPlayingBeforeTranslation) {
         videoRef.current.pause();
         console.log(`⏸️ Paused video for subtitle translation`);
       } else {
@@ -204,18 +207,26 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
       }
 
       // Resume video playback if it was playing before translation
-      // Capture the state in a local variable to avoid race conditions
-      const shouldResumePlayback = pauseVideo && videoRef.current && wasPlayingBeforeTranslation;
-      if (shouldResumePlayback) {
-        console.log(`🎬 Preparing to resume video playback (was playing: ${wasPlayingBeforeTranslation})`);
+      // Use the captured state to avoid race conditions
+      if (pauseVideo && videoRef.current && wasVideoPlayingBeforeTranslation) {
+        console.log(`🎬 Preparing to resume video playback (was playing: ${wasVideoPlayingBeforeTranslation})`);
         // Small delay to ensure subtitle track is loaded
         setTimeout(() => {
-          if (videoRef.current) {
+          if (videoRef.current && wasVideoPlayingBeforeTranslation) {
+            console.log(`▶️ Attempting to resume video playback...`);
             videoRef.current.play().then(() => {
-              console.log(`▶️ Successfully resumed video playback after subtitle translation`);
+              console.log(`✅ Successfully resumed video playback after subtitle translation`);
             }).catch((error) => {
               console.error(`❌ Failed to resume video playback:`, error);
+              // Try again after a short delay
+              setTimeout(() => {
+                if (videoRef.current) {
+                  videoRef.current.play().catch(e => console.error('❌ Second resume attempt failed:', e));
+                }
+              }, 500);
             });
+          } else {
+            console.log(`⚠️ Cannot resume - video ref or playing state lost`);
           }
         }, 300); // Slightly longer delay to ensure subtitles are ready
       } else if (pauseVideo) {
@@ -226,7 +237,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
       console.error('❌ Error loading subtitles:', err);
       
       // Capture the state for resuming playback even on error
-      const shouldResumePlaybackOnError = pauseVideo && videoRef.current && wasPlayingBeforeTranslation;
+      const shouldResumePlaybackOnError = pauseVideo && videoRef.current && wasVideoPlayingBeforeTranslation;
       
       if (err instanceof SubtitleThrottlingError) {
         setSubtitleError('Translation service is busy. Trying to load original subtitles...');
@@ -257,11 +268,12 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
       
       // Resume video playback even if subtitle loading failed
       if (shouldResumePlaybackOnError) {
-        console.log(`🎬 Resuming video playback despite subtitle error (was playing: ${wasPlayingBeforeTranslation})`);
+        console.log(`🎬 Resuming video playback despite subtitle error (was playing: ${wasVideoPlayingBeforeTranslation})`);
         setTimeout(() => {
-          if (videoRef.current) {
+          if (videoRef.current && wasVideoPlayingBeforeTranslation) {
+            console.log(`▶️ Attempting to resume video after error...`);
             videoRef.current.play().then(() => {
-              console.log(`▶️ Successfully resumed video playback after subtitle error`);
+              console.log(`✅ Successfully resumed video playback after subtitle error`);
             }).catch((playError) => {
               console.error(`❌ Failed to resume video playback after error:`, playError);
             });
@@ -271,7 +283,8 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
     } finally {
       setIsLoadingSubtitles(false);
       setIsTranslating(false);
-      setWasPlayingBeforeTranslation(false);
+      // Don't reset wasPlayingBeforeTranslation here to avoid race conditions
+      // It will be reset when the component unmounts or citation changes
     }
   };
 
@@ -291,6 +304,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
       setSubtitleUrl('');
       setSubtitleError('');
       setLastTranslatedTimestamp(-1);
+      setWasPlayingBeforeTranslation(false); // Reset playing state when subtitles disabled
     }
   }, [citation, isVisible, displaySubtitles, translationLanguage, username, idToken]);
 
@@ -447,23 +461,6 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
 
         {mediaUrl && !isLoading && (
           <Box>
-            {isLoadingSubtitles && (
-              <Box margin={{ bottom: "s" }}>
-                <SpaceBetween direction="horizontal" size="xs" alignItems="center">
-                  <Spinner size="normal" />
-                  <Box variant="h4" color="text-status-info">
-                    {isTranslating 
-                      ? `🌐 Translating subtitles to ${translationLanguage}...` 
-                      : 'Loading subtitles...'
-                    }
-                    {isTranslating && wasPlayingBeforeTranslation && (
-                      <span> - Video paused</span>
-                    )}
-                  </Box>
-                </SpaceBetween>
-              </Box>
-            )}
-
             {subtitleError && (
               <Alert 
                 type={subtitleError.includes('original subtitles') ? 'warning' : 'error'}
@@ -526,6 +523,23 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
                 </audio>
               )}
             </Box>
+
+            {isLoadingSubtitles && (
+              <Box margin={{ top: "s" }} textAlign="center">
+                <SpaceBetween direction="horizontal" size="xs" alignItems="center">
+                  <Spinner size="normal" />
+                  <Box variant="h4" color="text-status-info">
+                    {isTranslating 
+                      ? `🌐 Translating subtitles to ${translationLanguage}...` 
+                      : 'Loading subtitles...'
+                    }
+                    {isTranslating && wasPlayingBeforeTranslation && (
+                      <span> - Video paused</span>
+                    )}
+                  </Box>
+                </SpaceBetween>
+              </Box>
+            )}
           </Box>
         )}
 
