@@ -6,7 +6,6 @@ import {
   Container,
   Header,
   Select,
-  SelectProps,
   SpaceBetween,
   Button,
   Alert,
@@ -18,8 +17,6 @@ import {
   performCompleteAnalysis 
 } from '../api/analysis';
 import { 
-  Job, 
-  AnalysisTemplate, 
   AnalysisPageState 
 } from '../types/analysis';
 
@@ -63,7 +60,7 @@ export const AnalyzeMedia: React.FC = () => {
   }, [username]);
 
   // Handle media selection
-  const handleMediaChange: SelectProps.ChangeDetail['onChange'] = (event) => {
+  const handleMediaChange = (event: any) => {
     setState(prev => ({
       ...prev,
       selectedMediaName: event.detail.selectedOption.value as string,
@@ -73,7 +70,7 @@ export const AnalyzeMedia: React.FC = () => {
   };
 
   // Handle analysis template selection
-  const handleTemplateChange: SelectProps.ChangeDetail['onChange'] = (event) => {
+  const handleTemplateChange = (event: any) => {
     setState(prev => ({
       ...prev,
       selectedAnalysisTemplate: event.detail.selectedOption.value as string,
@@ -188,7 +185,7 @@ export const AnalyzeMedia: React.FC = () => {
       <AnalysisResults
         result={state.analysisResult || ''}
         isLoading={state.isLoading}
-        error={state.error}
+        error={state.error || undefined}
       />
     </SpaceBetween>
   );

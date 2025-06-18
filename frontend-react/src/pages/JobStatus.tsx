@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT-0
 
 import React, { useState, useEffect } from 'react';
-import { ContentLayout, Header } from '@cloudscape-design/components';
+import { ContentLayout } from '@cloudscape-design/components';
 import { getCurrentUser } from 'aws-amplify/auth';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import JobStatusTable from '../components/JobStatusTable';

@@ -48,7 +48,7 @@ export const uploadToS3 = async (
   });
   formData.append('file', file, filename);
 
-  let progressInterval: NodeJS.Timeout | null = null;
+  let progressInterval: number | null = null;
   let currentProgress = 0;
   
   if (onProgress) {

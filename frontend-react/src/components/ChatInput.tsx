@@ -50,7 +50,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
           placeholder={placeholder}
           disabled={disabled}
           rows={3}
-          resize="vertical"
         />
         <Box float="right">
           <Button

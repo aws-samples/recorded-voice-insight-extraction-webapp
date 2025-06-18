@@ -6,8 +6,6 @@ import { AnalyzeMedia } from "./AnalyzeMedia";
 
 const Analyze: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
-  const [authToken, setAuthToken] = useState<string>("");
-  const [username, setUsername] = useState<string>("");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   useEffect(() => {
@@ -17,9 +15,6 @@ const Analyze: React.FC = () => {
         const session = await fetchAuthSession();
         
         if (user.username && session.tokens?.idToken) {
-          setUsername(user.username);
-          setAuthToken(`Bearer ${session.tokens.idToken.toString()}`);
-          
           // Store auth info in localStorage for API calls
           localStorage.setItem('username', user.username);
           localStorage.setItem('authToken', session.tokens.idToken.toString());

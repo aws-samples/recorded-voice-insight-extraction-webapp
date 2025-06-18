@@ -9,7 +9,6 @@ import {
   Alert,
   Box,
   Button,
-  ProgressBar,
 } from '@cloudscape-design/components';
 import { getCurrentUser } from 'aws-amplify/auth';
 import { fetchAuthSession } from 'aws-amplify/auth';

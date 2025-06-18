@@ -4,9 +4,7 @@
 import { 
   Job, 
   AnalysisTemplate, 
-  AnalysisRequest, 
   DynamoDBRequest, 
-  DynamoDBResponse,
   ApiError 
 } from '../types/analysis';
 

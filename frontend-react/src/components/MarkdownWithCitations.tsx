@@ -19,7 +19,7 @@ const MarkdownWithCitations: React.FC<MarkdownWithCitationsProps> = ({
   // Create the citation button component
   const CitationButton: React.FC<{ citationNumber: number }> = ({ citationNumber }) => {
     const citation = citationMap.get(citationNumber);
-    const [hoverTimeout, setHoverTimeout] = React.useState<NodeJS.Timeout | null>(null);
+    const [hoverTimeout, setHoverTimeout] = React.useState<number | null>(null);
     const [lastTriggered, setLastTriggered] = React.useState<number>(0);
     
     if (!citation) {

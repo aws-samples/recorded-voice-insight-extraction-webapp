@@ -26,17 +26,17 @@ const JobStatusTable: React.FC<JobStatusTableProps> = ({
   error,
   onRefresh,
 }) => {
-  const getStatusColor = (status: string): string => {
+  const getStatusColor = (status: string) => {
     if (status === 'Completed' || status === 'BDA Analysis Complete') {
-      return 'text-status-success';
+      return 'text-status-success' as const;
     }
     if (status === 'Failed') {
-      return 'text-status-error';
+      return 'text-status-error' as const;
     }
     if (status?.includes('Queue') || status?.includes('Transcribing') || status?.includes('Indexing') || status?.includes('Processing')) {
-      return 'text-status-info';
+      return 'text-status-info' as const;
     }
-    return 'text-body-default';
+    return undefined; // Use default color
   };
 
   const columnDefinitions = [

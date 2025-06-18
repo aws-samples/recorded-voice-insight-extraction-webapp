@@ -471,7 +471,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
               </Alert>
             )}
 
-            <Box style={{ position: 'relative' }}>
+            <div style={{ position: 'relative' }}>
               {mediaType === 'video' ? (
                 <video
                   ref={videoRef}
@@ -522,7 +522,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
                   Your browser does not support the audio element.
                 </audio>
               )}
-            </Box>
+            </div>
 
             {isLoadingSubtitles && (
               <Box margin={{ top: "s" }} textAlign="center">

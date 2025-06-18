@@ -99,7 +99,7 @@ const FileManagementPage: React.FC = () => {
     .sort((a, b) => a.label.localeCompare(b.label));
 
   // Handle file selection change
-  const handleSelectionChange = ({ detail }: { detail: MultiselectProps.ChangeDetail }) => {
+  const handleSelectionChange = ({ detail }: any) => {
     setSelectedFiles(detail.selectedOptions);
   };
 
