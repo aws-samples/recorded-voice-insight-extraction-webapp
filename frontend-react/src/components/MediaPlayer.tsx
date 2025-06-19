@@ -150,7 +150,6 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
         const vttContent = await retrieveSubtitles(
           job.UUID,
           username,
-          idToken,
           adjustedStartTime,
           translationDuration,
           translationDestinationLanguage
@@ -172,8 +171,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
         // No translation needed, load original subtitles
         const vttContent = await retrieveSubtitles(
           job.UUID,
-          username,
-          idToken
+          username
         );
 
         // Create a blob URL for the VTT content
@@ -246,7 +244,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
         try {
           const job = jobData.find(j => j.media_name === citation.media_name);
           if (job) {
-            const vttContent = await retrieveSubtitles(job.UUID, username, idToken);
+            const vttContent = await retrieveSubtitles(job.UUID, username);
             const blob = new Blob([vttContent], { type: 'text/vtt' });
             const url = URL.createObjectURL(blob);
             

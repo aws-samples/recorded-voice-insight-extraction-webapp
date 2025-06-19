@@ -1,6 +1,11 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
+import useHttp from '../hooks/useHttp';
+
+// Create HTTP client instance
+const httpClient = useHttp();
+
 export interface SubtitleRequest {
   username: string;
   transcript_job_id: string;
@@ -30,7 +35,6 @@ export class SubtitleThrottlingError extends SubtitleError {
 export const retrieveSubtitles = async (
   jobId: string,
   username: string,
-  idToken: string,
   translationStartTime?: number,
   translationDuration?: number,
   translationDestinationLanguage?: string
@@ -52,41 +56,28 @@ export const retrieveSubtitles = async (
   }
 
   try {
-    const response = await fetch('/api/subtitles', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': idToken,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      if (response.status === 503) {
+    // Use the HTTP client to make the request with the correct API endpoint
+    const response = await httpClient.post<string>('/subtitles', requestBody);
+    
+    // The API returns the VTT content as a JSON string
+    if (typeof response.data === 'string') {
+      return response.data;
+    } else {
+      throw new SubtitleError('Invalid subtitle format received from server');
+    }
+  } catch (error: any) {
+    // Check for specific error status codes
+    if (error.response) {
+      if (error.response.status === 503) {
         throw new SubtitleThrottlingError(
           'Translation service is temporarily unavailable. Please try again in a few seconds.'
         );
       } else {
-        const errorText = await response.text();
         throw new SubtitleError(
-          `Failed to retrieve subtitles: ${response.status} ${response.statusText}. ${errorText}`,
-          response.status
+          `Failed to retrieve subtitles: ${error.response.status} ${error.response.statusText}`,
+          error.response.status
         );
       }
-    }
-
-    const subtitleContent = await response.json();
-    
-    // The API returns the VTT content as a JSON string
-    if (typeof subtitleContent === 'string') {
-      return subtitleContent;
-    } else {
-      throw new SubtitleError('Invalid subtitle format received from server');
-    }
-
-  } catch (error) {
-    if (error instanceof SubtitleError) {
-      throw error;
     }
     
     // Handle network errors and other exceptions
