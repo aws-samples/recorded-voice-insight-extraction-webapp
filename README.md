@@ -38,7 +38,7 @@ Additionally, this application includes the capability to use an LLM to analyze 
   - Respond in the same language as the question asked regardless the language of the source media, given the LLM used knows that language.
   - Display subtitles during video playback in any language, regardless of the language of the video.
 - Provided analysis templates allow for easy GenAI summarization, document generation, next-steps and blockers identifications, and more.
-- Complete frontend/backend separation via API Gateway to enable users to replace Streamlit if desired. REST API primarily used, along with websockets for streaming responses.
+- Complete frontend/backend separation via API Gateway to enable users to replace the React frontend if desired. REST API primarily used, along with websockets for streaming responses.
 
 Here is an overview of the architecture for the solution.
 
@@ -50,11 +50,11 @@ Below is a screenshot of the chat functionality. Here, the user asked whether an
 # 🏗️ Architecture
 Here is an overview of the architecture for the solution.
 <p align="center">
-    <img src=diagram/ReVIEW-architecture-20250522.png alt="architecture" width="90%">
+    <img src=diagram/ReVIEW-architecture-20250619.png alt="architecture" width="90%">
 </p>
 
-* **(1)** Users connect to a CloudFront distribution which forwards traffic to the application load balancer via HTTPS with a custom header. 
-* **(2)** The containerized Streamlit application running in ECS connects to Amazon Cognito to authenticate users and to get a bearer token for API Gateway authentication.
+* **(1)** Users connect to a CloudFront distribution which hosts a static React page from s3. 
+* **(2)** The React page authenticates users through Cognito, and uses that authentication to enable access to API Gateway APIs.
 * **(3 and 4)** The frontend uploads media files to an S3 bucket by first requesting a presigned URL and then POSTing the file to it. The media files then automatically transcribed and/or processed with Bedrock Data Automation. Once transcripts are created in s3, an EventBridge notification triggers an AWS Step Functions workflow to asynchronously sync the transcripts (and track the sync job status) with a Bedrock Knowledge Base. The Knowledge Base handles chunking, embedding, and later retrieval. 
 * **(5)** The application functionality leverages Large Language Models in Bedrock to analyze transcripts (or chunks of transcripts retrieved from the knowledge base **(6)**) and identify timestamps at which to replay media to the users. This pathway is also used for translating subtitles from one language to another.
 * **(7)** DynamoDB is used to track job processing statuses and cache previous LLM responses.
@@ -73,7 +73,7 @@ The code base behind the solution consists of one stack defined in `infra/stacks
 1) A backend which handles transcribing uploaded media and tracking job statuses, 
 2) A RAG stack which handles setting up OpenSearch and Bedrock Knowledge bases, 
 3) An API stack which stands up both a Cognito-authorized API Gateway REST API and API Gateway Websocket API and various lambda functions to logically separate the frontend from the backend, and
-4) A frontend stack which consists of a containerized streamlit application running as a load balanced service in an ECS cluster in a VPC, with a cloudfront distribution connected to the load balancer.
+4) A frontend stack which consists of a React application built and deployed to S3, served globally via a CloudFront distribution.
 
 ### *Clone the Repository*
 Fork the repository, and clone it to the location of your choice. For example:
@@ -149,17 +149,15 @@ The only resource not automatically removed is the Cognito user pool, to preserv
     - api_stack - Python CDK containing the AWS API Gateway stack connecting the frontend to the backend
     - frontend_stack - Python CDK containing the frontend stack definition
   - utils - Utility functions related to infra, like configuration managers
-- frontend - Python streamlit application code for the frontend
-  - 💡_Home.py - Main streamlit application entrypoint
-  - components/ - Utilities used by streamlit application
-  - pages/ - Different pages displayed in the frontend application
-  - assets/ - Static assets used by the frontend, e.g. analysis templates that application users can select
-  - schemas/ - Data models and schemas used by the frontend
-  - Dockerfile - Docker file to build containerized frontend application within this directory
+- frontend - React frontend application code
+  - src/ - React source code including components, pages, API clients, and utilities
+  - public/ - Static assets and HTML template
+  - package.json - Node.js dependencies and build scripts
+  - README.md - Detailed frontend documentation
 - diagram/ - Architecture diagrams of the solution used in READMEs
 
 # 🚪 Frontend Replacement
-This application has been designed to make the frontend easily replaceable, as end users may want to replace Streamlit with something more production-grade whilst preserving the backend. Besides the frontend being deployed as a separate stack, it also connects to the backend exclusively through a REST API hosted by API Gateway and a Websocket API hosted by API Gateway. 
+This application has been designed to make the frontend easily replaceable. Besides the frontend being deployed as a separate stack, it also connects to the backend exclusively through a REST API hosted by API Gateway and a Websocket API hosted by API Gateway. 
 
 Comprehensive API documentation is available in the `docs` directory:
 - [API_README.md](docs/API_README.md) - General API documentation and usage examples
@@ -171,9 +169,7 @@ At a high level, the steps to replace the frontend are:
 2. Connect the new frontend to the `/s3-presigned` endpoint. This endpoint will generate presigned urls for the frontend to `POST` and `GET` files to and from s3.
 3. Connect the new frontend to the three `POST` REST API endpoints: `/llm`, `/ddb`, `/kb-job-deletion` to access large language models, dynamodb, and knowledge base job deletion respectively.
 4. Connect to the WebSocket API for streaming responses from the knowledge base queries. This is essential for the chat functionality to provide real-time streaming responses with citations.
-5. Leverage the `FullQAnswer` pydantic model (defined in `frontend/schemas/qa_response.py`) to parse the LLM responses in the chat application. This model includes citations which reference specific timestamps in media files.
-
-If the new frontend is written in Python, it is recommended to re-use the `frontend/components/` which is where most of the REST API calls are made. In particular, `bedrock_utils.py` contains the implementation for the WebSocket streaming functionality.
+5. Leverage the `FullQAnswer` pydantic model (defined in `infra/lambdas/schemas/qa_response.py`) to parse the LLM responses in the chat application. This model includes citations which reference specific timestamps in media files.
 
 # 🔒️ Security
 
@@ -206,8 +202,19 @@ The following are some security best practices one should keep in mind when usin
   - Regularly review access keys and IAM roles, and rotate credentials.
 
 # 🤔 Common Issues
-1. API gateway "Endpoint request timed out" issue: This is caused when lambda functions connected to REST endpoints in API Gateways take more than 29 seconds to execute. This 29 seconds quota [can now be increased at the account level](https://aws.amazon.com/about-aws/whats-new/2024/06/amazon-api-gateway-integration-timeout-limit-29-seconds/), under API Gateway quotas named "Maximum integration timeout in milliseconds". Recommended increase from 29000 to 60000 to fix this issue. After increasing this at the account level, you will need to increase the integration timeout for that endpoint in the console, as `cdk` doesn't support >29 second timeouts programmatically yet. To do this, navigate in the console to API Gateway --> web_socket_api --> `$default` --> Integration request --> Edit, and set your Integration timeout to e.g. 60000 ms. Note, this issue _can not be fixed_ for websocket API Gateway connections. This is a known issue with a fix currently under development.
-2. Frontend ECS Container Task does not launch successfully (perhaps with the logged error: `exec /usr/local/bin/streamlit: exec format error`): This happens because the frontend `docker build` step can be OS dependent. If you are deploying from a mac OS, [uncomment this line](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/blob/c729e51ec43436fe26b82a2e89666a50ae08f46c/infra/stacks/frontend_stack.py#L111) in `frontend_stack.py` before deploying.
+1. **API gateway "Endpoint request timed out" issue**: This is caused when lambda functions connected to REST endpoints in API Gateways take more than 29 seconds to execute. This 29 seconds quota [can now be increased at the account level](https://aws.amazon.com/about-aws/whats-new/2024/06/amazon-api-gateway-integration-timeout-limit-29-seconds/), under API Gateway quotas named "Maximum integration timeout in milliseconds". Recommended increase from 29000 to 60000 to fix this issue. After increasing this at the account level, you will need to increase the integration timeout for that endpoint in the console, as `cdk` doesn't support >29 second timeouts programmatically yet. To do this, navigate in the console to API Gateway --> web_socket_api --> `$default` --> Integration request --> Edit, and set your Integration timeout to e.g. 60000 ms. Note, this issue _can not be fixed_ for websocket API Gateway connections. This is a known issue with a fix currently under development.
+
+2. **WebSocket connection issues**: If the chat functionality is not working, ensure that the `aws-exports.json` file is accessible and contains the correct WebSocket endpoint. Check the browser developer console for WebSocket connection errors.
+
+3. **Authentication failures**: If users cannot log in or API calls are failing with 401/403 errors, verify that:
+   - The Cognito User Pool is properly configured
+   - Users have been created in the Cognito User Pool
+   - The `aws-exports.json` file contains the correct Cognito configuration
+
+4. **File upload issues**: If file uploads are failing, check that:
+   - The S3 bucket has the correct CORS configuration
+   - The presigned URL generation is working properly
+   - File size limits are not being exceeded
    
 # 👥 Authors
 <div style="display: flex; align-items: center;">
