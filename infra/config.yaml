@@ -16,7 +16,3 @@ llm:
 
 frontend:
   cognito_pool_name: "review-app-cognito-user-pool"
-  # The frontend creates its own VPC with an internet gateway.
-  # If you have your own VPC (with IGW) to deploy into,
-  # uncomment and populate the following line with the VPC ID:
-  # vpc_id: "vpc-12345abcde"

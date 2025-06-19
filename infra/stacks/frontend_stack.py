@@ -32,9 +32,7 @@ class ReVIEWFrontendStack(NestedStack):
     def __init__(
         self,
         scope,
-        props: dict,
-        api_gateway_url: str = "",  # Optional, will read from SSM if empty
-        websocket_url: str = "",    # Optional, will read from SSM if empty
+        props: dict,y
         **kwargs,
     ):
         self.props = props
@@ -159,7 +157,7 @@ class ReVIEWFrontendStack(NestedStack):
 
     def deploy_react_app(self):
         """Build and deploy the React application to S3."""
-        app_path = os.path.join(Path(__file__).parent.parent.parent, "frontend-react")
+        app_path = os.path.join(Path(__file__).parent.parent.parent, "frontend")
         
         # Generate aws-exports.json configuration following the reference pattern
         exports_config = {

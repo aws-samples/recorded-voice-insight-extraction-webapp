@@ -22,7 +22,8 @@ export type JobStatus =
   | "Transcription Complete"
   | "Completed"
   | "Failed"
-  | "In Transcription Queue";
+  | "In Transcription Queue"
+  | "BDA Analysis Complete";
 
 /**
  * Represents an analysis template

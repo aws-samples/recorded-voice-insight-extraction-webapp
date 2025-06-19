@@ -43,7 +43,9 @@ export const AnalyzeMedia: React.FC = () => {
 
         setState(prev => ({
           ...prev,
-          completedJobs: jobs.filter((job: Job) => job.job_status === 'Completed'),
+          completedJobs: jobs.filter((job: Job) => 
+            job.job_status === 'Completed' || job.job_status === 'BDA Analysis Complete'
+          ),
           analysisTemplates: templates
         }));
       } catch (error) {

@@ -31,25 +31,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       const partialAnswers = message.full_answer.answer || [];
       
       if (partialAnswers.length > 0) {
-        console.log(`📝 Processing ${partialAnswers.length} partial answers with citations for markdown`);
-        
         // Process partial answers for markdown rendering
         const { markdownContent, citationMap } = processPartialAnswersForMarkdown(partialAnswers);
         
         // Extract all citations for the sources section
         allCitations = extractAllCitations(partialAnswers);
         
-        console.log(`📚 Total citations found: ${allCitations.length}`);
-        console.log(`📄 Markdown content preview: ${markdownContent.substring(0, 500)}...`);
-        console.log(`🗺️ Citation map size: ${citationMap.size}`);
-        console.log(`🔗 Citation map keys: [${Array.from(citationMap.keys()).join(', ')}]`);
-        
         // Render markdown with citations
         processedContent = (
           <div>
-            <div style={{ background: '#fff3cd', padding: '4px', fontSize: '12px', marginBottom: '8px' }}>
-              DEBUG: Using MarkdownWithCitations - Citations: {citationMap.size}, Content length: {markdownContent.length}
-            </div>
             <MarkdownWithCitations
               content={markdownContent}
               citationMap={citationMap}
@@ -58,13 +48,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           </div>
         );
       } else {
-        console.log(`⚠️ No partial answers found, using fallback markdown`);
         // Fallback to plain markdown if no partial answers but we have full_answer
         processedContent = (
           <div>
-            <div style={{ background: '#f8d7da', padding: '4px', fontSize: '12px', marginBottom: '8px' }}>
-              DEBUG: Using fallback MarkdownWithCitations - No partial answers
-            </div>
             <MarkdownWithCitations
               content={messageText}
               citationMap={new Map()}
@@ -74,13 +60,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         );
       }
     } else {
-      console.log(`⚠️ No full_answer or onCitationClick, using basic markdown`);
       // For assistant messages without full_answer or citations, still render as markdown
       processedContent = (
         <div>
-          <div style={{ background: '#d1ecf1', padding: '4px', fontSize: '12px', marginBottom: '8px' }}>
-            DEBUG: Using basic MarkdownWithCitations - No full_answer
-          </div>
           <MarkdownWithCitations
             content={messageText}
             citationMap={new Map()}

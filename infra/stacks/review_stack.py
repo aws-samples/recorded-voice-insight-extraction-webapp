@@ -74,8 +74,6 @@ class ReVIEWStack(Stack):
         self.frontend_stack = ReVIEWFrontendStack(
             self,
             props=props,
-            api_gateway_url="",  # Will be read from SSM in frontend stack
-            websocket_url="",    # Will be read from SSM in frontend stack
         )
 
         # Add explicit dependencies to ensure frontend is deployed after backend stacks
