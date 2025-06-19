@@ -17,13 +17,19 @@
 import os
 from pathlib import Path
 
-import cdk_nag
-from aws_cdk import CfnOutput, NestedStack, Duration, RemovalPolicy, Aws, BundlingOptions, DockerImage
+from aws_cdk import (
+    CfnOutput,
+    NestedStack,
+    Duration,
+    RemovalPolicy,
+    Aws,
+    BundlingOptions,
+    DockerImage,
+)
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as origins
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_s3_deployment as s3deploy
-from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_ssm as ssm
 from aws_cdk import aws_iam as iam
 
@@ -32,7 +38,7 @@ class ReVIEWFrontendStack(NestedStack):
     def __init__(
         self,
         scope,
-        props: dict,y
+        props: dict,
         **kwargs,
     ):
         self.props = props
@@ -41,16 +47,16 @@ class ReVIEWFrontendStack(NestedStack):
         super().__init__(scope, construct_id, description=description, **kwargs)
 
         self.fe_stack_name = construct_id
-        
+
         # Read configuration from SSM Parameter Store
         self.read_config_from_ssm()
-        
+
         # Create S3 bucket for static website hosting
         self.create_website_bucket()
-        
+
         # Create CloudFront distribution (static files only)
         self.create_cloudfront_distribution()
-        
+
         # Deploy React application with configuration
         self.deploy_react_app()
 
@@ -99,9 +105,9 @@ class ReVIEWFrontendStack(NestedStack):
         """Create CloudFront distribution for the React app (static files only)."""
         # Create Origin Access Control (OAC) for S3
         self.origin_access_control = cloudfront.S3OriginAccessControl(
-            self, 
+            self,
             f"{self.fe_stack_name}-s3-oac",
-            description="OAC for ReVIEW React frontend"
+            description="OAC for ReVIEW React frontend",
         )
 
         # Create S3 origin for static files only
@@ -131,9 +137,9 @@ class ReVIEWFrontendStack(NestedStack):
                 cloudfront.ErrorResponse(
                     http_status=403,
                     response_http_status=200,
-                    response_page_path="/index.html", 
+                    response_page_path="/index.html",
                     ttl=Duration.seconds(0),  # Handle S3 403s as SPA routes
-                )
+                ),
             ],
             price_class=cloudfront.PriceClass.PRICE_CLASS_ALL,
             http_version=cloudfront.HttpVersion.HTTP2_AND_3,
@@ -151,14 +157,14 @@ class ReVIEWFrontendStack(NestedStack):
                     "StringEquals": {
                         "AWS:SourceArn": f"arn:aws:cloudfront::{Aws.ACCOUNT_ID}:distribution/{self.distribution.distribution_id}"
                     }
-                }
+                },
             )
         )
 
     def deploy_react_app(self):
         """Build and deploy the React application to S3."""
         app_path = os.path.join(Path(__file__).parent.parent.parent, "frontend")
-        
+
         # Generate aws-exports.json configuration following the reference pattern
         exports_config = {
             "Auth": {
@@ -190,11 +196,13 @@ class ReVIEWFrontendStack(NestedStack):
                 command=[
                     "sh",
                     "-c",
-                    " && ".join([
-                        "npm --cache /tmp/.npm install",
-                        "npm --cache /tmp/.npm run build",
-                        "cp -aur /asset-input/dist/* /asset-output/",
-                    ]),
+                    " && ".join(
+                        [
+                            "npm --cache /tmp/.npm install",
+                            "npm --cache /tmp/.npm run build",
+                            "cp -aur /asset-input/dist/* /asset-output/",
+                        ]
+                    ),
                 ],
             ),
         )
