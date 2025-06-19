@@ -21,6 +21,7 @@ import os
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
+from lambda_utils.cors_utils import CORSResponse
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -42,85 +43,97 @@ def lambda_handler(event, context):
     logger.debug("presigned-url-lambda handler called.")
     logger.debug(f"{event=}")
 
-    if "body" in event:
-        event = json.loads(event["body"])
+    try:
+        if "body" in event:
+            event = json.loads(event["body"])
 
-    action = event["action"]
+        action = event["action"]
 
-    if action == "upload_media_file":  # POST
-        username = event["username"]
-        media_file_name = event["media_file_name"]
-        use_bda = event["use_bda"] == "True"
-        try:
-            key = (
-                f"{RECORDINGS_PREFIX}/{username}/{media_file_name}"
-                if not use_bda
-                else f"{BDA_RECORDINGS_PREFIX}/{username}/{media_file_name}"
-            )
-            response = s3_client.generate_presigned_post(
-                Bucket=S3_BUCKET,
-                Key=key,
-                ExpiresIn=PRESIGNED_URL_EXPIRATION_SECONDS,
-            )
-        except ClientError as e:
-            logging.error(e)
-            return None
-    elif action == "download_media_file":  # GET
-        username = event["username"]
-        media_file_name = event["media_file_name"]
-        try:
-            # Check both normal recordings prefix, and BDA recordings prefix
-            # and return presigned url to whichever exists
-            possible_keys = (
-                f"{RECORDINGS_PREFIX}/{username}/{media_file_name}",
-                f"{BDA_RECORDINGS_PREFIX}/{username}/{media_file_name}",
-            )
+        if action == "upload_media_file":  # POST
+            username = event["username"]
+            media_file_name = event["media_file_name"]
+            use_bda = event.get("use_bda", "false").lower() == "true"
+            try:
+                key = (
+                    f"{RECORDINGS_PREFIX}/{username}/{media_file_name}"
+                    if not use_bda
+                    else f"{BDA_RECORDINGS_PREFIX}/{username}/{media_file_name}"
+                )
+                response = s3_client.generate_presigned_post(
+                    Bucket=S3_BUCKET,
+                    Key=key,
+                    ExpiresIn=PRESIGNED_URL_EXPIRATION_SECONDS,
+                )
+            except ClientError as e:
+                logging.error(e)
+                return CORSResponse.error_response(
+                    f"Failed to generate presigned URL: {str(e)}", 500
+                )
 
-            for key in possible_keys:
-                if check_if_file_exists(bucket_name=S3_BUCKET, key=key):
-                    response = s3_client.generate_presigned_url(
-                        "get_object",
-                        Params={
-                            "Bucket": S3_BUCKET,
-                            "Key": key,
-                        },
-                        ExpiresIn=PRESIGNED_URL_EXPIRATION_SECONDS,
+        elif action == "download_media_file":  # GET
+            username = event["username"]
+            media_file_name = event["media_file_name"]
+            try:
+                # Check both normal recordings prefix, and BDA recordings prefix
+                # and return presigned url to whichever exists
+                possible_keys = (
+                    f"{RECORDINGS_PREFIX}/{username}/{media_file_name}",
+                    f"{BDA_RECORDINGS_PREFIX}/{username}/{media_file_name}",
+                )
+
+                for key in possible_keys:
+                    if check_if_file_exists(bucket_name=S3_BUCKET, key=key):
+                        response = s3_client.generate_presigned_url(
+                            "get_object",
+                            Params={
+                                "Bucket": S3_BUCKET,
+                                "Key": key,
+                            },
+                            ExpiresIn=PRESIGNED_URL_EXPIRATION_SECONDS,
+                        )
+                        break
+                else:
+                    # This else clause executes if the for loop completes without a break
+                    # (i.e., if no file was found)
+                    logging.error(
+                        f"Requested download of file {media_file_name} that does not exist."
                     )
-                    break
-            else:
-                # This else clause executes if the for loop completes without a break
-                # (i.e., if no file was found)
-                logging.error(f"Requested download of file {media_file_name} that does not exist.")
-                return {
-                    "statusCode": 404,
-                    "body": json.dumps(f"File {media_file_name} not found")
-                }
-        except ClientError as e:
-            logging.error(e)
-            return None
-    elif action == "download_transcript_txt_file":  # GET
-        username = event["username"]
-        job_id = event["job_id"]
-        try:
-            response = s3_client.generate_presigned_url(
-                "get_object",
-                Params={
-                    "Bucket": S3_BUCKET,
-                    "Key": f"{TEXT_TRANSCRIPTS_PREFIX}/{username}/{job_id}.txt",
-                },
-                ExpiresIn=PRESIGNED_URL_EXPIRATION_SECONDS,
-            )
-        except ClientError as e:
-            logging.error(e)
-            return None
+                    return CORSResponse.error_response(
+                        f"File {media_file_name} not found", 404
+                    )
 
-    else:
-        return {"statusCode": 400, "body": json.dumps("Invalid action")}
+            except ClientError as e:
+                logging.error(e)
+                return CORSResponse.error_response(
+                    f"Failed to generate presigned URL: {str(e)}", 500
+                )
 
-    return {
-        "statusCode": 200,
-        "body": json.dumps(response),
-    }
+        elif action == "download_transcript_txt_file":  # GET
+            username = event["username"]
+            job_id = event["job_id"]
+            try:
+                response = s3_client.generate_presigned_url(
+                    "get_object",
+                    Params={
+                        "Bucket": S3_BUCKET,
+                        "Key": f"{TEXT_TRANSCRIPTS_PREFIX}/{username}/{job_id}.txt",
+                    },
+                    ExpiresIn=PRESIGNED_URL_EXPIRATION_SECONDS,
+                )
+            except ClientError as e:
+                logging.error(e)
+                return CORSResponse.error_response(
+                    f"Failed to generate presigned URL: {str(e)}", 500
+                )
+
+        else:
+            return CORSResponse.error_response("Invalid action", 400)
+
+        return CORSResponse.success_response(response)
+
+    except Exception as e:
+        logger.error(f"Error in lambda_handler: {str(e)}")
+        return CORSResponse.error_response(f"Internal server error: {str(e)}", 500)
 
 
 def check_if_file_exists(bucket_name, key):

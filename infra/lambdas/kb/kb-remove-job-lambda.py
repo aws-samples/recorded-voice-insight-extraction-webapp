@@ -18,6 +18,7 @@ import json
 import logging
 import os
 from lambda_utils.invoke_lambda import invoke_lambda
+from lambda_utils.cors_utils import CORSResponse
 import boto3
 
 KNOWLEDGE_BASE_ID = os.environ["KNOWLEDGE_BASE_ID"]
@@ -45,25 +46,26 @@ def lambda_handler(event, context):
     Also delete the media and transcript files from s3, and also
     delete the row from dynamodb"""
 
-    if "body" in event:
-        event = json.loads(event["body"])
-
-    username = event["username"]
-    UUID = event["job_id"]
-
-    input_data = {
-        "knowledgeBaseId": KNOWLEDGE_BASE_ID,
-        "dataSourceId": DATA_SOURCE_ID,
-        "documentIdentifiers": [
-            {
-                "dataSourceType": "S3",
-                "s3": {
-                    "uri": f"s3://{SOURCE_BUCKET}/{TEXT_TRANSCRIPTS_PREFIX}/{username}/{UUID}.txt"
-                },
-            }
-        ],
-    }
     try:
+        if "body" in event:
+            event = json.loads(event["body"])
+
+        username = event["username"]
+        UUID = event["job_id"]
+
+        input_data = {
+            "knowledgeBaseId": KNOWLEDGE_BASE_ID,
+            "dataSourceId": DATA_SOURCE_ID,
+            "documentIdentifiers": [
+                {
+                    "dataSourceType": "S3",
+                    "s3": {
+                        "uri": f"s3://{SOURCE_BUCKET}/{TEXT_TRANSCRIPTS_PREFIX}/{username}/{UUID}.txt"
+                    },
+                }
+            ],
+        }
+        
         logger.info(f"Starting deletion job with {input_data=}")
         deletion_response = bedrock_agent_client.delete_knowledge_base_documents(
             **input_data
@@ -127,13 +129,9 @@ def lambda_handler(event, context):
                 "username": username,
             },
         )
+        
+        return CORSResponse.success_response(f"Deletion for username={username} job_id={UUID} successful.")
+        
     except Exception as e:
-        logger.error(f"Exception thrown in kb-ingest-job-lambda: {e}")
-        return {
-            "statusCode": 400,
-            "body": json.dumps(f"Error in deletion for {username=} {UUID=}: {e}"),
-        }
-    return {
-        "statusCode": 200,
-        "body": json.dumps(f"Deletion for {username=} {UUID=} successful."),
-    }
+        logger.error(f"Exception thrown in kb-remove-job-lambda: {e}")
+        return CORSResponse.error_response(f"Error in deletion for username={username} job_id={UUID}: {str(e)}", 400)

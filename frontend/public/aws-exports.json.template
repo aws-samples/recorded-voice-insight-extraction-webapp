@@ -1,0 +1,16 @@
+{
+  "Auth": {
+    "Cognito": {
+      "userPoolClientId": "YOUR_USER_POOL_CLIENT_ID",
+      "userPoolId": "YOUR_USER_POOL_ID"
+    }
+  },
+  "API": {
+    "REST": {
+      "endpoint": "https://YOUR_API_GATEWAY_ID.execute-api.us-east-1.amazonaws.com/prod"
+    }
+  },
+  "WebSocket": {
+    "endpoint": "wss://YOUR_WEBSOCKET_ID.execute-api.us-east-1.amazonaws.com/prod"
+  }
+}

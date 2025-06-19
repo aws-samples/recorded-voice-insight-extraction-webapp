@@ -1,0 +1,48 @@
+{
+    "mcpServers": {
+        "awslabs.aws-diagram-mcp-server": {
+            "args": [
+                "awslabs.aws-diagram-mcp-server"
+            ],
+            "autoApprove": [],
+            "command": "uvx",
+            "disabled": false,
+            "env": {
+                "FASTMCP_LOG_LEVEL": "ERROR"
+            }
+        },
+        "awslabs.cdk-mcp-server": {
+            "args": [
+                "awslabs.cdk-mcp-server@latest"
+            ],
+            "autoApprove": [],
+            "command": "uvx",
+            "disabled": false,
+            "env": {
+                "FASTMCP_LOG_LEVEL": "ERROR"
+            }
+        },
+        "awslabs.core-mcp-server": {
+            "args": [
+                "awslabs.core-mcp-server@latest"
+            ],
+            "autoApprove": [],
+            "command": "uvx",
+            "disabled": false,
+            "env": {
+                "FASTMCP_LOG_LEVEL": "ERROR"
+            }
+        },
+        "awslabs.frontend-mcp-server": {
+            "args": [
+                "awslabs.frontend-mcp-server@latest"
+            ],
+            "autoApprove": [],
+            "command": "uvx",
+            "disabled": false,
+            "env": {
+                "FASTMCP_LOG_LEVEL": "ERROR"
+            }
+        }
+    }
+}

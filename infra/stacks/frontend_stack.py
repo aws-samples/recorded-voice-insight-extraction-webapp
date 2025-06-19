@@ -17,17 +17,21 @@
 import os
 from pathlib import Path
 
-import cdk_nag
-from aws_cdk import CfnOutput, NestedStack, Duration
+from aws_cdk import (
+    CfnOutput,
+    NestedStack,
+    Duration,
+    RemovalPolicy,
+    Aws,
+    BundlingOptions,
+    DockerImage,
+)
 from aws_cdk import aws_cloudfront as cloudfront
-from aws_cdk import aws_cloudfront_origins as cfo
-from aws_cdk import aws_ec2 as ec2
-from aws_cdk import aws_ecs as ecs
-from aws_cdk import aws_ecs_patterns as ecs_patterns
-from aws_cdk import aws_elasticloadbalancingv2 as elbv2
+from aws_cdk import aws_cloudfront_origins as origins
+from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_s3_deployment as s3deploy
+from aws_cdk import aws_ssm as ssm
 from aws_cdk import aws_iam as iam
-from aws_cdk import aws_cognito as cognito
-from aws_cdk import aws_ecr_assets as ecr_assets  # noqa
 
 
 class ReVIEWFrontendStack(NestedStack):
@@ -35,176 +39,180 @@ class ReVIEWFrontendStack(NestedStack):
         self,
         scope,
         props: dict,
-        backend_api_url: str,
-        websocket_api_url: str,
-        cognito_pool: cognito.UserPool,
         **kwargs,
     ):
         self.props = props
         construct_id = props["stack_name_base"] + "-frontend"
-        description = "ReVIEW Application - Frontend stack"
+        description = "ReVIEW Application - React Frontend stack"
         super().__init__(scope, construct_id, description=description, **kwargs)
 
-        # Note: all props (which have string values) are exported as env variables
-        # in the streamlit docker container (backend bucket names, table names, etc)
-
-        # if app.py calls ReVIEWStack(app,"ReVIEW-prod") then
-        # construct_id here is "review-prod-streamlit"
         self.fe_stack_name = construct_id
 
-        # This will be exported as an env variable in the frontend, for it to call API Gateway
-        self.backend_api_url = backend_api_url
-        self.websocket_api_url = websocket_api_url
+        # Read configuration from SSM Parameter Store
+        self.read_config_from_ssm()
 
-        self.cognito_user_pool_id = cognito_pool.user_pool_id
-        # Frontend needs a cognito client associated with the user pool created in API stack
-        self.setup_cognito_pool_client(cognito_pool)
+        # Create S3 bucket for static website hosting
+        self.create_website_bucket()
 
-        self.create_frontend_app_execution_role()
-        self.deploy_fargate_service()
-        self.custom_header_name = f"{self.fe_stack_name}-custom-header"
-        self.custom_header_value = f"{self.fe_stack_name}-StreamlitCfnHeaderVal"
-        self.set_listener_custom_headers()
+        # Create CloudFront distribution (static files only)
         self.create_cloudfront_distribution()
 
-        # Save cfn distribution domain name as output, for convenience
+        # Deploy React application with configuration
+        self.deploy_react_app()
+
+        # Save CloudFront distribution domain name as output
         CfnOutput(
             self,
             f"{self.fe_stack_name}-FrontendUrl",
-            value=self.cfn_distribution.domain_name,
+            value=f"https://{self.distribution.distribution_domain_name}",
         )
 
-        cdk_nag.NagSuppressions.add_resource_suppressions(
-            self.app_execution_role,
-            suppressions=[
-                {"id": "AwsSolutions-IAM4", "reason": "Managed policies ok"},
-                {"id": "AwsSolutions-IAM5", "reason": "Wildcard ok"},
-            ],
+    def read_config_from_ssm(self):
+        """Read frontend configuration from SSM Parameter Store."""
+        # Read API Gateway URL
+        self.api_gateway_url = ssm.StringParameter.value_for_string_parameter(
+            self, f"/{self.props['stack_name_base']}/api-url"
         )
 
-    def setup_cognito_pool_client(self, cognito_pool: cognito.UserPool):
-        self.cognito_user_pool_client = cognito_pool.add_client(
-            "review-app-cognito-client",
-            user_pool_client_name="review-app-cognito-client",
-            generate_secret=False,
-            access_token_validity=Duration.hours(8),
-            id_token_validity=Duration.hours(8),
-            auth_flows=cognito.AuthFlow(user_srp=True),
+        # Read WebSocket API URL
+        self.websocket_url = ssm.StringParameter.value_for_string_parameter(
+            self, f"/{self.props['stack_name_base']}/websocket-url"
         )
 
-        self.cognito_client_id = self.cognito_user_pool_client.user_pool_client_id
-
-    def deploy_fargate_service(self):
-        """Deploy VPC, cluster, app image into fargate"""
-        # Create a VPC if user does not specify an existing one
-        if not self.props["existing_vpc_id"]:
-            self.vpc = ec2.Vpc(
-                self,
-                f"{self.fe_stack_name}-WebappVpc",
-                max_azs=2,
-            )
-        else:
-            # Re-use existing VPC (with internet gateway)
-            self.vpc = ec2.Vpc.from_lookup(
-                self,
-                f"{self.fe_stack_name}-WebappVpc",
-                vpc_id=self.props["existing_vpc_id"],
-            )
-
-        # Create an ECS cluster in the VPC
-        self.cluster = ecs.Cluster(
-            self, f"{self.fe_stack_name}-WebappCluster", vpc=self.vpc
+        # Read Cognito User Pool ID
+        self.cognito_user_pool_id = ssm.StringParameter.value_for_string_parameter(
+            self, f"/{self.props['stack_name_base']}/cognito-pool-id"
         )
-        # Docker build the frontend UI image
-        self.app_image = ecs.ContainerImage.from_asset(
-            os.path.join(Path(__file__).parent.parent.parent, "frontend"),
-            # platform = ecr_assets.Platform.LINUX_AMD64 ## Use this if Docker building on a mac OS
+
+        # Read Cognito Client ID
+        self.cognito_client_id = ssm.StringParameter.value_for_string_parameter(
+            self, f"/{self.props['stack_name_base']}/cognito-client-id"
         )
-        # Deploy the frontend UI image into a load balanced fargate service in the cluster
-        self.service = ecs_patterns.ApplicationLoadBalancedFargateService(
+
+    def create_website_bucket(self):
+        """Create S3 bucket for static website hosting."""
+        self.website_bucket = s3.Bucket(
             self,
-            f"{self.fe_stack_name}-AppService",
-            cluster=self.cluster,
-            cpu=1024,
-            desired_count=1,  # Possibly increase this to handle more concurrent requests
-            # 10 min timeout to allow large file uploads, else AxiosError
-            idle_timeout=Duration.minutes(10),
-            task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
-                image=self.app_image,
-                container_port=8501,
-                task_role=self.app_execution_role,
-                environment={
-                    "COGNITO_CLIENT_ID": self.cognito_user_pool_client.user_pool_client_id,
-                    "COGNITO_POOL_ID": self.cognito_user_pool_id,
-                    "BACKEND_API_URL": self.backend_api_url,
-                    "WS_API_URL": self.websocket_api_url,
-                    # Export all string props as environment variables in the frontend
-                    **{k: v for k, v in self.props.items() if isinstance(v, str)},
-                },
-            ),
-            # Memory needs to be large enough to handle large media uploads
-            # https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ecs_patterns.ApplicationLoadBalancedFargateService.html#memorylimitmib
-            memory_limit_mib=8192,
-            public_load_balancer=True,
-            # Max length is 32 characters for ALB names
-            load_balancer_name=f"{self.fe_stack_name}-alb"[-32:],
-        )
-
-    def set_listener_custom_headers(self):
-        # To increase security, fargate service only responds when http requests
-        # include this specific header name and value.
-        # This prevents people from connecting to the open-to-the-internet
-        # load balancer directly.
-        # Ultimately, the cloudfront distribution will construct requests
-        # with this header.
-
-        self.service.listener.add_action(
-            "forward-custom-header",
-            priority=1,
-            conditions=[
-                elbv2.ListenerCondition.http_header(
-                    self.custom_header_name, [self.custom_header_value]
-                )
-            ],
-            action=elbv2.ListenerAction.forward([self.service.target_group]),
-        )
-
-        self.service.listener.add_action(
-            "new-default-action", action=elbv2.ListenerAction.fixed_response(403)
-        )
-
-    def create_frontend_app_execution_role(self):
-        self.app_execution_role = iam.Role(
-            self,
-            f"{self.fe_stack_name}-frontendAppExecutionRole",
-            assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-        )
-        # Frontend UI needs read/write access to s3
-        self.app_execution_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
-        )
-        # Frontend UI needs to access cognito to create API auth tokens
-        self.app_execution_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonCognitoReadOnly")
+            f"{self.fe_stack_name}-website-bucket",
+            removal_policy=RemovalPolicy.DESTROY,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            auto_delete_objects=True,
+            website_index_document="index.html",
+            website_error_document="index.html",  # SPA routing support
         )
 
     def create_cloudfront_distribution(self):
-        self.cfn_distribution = cloudfront.Distribution(
+        """Create CloudFront distribution for the React app (static files only)."""
+        # Create Origin Access Control (OAC) for S3
+        self.origin_access_control = cloudfront.S3OriginAccessControl(
             self,
-            f"{self.fe_stack_name}-cloudfront-id",
+            f"{self.fe_stack_name}-s3-oac",
+            description="OAC for ReVIEW React frontend",
+        )
+
+        # Create S3 origin for static files only
+        s3_origin = origins.S3BucketOrigin.with_origin_access_control(
+            self.website_bucket,
+            origin_access_control=self.origin_access_control,
+        )
+
+        self.distribution = cloudfront.Distribution(
+            self,
+            f"{self.fe_stack_name}-distribution",
             default_behavior=cloudfront.BehaviorOptions(
-                origin=cfo.LoadBalancerV2Origin(
-                    self.service.load_balancer,
-                    protocol_policy=cloudfront.OriginProtocolPolicy.HTTP_ONLY,
-                    http_port=80,
-                    origin_path="/",
-                    custom_headers={self.custom_header_name: self.custom_header_value},
-                ),
-                allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
-                cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
+                origin=s3_origin,
+                allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+                cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-                origin_request_policy=cloudfront.OriginRequestPolicy.ALL_VIEWER_AND_CLOUDFRONT_2022,
-                response_headers_policy=cloudfront.ResponseHeadersPolicy.CORS_ALLOW_ALL_ORIGINS,
-                compress=False,
+                compress=True,
             ),
+            # SPA routing support - redirect 404s to index.html
+            error_responses=[
+                cloudfront.ErrorResponse(
+                    http_status=404,
+                    response_http_status=200,
+                    response_page_path="/index.html",
+                    ttl=Duration.seconds(0),  # Don't cache error responses
+                ),
+                cloudfront.ErrorResponse(
+                    http_status=403,
+                    response_http_status=200,
+                    response_page_path="/index.html",
+                    ttl=Duration.seconds(0),  # Handle S3 403s as SPA routes
+                ),
+            ],
+            price_class=cloudfront.PriceClass.PRICE_CLASS_ALL,
+            http_version=cloudfront.HttpVersion.HTTP2_AND_3,
+        )
+
+        # Grant CloudFront access to S3 bucket via bucket policy
+        self.website_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                sid="AllowCloudFrontServicePrincipal",
+                effect=iam.Effect.ALLOW,
+                principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
+                actions=["s3:GetObject"],
+                resources=[f"{self.website_bucket.bucket_arn}/*"],
+                conditions={
+                    "StringEquals": {
+                        "AWS:SourceArn": f"arn:aws:cloudfront::{Aws.ACCOUNT_ID}:distribution/{self.distribution.distribution_id}"
+                    }
+                },
+            )
+        )
+
+    def deploy_react_app(self):
+        """Build and deploy the React application to S3."""
+        app_path = os.path.join(Path(__file__).parent.parent.parent, "frontend")
+
+        # Generate aws-exports.json configuration following the reference pattern
+        exports_config = {
+            "Auth": {
+                "Cognito": {
+                    "userPoolClientId": self.cognito_client_id,
+                    "userPoolId": self.cognito_user_pool_id,
+                }
+            },
+            "API": {
+                "REST": {
+                    "endpoint": self.api_gateway_url,  # Read from SSM
+                }
+            },
+            "WebSocket": {
+                "endpoint": self.websocket_url,  # Read from SSM
+            },
+        }
+
+        # Create aws-exports.json as a deployment source
+        exports_asset = s3deploy.Source.json_data("aws-exports.json", exports_config)
+
+        # Create React app asset with Docker bundling
+        react_asset = s3deploy.Source.asset(
+            app_path,
+            bundling=BundlingOptions(
+                image=DockerImage.from_registry(
+                    "public.ecr.aws/sam/build-nodejs18.x:latest"
+                ),
+                command=[
+                    "sh",
+                    "-c",
+                    " && ".join(
+                        [
+                            "npm --cache /tmp/.npm install",
+                            "npm --cache /tmp/.npm run build",
+                            "cp -aur /asset-input/dist/* /asset-output/",
+                        ]
+                    ),
+                ],
+            ),
+        )
+
+        # Deploy both the React app and configuration
+        self.deployment = s3deploy.BucketDeployment(
+            self,
+            f"{self.fe_stack_name}-deployment",
+            sources=[react_asset, exports_asset],
+            destination_bucket=self.website_bucket,
+            distribution=self.distribution,
+            prune=False,  # Don't delete files not in the deployment
         )
