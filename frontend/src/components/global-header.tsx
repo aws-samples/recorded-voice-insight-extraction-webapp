@@ -51,7 +51,7 @@ export default function GlobalHeader() {
     >
       <TopNavigation
         identity={{
-          href: "/",
+          href: "/file-upload",
           title: "ReVIEW",
         }}
         utilities={[

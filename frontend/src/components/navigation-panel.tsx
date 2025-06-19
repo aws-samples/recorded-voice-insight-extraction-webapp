@@ -18,12 +18,6 @@ export default function NavigationPanel() {
     const items: SideNavigationProps.Item[] = [
       {
         type: "link",
-        text: "Admin Dashboard",
-        href: "/",
-      },
-      { type: "divider" },
-      {
-        type: "link",
         text: "File Upload",
         href: "/file-upload",
       },
@@ -80,7 +74,7 @@ export default function NavigationPanel() {
     <SideNavigation
       onFollow={onFollow}
       onChange={onChange}
-      header={{ href: "/", text: APP_NAME }}
+      header={{ href: "/file-upload", text: APP_NAME }}
       activeHref={location.pathname}
       items={items.map((value, idx) => {
         const item = { ...value };

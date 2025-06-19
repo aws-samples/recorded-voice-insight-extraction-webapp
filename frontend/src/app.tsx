@@ -6,7 +6,6 @@ import {
 } from "react-router-dom";
 import { USE_BROWSER_ROUTER } from "./common/constants";
 import GlobalHeader from "./components/global-header";
-import DashboardPage from "./pages/dashboard/dashboard-page";
 import FileUploadPage from "./pages/FileUpload";
 import JobStatus from "./pages/JobStatus";
 import Analyze from "./pages/Analyze";
@@ -25,7 +24,7 @@ export default function App() {
         <div style={{ height: "56px", backgroundColor: "#000716" }}>&nbsp;</div>
         <div>
           <Routes>
-            <Route index path="/" element={<DashboardPage />} />
+            <Route index path="/" element={<FileUploadPage />} />
             <Route path="/file-upload" element={<FileUploadPage />} />
             <Route path="/job-status" element={<JobStatus />} />
             <Route path="/analyze" element={<Analyze />} />
