@@ -12,12 +12,19 @@ import { Mode } from "@cloudscape-design/global-styles";
 import { StatusIndicator } from "@cloudscape-design/components";
 import { APP_NAME } from "../common/constants";
 import { Amplify, ResourcesConfig } from "aws-amplify";
+
+// Extended configuration type to include our custom WebSocket property
+interface ExtendedResourcesConfig extends ResourcesConfig {
+  WebSocket?: {
+    endpoint: string;
+  };
+}
 import App from "../app";
 import "@aws-amplify/ui-react/styles.css";
 
 export default function AppConfigured() {
   const { tokens } = useTheme();
-  const [config, setConfig] = useState<ResourcesConfig | null>(null);
+  const [config, setConfig] = useState<ExtendedResourcesConfig | null>(null);
   const [error, setError] = useState<boolean | null>(null);
   const [theme, setTheme] = useState(StorageHelper.getTheme());
 
@@ -25,7 +32,7 @@ export default function AppConfigured() {
     (async () => {
       try {
         const result = await fetch("/aws-exports.json");
-        const awsExports: ResourcesConfig = await result.json();
+        const awsExports: ExtendedResourcesConfig = await result.json();
 
         Amplify.configure(awsExports);
 

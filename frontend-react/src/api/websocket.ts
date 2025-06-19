@@ -1,4 +1,5 @@
 import { FullQAnswer, ChatMessage } from '../types/chat';
+import { Amplify } from 'aws-amplify';
 
 // WebSocket message size limit for API Gateway (32KB)
 const CHUNK_SIZE = 32 * 1024;
@@ -44,9 +45,6 @@ interface EndMessage {
   step: WebSocketStep.END;
   token: string;
 }
-
-// Remove unused WebSocketMessage type since we have specific types
-// type WebSocketMessage = StartMessage | BodyMessage | EndMessage;
 export class ChatWebSocketService {
   private ws: WebSocket | null = null;
   private wsUrl: string;
@@ -54,9 +52,40 @@ export class ChatWebSocketService {
   private expectedChunks: number = 0;
 
   constructor() {
-    // Use environment variable or fallback URL
+    // Try to get WebSocket URL from configuration
+    try {
+      this.wsUrl = this.getWebSocketUrl();
+      console.log('Got this.wsUrl = ',this.wsUrl)
+    } catch (error) {
+      console.error('Failed to initialize WebSocket service:', error);
+      throw error;
+    }
+  }
+
+  private getWebSocketUrl(): string {
+    // Always prioritize Amplify configuration over environment variables
+    try {
+      const config = Amplify.getConfig() as any;
+      if (config?.WebSocket?.endpoint) {
+        console.log('Using WebSocket URL from Amplify configuration:', config.WebSocket.endpoint);
+        return config.WebSocket.endpoint;
+      }
+    } catch (error) {
+      console.warn('Could not load WebSocket URL from Amplify configuration:', error);
+    }
+
+    // Only use environment variable as fallback for local development
     // @ts-ignore - Vite handles this at build time
-    this.wsUrl = import.meta.env?.VITE_WS_API_URL || 'wss://qabuyr9e0i.execute-api.us-east-1.amazonaws.com/prod';
+    const envUrl = import.meta.env?.VITE_WS_API_URL;
+    if (envUrl && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      console.log('Using WebSocket URL from environment variable (local development):', envUrl);
+      return envUrl;
+    }
+
+    // No hardcoded fallback - throw an error instead
+    throw new Error(
+      'WebSocket URL not configured. Please ensure aws-exports.json contains WebSocket.endpoint'
+    );
   }
 
   async connect(authToken: string): Promise<void> {
@@ -65,23 +94,30 @@ export class ChatWebSocketService {
         // Clean token (remove Bearer prefix if present)
         const cleanToken = authToken.startsWith('Bearer ') ? authToken.substring(7) : authToken;
         
-        console.log('Connecting to WebSocket:', this.wsUrl);
-        console.log('Token length:', cleanToken.length);
+        console.log('🔌 Attempting WebSocket connection to:', this.wsUrl);
+        console.log('🔑 Auth token length:', cleanToken.length);
         
         // Connect without auth in URL - auth moved to message body
         this.ws = new WebSocket(this.wsUrl);
 
         this.ws.onopen = () => {
-          console.log('WebSocket connected successfully');
+          console.log('🔗 WebSocket TCP connection established (onopen fired)');
+          console.log('📤 Sending START message to authenticate with API Gateway...');
           // Send START message with token for authentication
           this.sendStartMessage(cleanToken)
-            .then(() => resolve())
-            .catch(reject);
+            .then(() => {
+              console.log('✅ WebSocket connection fully established and authenticated');
+              resolve();
+            })
+            .catch((error) => {
+              console.error('❌ WebSocket authentication failed:', error);
+              reject(error);
+            });
         };
 
         this.ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          reject(new Error('WebSocket connection failed'));
+          console.error('❌ WebSocket TCP connection error:', error);
+          reject(new Error('WebSocket TCP connection failed'));
         };
 
         this.ws.onclose = (event) => {
@@ -101,7 +137,8 @@ export class ChatWebSocketService {
   private async sendStartMessage(token: string): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket is not connected'));
+        console.error('❌ Cannot send START message: WebSocket TCP connection not open (readyState:', this.ws?.readyState, ')');
+        reject(new Error('WebSocket TCP connection is not open'));
         return;
       }
 
@@ -114,18 +151,22 @@ export class ChatWebSocketService {
       const handleStartResponse = (event: MessageEvent) => {
         this.ws!.removeEventListener('message', handleStartResponse);
         
+        console.log('📥 Received START response from API Gateway:', event.data);
+        
         if (event.data === 'Session started.') {
-          console.log('✅ Authentication successful - session started');
+          console.log('✅ API Gateway authentication successful - session started');
           resolve();
         } else {
-          console.error('❌ Authentication failed:', event.data);
-          reject(new Error(`Authentication failed: ${event.data}`));
+          console.error('❌ API Gateway authentication failed:', event.data);
+          reject(new Error(`API Gateway authentication failed: ${event.data}`));
         }
       };
 
       this.ws.addEventListener('message', handleStartResponse);
+      
+      console.log('📤 Sending START message to API Gateway with auth token...');
       this.ws.send(JSON.stringify(startMessage));
-      console.log('📤 Sent START message with authentication token');
+      console.log('📤 START message sent via WebSocket (waiting for API Gateway response)');
     });
   }
   private async sendChunkedMessage(chatInput: ChatInput, token: string): Promise<void> {
@@ -370,5 +411,57 @@ export class ChatWebSocketService {
   }
 }
 
-// Singleton instance
-export const chatWebSocketService = new ChatWebSocketService();
+// Use a lazy singleton pattern instead of initializing immediately
+let _instance: ChatWebSocketService | null = null;
+
+export const chatWebSocketService = {
+  getInstance(): ChatWebSocketService {
+    if (!_instance) {
+      try {
+        _instance = new ChatWebSocketService();
+      } catch (error) {
+        console.warn('WebSocket service initialization deferred until configuration is loaded');
+        // Return a temporary instance that will be replaced on the next call
+        // after configuration is loaded
+        return {
+          connect: async () => {
+            _instance = new ChatWebSocketService();
+            return _instance.connect(arguments[0]);
+          },
+          sendMessage: async () => {
+            _instance = new ChatWebSocketService();
+            return _instance.sendMessage(
+              arguments[0], 
+              arguments[1], 
+              arguments[2], 
+              arguments[3], 
+              arguments[4]
+            );
+          },
+          disconnect: () => {}
+        } as unknown as ChatWebSocketService;
+      }
+    }
+    return _instance;
+  },
+  
+  connect(token: string): Promise<void> {
+    return this.getInstance().connect(token);
+  },
+  
+  sendMessage(
+    messages: ChatMessage[],
+    username: string,
+    token: string,
+    mediaNames: string[] = [],
+    transcriptJobId?: string
+  ): Promise<AsyncGenerator<FullQAnswer, void, unknown>> {
+    return this.getInstance().sendMessage(messages, username, token, mediaNames, transcriptJobId);
+  },
+  
+  disconnect(): void {
+    if (_instance) {
+      _instance.disconnect();
+    }
+  }
+};

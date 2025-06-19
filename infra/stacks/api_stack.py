@@ -20,7 +20,6 @@ from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy, aws_logs
 from aws_cdk import aws_apigateway as apigw
 from aws_cdk import aws_apigatewayv2 as apigwv2
 from aws_cdk import aws_apigatewayv2_integrations as integrations
-from aws_cdk import aws_apigatewayv2_authorizers as authorizers
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as _lambda
@@ -64,7 +63,9 @@ class ReVIEWAPIStack(NestedStack):
         self.associate_lambda_with_gateway(presigned_url_lambda, "s3-presigned")
         self.associate_lambda_with_gateway(kb_job_deletion_lambda, "kb-job-deletion")
         self.associate_lambda_with_gateway(subtitle_lambda, "subtitles")
-        self.associate_lambda_with_gateway_get(analysis_templates_lambda, "analysis-templates")
+        self.associate_lambda_with_gateway_get(
+            analysis_templates_lambda, "analysis-templates"
+        )
 
         # Create DynamoDB table for WebSocket session management
         self.websocket_session_table = self.create_websocket_session_table()
@@ -202,19 +203,17 @@ class ReVIEWAPIStack(NestedStack):
             f"{self.props['stack_name_base']}-WebSocketSessionTable",
             table_name=f"{self.props['stack_name_base']}-websocket-sessions",
             partition_key=dynamodb.Attribute(
-                name="ConnectionId",
-                type=dynamodb.AttributeType.STRING
+                name="ConnectionId", type=dynamodb.AttributeType.STRING
             ),
             sort_key=dynamodb.Attribute(
-                name="MessagePartId",
-                type=dynamodb.AttributeType.NUMBER
+                name="MessagePartId", type=dynamodb.AttributeType.NUMBER
             ),
             # TTL for automatic cleanup of expired sessions
             time_to_live_attribute="expire",
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
         )
-        
+
         return table
 
     def associate_lambda_with_gateway(
@@ -276,15 +275,16 @@ class ReVIEWAPIStack(NestedStack):
         cfn_stage = self.web_socket_api_stage.node.default_child
         cfn_stage.access_log_settings = {
             "destinationArn": log_group.log_group_arn,
-            "format": '$context.identity.sourceIp - - [$context.requestTime] "$context.routeKey $context.connectionId" $context.status $context.responseLength $context.requestId',
+            "format": '$context.identity.sourceIp - - [$context.requestTime] "$context.routeKey $context.connectionId" $context.status $context.responseLength $context.requestId $context.error.message $context.error.messageString $context.integrationErrorMessage',
         }
 
-        # Add default route settings including throttling
+        # Add default route settings including throttling and logging
         cfn_stage.default_route_settings = {
             "throttling_burst_limit": 500,
             "throttling_rate_limit": 1000,
             "data_trace_enabled": True,
             "logging_level": "INFO",
+            "detailed_metrics_enabled": True,
         }
 
         connect_disconnect_lambda_role = iam.Role(
@@ -446,25 +446,25 @@ class ReVIEWAPIStack(NestedStack):
             "ApiUrlParam",
             parameter_name=f"/{self.props['stack_name_base']}/api-url",
             string_value=self.api.url,
-            description="REST API Gateway URL for ReVIEW frontend"
+            description="REST API Gateway URL for ReVIEW frontend",
         )
 
         # Store WebSocket API URL
         ssm.StringParameter(
             self,
-            "WebSocketUrlParam", 
+            "WebSocketUrlParam",
             parameter_name=f"/{self.props['stack_name_base']}/websocket-url",
             string_value=self.web_socket_api_stage.url,
-            description="WebSocket API URL for ReVIEW frontend"
+            description="WebSocket API URL for ReVIEW frontend",
         )
 
         # Store Cognito User Pool ID
         ssm.StringParameter(
             self,
             "CognitoPoolIdParam",
-            parameter_name=f"/{self.props['stack_name_base']}/cognito-pool-id", 
+            parameter_name=f"/{self.props['stack_name_base']}/cognito-pool-id",
             string_value=self.cognito_user_pool.user_pool_id,
-            description="Cognito User Pool ID for ReVIEW frontend"
+            description="Cognito User Pool ID for ReVIEW frontend",
         )
 
         # Store Cognito Client ID
@@ -473,5 +473,5 @@ class ReVIEWAPIStack(NestedStack):
             "CognitoClientIdParam",
             parameter_name=f"/{self.props['stack_name_base']}/cognito-client-id",
             string_value=self.cognito_user_pool_client.user_pool_client_id,
-            description="Cognito User Pool Client ID for ReVIEW frontend"
+            description="Cognito User Pool Client ID for ReVIEW frontend",
         )
