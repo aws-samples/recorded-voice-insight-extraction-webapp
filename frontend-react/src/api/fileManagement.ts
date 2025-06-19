@@ -1,13 +1,15 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-// Use the proxy URL in development
-const API_BASE_URL = '/api';
+import useHttp from '../hooks/useHttp';
+
+// Create HTTP client instance
+const httpClient = useHttp();
 
 export const deleteFileByJobId = async (
   jobId: string,
   username: string,
-  authToken: string
+  _authToken?: string // Underscore prefix to indicate unused parameter (useHttp handles auth)
 ): Promise<string> => {
   const requestBody = {
     username,
@@ -15,21 +17,8 @@ export const deleteFileByJobId = async (
   };
 
   try {
-    const response = await fetch(`${API_BASE_URL}/kb-job-deletion`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authToken,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    return result;
+    const response = await httpClient.post<string>('/kb-job-deletion', requestBody);
+    return response.data;
   } catch (error) {
     console.error('Error deleting file:', error);
     throw error;

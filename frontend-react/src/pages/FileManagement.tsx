@@ -136,7 +136,7 @@ const FileManagementPage: React.FC = () => {
             message: `Deleting ${mediaName}...`,
           });
           
-          await deleteFileByJobId(job.UUID, username, authToken);
+          await deleteFileByJobId(job.UUID, username);
         }
       }
 
