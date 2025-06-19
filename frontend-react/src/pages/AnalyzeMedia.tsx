@@ -111,7 +111,7 @@ export const AnalyzeMedia: React.FC = () => {
 
       setState(prev => ({
         ...prev,
-        analysisResult: `Analysis submitted with job ID: ${result.jobId}`,
+        analysisResult: result, // result is now the analysis text directly
         isLoading: false
       }));
     } catch (error) {

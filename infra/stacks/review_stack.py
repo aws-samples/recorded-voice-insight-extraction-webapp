@@ -65,6 +65,7 @@ class ReVIEWStack(Stack):
             presigned_url_lambda=self.backend_stack.presigned_url_lambda,
             kb_job_deletion_lambda=self.rag_stack.kb_sync_construct.deletion_lambda,
             subtitle_lambda=self.backend_stack.subtitle_lambda,
+            analysis_templates_lambda=self.backend_stack.analysis_templates_lambda,
             source_bucket=self.backend_stack.bucket,
         )
 

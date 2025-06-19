@@ -116,12 +116,12 @@ const ChatWithMediaPage: React.FC = () => {
 
   const handleGetPresignedUrl = useCallback(async (mediaName: string) => {
     try {
-      return await getMediaPresignedUrl(mediaName, username, idToken);
+      return await getMediaPresignedUrl(mediaName, username);
     } catch (error) {
       console.error('Error getting presigned URL:', error);
       throw new Error('Failed to get media URL. Please try again.');
     }
-  }, [username, idToken]);
+  }, [username]);
 
   const handleSendMessage = useCallback(async (messageText: string) => {
     if (!messageText.trim() || isSending) return;

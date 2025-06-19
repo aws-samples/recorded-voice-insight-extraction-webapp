@@ -53,16 +53,19 @@ export class AnalysisApi {
     selectedFiles: string[],
     template: AnalysisTemplate,
     customPrompt?: string
-  ): Promise<{ jobId: string }> {
+  ): Promise<string> {
     const requestBody = {
+      foundation_model_id: template.model_id,
+      system_prompt: template.system_prompt,
+      main_prompt: customPrompt || template.template_prompt,
+      bedrock_kwargs: template.bedrock_kwargs,
       username,
       selectedFiles,
-      template,
-      customPrompt,
+      template_id: template.template_id,
     };
 
     try {
-      const response = await this.http.post<{ jobId: string }>('/llm', requestBody);
+      const response = await this.http.post<string>('/llm', requestBody);
       return response.data;
     } catch (error) {
       console.error('Error submitting analysis:', error);

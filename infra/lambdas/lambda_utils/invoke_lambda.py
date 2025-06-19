@@ -30,7 +30,19 @@ def invoke_lambda(lambda_client, lambda_function_name: str, action: str, params:
     try:
         response = lambda_client.invoke(**lambda_params)
         result = json.loads(response["Payload"].read().decode("utf-8"))
-        return json.loads(result["body"]) if result.get("body") else None
+        
+        # Handle both old format and new CORS format
+        if result.get("body"):
+            # New CORS format - body is already JSON encoded
+            try:
+                return json.loads(result["body"])
+            except (json.JSONDecodeError, TypeError):
+                # If body is already parsed or not valid JSON, return as-is
+                return result["body"]
+        else:
+            # Old format - return the result directly
+            return result
+            
     except Exception as e:
         print(f"Error invoking Lambda: {str(e)}")
         raise

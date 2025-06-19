@@ -1,43 +1,43 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: MIT-0
+
+import useHttp from '../hooks/useHttp';
+
 /**
  * Functions for interacting with S3 via API Gateway
  */
+
+// Create HTTP client instance
+const httpClient = useHttp();
 
 /**
  * Get a presigned URL for a media file
  * @param mediaName The name of the media file
  * @param username The current user's username
- * @param authToken The authentication token
+ * @param authToken The authentication token (not needed as useHttp handles auth)
  * @returns Promise resolving to the presigned URL
  */
 export async function getMediaPresignedUrl(
   mediaName: string,
   username: string,
-  authToken: string
+  _authToken?: string // Underscore prefix to indicate unused parameter
 ): Promise<string> {
   console.log(`🔗 Requesting presigned URL for: ${mediaName}`);
   
-  const response = await fetch('/api/s3-presigned', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': authToken
-    },
-    body: JSON.stringify({
-      action: 'download_media_file',  // Backend expects 'action', not 'operation'
-      media_file_name: mediaName,     // Backend expects 'media_file_name', not 'media_name'
-      username: username
-    })
-  });
+  const requestBody = {
+    action: 'download_media_file',
+    media_file_name: mediaName,
+    username: username
+  };
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`❌ Presigned URL request failed: ${response.status} ${response.statusText}`, errorText);
-    throw new Error(`Failed to get presigned URL: ${response.statusText}`);
+  try {
+    const response = await httpClient.post<string>('/s3-presigned', requestBody);
+    console.log(`✅ Received presigned URL response:`, response.data);
+    
+    // The backend returns the presigned URL directly as a string, not in a 'url' field
+    return typeof response.data === 'string' ? response.data : response.data;
+  } catch (error) {
+    console.error(`❌ Presigned URL request failed:`, error);
+    throw new Error(`Failed to get presigned URL: ${error}`);
   }
-
-  const data = await response.json();
-  console.log(`✅ Received presigned URL response:`, data);
-  
-  // The backend returns the presigned URL directly as a string, not in a 'url' field
-  return typeof data === 'string' ? data : data.url || data;
 }

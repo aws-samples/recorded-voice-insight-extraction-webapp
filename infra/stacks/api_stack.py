@@ -45,6 +45,7 @@ class ReVIEWAPIStack(NestedStack):
         presigned_url_lambda: _lambda.Function,
         kb_job_deletion_lambda: _lambda.Function,
         subtitle_lambda: _lambda.Function,
+        analysis_templates_lambda: _lambda.Function,
         source_bucket: s3.Bucket,
         **kwargs,
     ):
@@ -63,6 +64,7 @@ class ReVIEWAPIStack(NestedStack):
         self.associate_lambda_with_gateway(presigned_url_lambda, "s3-presigned")
         self.associate_lambda_with_gateway(kb_job_deletion_lambda, "kb-job-deletion")
         self.associate_lambda_with_gateway(subtitle_lambda, "subtitles")
+        self.associate_lambda_with_gateway_get(analysis_templates_lambda, "analysis-templates")
 
         # Create DynamoDB table for WebSocket session management
         self.websocket_session_table = self.create_websocket_session_table()
@@ -228,6 +230,24 @@ class ReVIEWAPIStack(NestedStack):
         # Add POST method to resource, with Cognito authorizer
         resource.add_method(
             "POST",
+            integration,
+            authorizer=self.authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO,
+        )
+
+    def associate_lambda_with_gateway_get(
+        self, my_lambda: _lambda.Function, resource_name: str
+    ):
+        # Create a resource for the Lambda function
+        resource = self.api.root.add_resource(resource_name)
+
+        # Integrate Lambda function with API Gateway
+        # Lambda functions now handle CORS headers themselves
+        integration = apigw.LambdaIntegration(my_lambda)
+
+        # Add GET method to resource, with Cognito authorizer
+        resource.add_method(
+            "GET",
             integration,
             authorizer=self.authorizer,
             authorization_type=apigw.AuthorizationType.COGNITO,

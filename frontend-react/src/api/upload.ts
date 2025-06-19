@@ -1,4 +1,10 @@
-const API_BASE_URL = '/api';
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: MIT-0
+
+import useHttp from '../hooks/useHttp';
+
+// Create HTTP client instance
+const httpClient = useHttp();
 
 export interface S3PresignedRequest {
   action: string;
@@ -16,7 +22,7 @@ export const uploadToS3 = async (
   file: File,
   filename: string,
   username: string,
-  authToken: string,
+  _authToken?: string, // Underscore prefix to indicate unused parameter (useHttp handles auth)
   useBda: boolean = false,
   onProgress?: (progress: number) => void
 ): Promise<boolean> => {
@@ -27,61 +33,54 @@ export const uploadToS3 = async (
     use_bda: useBda.toString(),
   };
 
-  const presignedResponse = await fetch(`${API_BASE_URL}/s3-presigned`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': authToken,
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!presignedResponse.ok) {
-    throw new Error(`Failed to get presigned URL: ${presignedResponse.status}`);
-  }
-
-  const presignedData: S3PresignedResponse = await presignedResponse.json();
-
-  const formData = new FormData();
-  Object.entries(presignedData.fields).forEach(([key, value]) => {
-    formData.append(key, value);
-  });
-  formData.append('file', file, filename);
-
-  let progressInterval: number | null = null;
-  let currentProgress = 0;
-  
-  if (onProgress) {
-    onProgress(5);
-    progressInterval = setInterval(() => {
-      if (currentProgress < 85) {
-        currentProgress += Math.random() * 10 + 5;
-        if (currentProgress > 85) currentProgress = 85;
-        onProgress(currentProgress);
-      }
-    }, 300);
-  }
-
   try {
-    const uploadResponse = await fetch(presignedData.url, {
-      method: 'POST',
-      body: formData,
+    const response = await httpClient.post<S3PresignedResponse>('/s3-presigned', requestBody);
+    const presignedData = response.data;
+
+    const formData = new FormData();
+    Object.entries(presignedData.fields).forEach(([key, value]) => {
+      formData.append(key, value);
     });
+    formData.append('file', file, filename);
 
-    if (progressInterval) {
-      clearInterval(progressInterval);
-      onProgress?.(100);
+    let progressInterval: number | null = null;
+    let currentProgress = 0;
+    
+    if (onProgress) {
+      onProgress(5);
+      progressInterval = setInterval(() => {
+        if (currentProgress < 85) {
+          currentProgress += Math.random() * 10 + 5;
+          if (currentProgress > 85) currentProgress = 85;
+          onProgress(currentProgress);
+        }
+      }, 300);
     }
 
-    if (uploadResponse.status !== 204) {
-      throw new Error(`Upload failed: ${uploadResponse.status}`);
-    }
+    try {
+      const uploadResponse = await fetch(presignedData.url, {
+        method: 'POST',
+        body: formData,
+      });
 
-    return true;
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        onProgress?.(100);
+      }
+
+      if (uploadResponse.status !== 204) {
+        throw new Error(`Upload failed: ${uploadResponse.status}`);
+      }
+
+      return true;
+    } catch (error) {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+      throw error;
+    }
   } catch (error) {
-    if (progressInterval) {
-      clearInterval(progressInterval);
-    }
-    throw error;
+    console.error('Error getting presigned URL:', error);
+    throw new Error(`Failed to get presigned URL: ${error}`);
   }
 };

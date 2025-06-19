@@ -108,7 +108,7 @@ const FileUploadPage: React.FC = () => {
         file, 
         urlEncodedFilename, 
         username, 
-        authToken, 
+        undefined, // authToken no longer needed (useHttp handles auth)
         useBda,
         (progress) => setUploadProgress(progress)
       );

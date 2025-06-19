@@ -47,7 +47,7 @@ export const useAnalysisApi = () => {
     selectedFiles: string[],
     template: AnalysisTemplate,
     customPrompt?: string
-  ): Promise<{ jobId: string }> => {
+  ): Promise<string> => {
     setLoading(true);
     setError(null);
     try {
