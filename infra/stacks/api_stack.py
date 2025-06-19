@@ -27,6 +27,7 @@ from aws_cdk import aws_lambda as _lambda
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk.aws_bedrock import CfnKnowledgeBase
 import aws_cdk.aws_s3 as s3
+from aws_cdk import aws_ssm as ssm
 
 
 class ReVIEWAPIStack(NestedStack):
@@ -84,6 +85,9 @@ class ReVIEWAPIStack(NestedStack):
         CfnOutput(self, "RESTApiUrl", value=self.api.url)
         CfnOutput(self, "WSApiUrl", value=self.web_socket_api_stage.url)
 
+        # Store configuration in SSM Parameter Store for frontend to access
+        self.store_config_in_ssm()
+
     def setup_cognito_pool(self):
         # Cognito User Pool (stored as self.cognito_user_pool)
         user_pool_common_config = {
@@ -121,6 +125,16 @@ class ReVIEWAPIStack(NestedStack):
         if not found_existing_pool:
             # Create a new user pool
             self.cognito_user_pool = cognito.UserPool(self, **user_pool_common_config)
+
+        # Create Cognito user pool client for frontend authentication
+        self.cognito_user_pool_client = self.cognito_user_pool.add_client(
+            "review-app-cognito-client",
+            user_pool_client_name="review-app-cognito-client",
+            generate_secret=False,
+            access_token_validity=Duration.hours(8),
+            id_token_validity=Duration.hours(8),
+            auth_flows=cognito.AuthFlow(user_srp=True),
+        )
 
     def enable_API_GW_logging(self):
         cloud_watch_role = iam.Role(
@@ -208,6 +222,7 @@ class ReVIEWAPIStack(NestedStack):
         resource = self.api.root.add_resource(resource_name)
 
         # Integrate Lambda function with API Gateway
+        # Lambda functions now handle CORS headers themselves
         integration = apigw.LambdaIntegration(my_lambda)
 
         # Add POST method to resource, with Cognito authorizer
@@ -402,3 +417,41 @@ class ReVIEWAPIStack(NestedStack):
         )
 
         return query_lambda
+
+    def store_config_in_ssm(self):
+        """Store frontend configuration in SSM Parameter Store."""
+        # Store API Gateway URL
+        ssm.StringParameter(
+            self,
+            "ApiUrlParam",
+            parameter_name=f"/{self.props['stack_name_base']}/api-url",
+            string_value=self.api.url,
+            description="REST API Gateway URL for ReVIEW frontend"
+        )
+
+        # Store WebSocket API URL
+        ssm.StringParameter(
+            self,
+            "WebSocketUrlParam", 
+            parameter_name=f"/{self.props['stack_name_base']}/websocket-url",
+            string_value=self.web_socket_api_stage.url,
+            description="WebSocket API URL for ReVIEW frontend"
+        )
+
+        # Store Cognito User Pool ID
+        ssm.StringParameter(
+            self,
+            "CognitoPoolIdParam",
+            parameter_name=f"/{self.props['stack_name_base']}/cognito-pool-id", 
+            string_value=self.cognito_user_pool.user_pool_id,
+            description="Cognito User Pool ID for ReVIEW frontend"
+        )
+
+        # Store Cognito Client ID
+        ssm.StringParameter(
+            self,
+            "CognitoClientIdParam",
+            parameter_name=f"/{self.props['stack_name_base']}/cognito-client-id",
+            string_value=self.cognito_user_pool_client.user_pool_client_id,
+            description="Cognito User Pool Client ID for ReVIEW frontend"
+        )

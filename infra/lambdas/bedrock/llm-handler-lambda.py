@@ -17,6 +17,7 @@
 """Lambda to handle interactions with Bedrock foundation models"""
 
 from bedrock.bedrock_utils import LLM
+from lambda_utils.cors_utils import CORSResponse
 import logging
 import json
 
@@ -43,23 +44,25 @@ def lambda_handler(event, context):
 
     logger.debug(f"{event=}")
 
-    if "body" in event:
-        event = json.loads(event["body"])
-
-    foundation_model_id = event["foundation_model_id"]
-    system_prompt = event["system_prompt"]
-    main_prompt = event["main_prompt"]
-    bedrock_kwargs = event["bedrock_kwargs"]
-
-    # Inference LLM & return result
     try:
+        if "body" in event:
+            event = json.loads(event["body"])
+
+        foundation_model_id = event["foundation_model_id"]
+        system_prompt = event["system_prompt"]
+        main_prompt = event["main_prompt"]
+        bedrock_kwargs = event["bedrock_kwargs"]
+
+        # Inference LLM & return result
         generation = llm.generate(
             model_id=foundation_model_id,
             system_prompt=system_prompt,
             prompt=main_prompt,
             kwargs=bedrock_kwargs,
         )
+        
+        return CORSResponse.success_response(generation)
+        
     except Exception as e:
-        return {"statusCode": 500, "body": f"Internal server error: {e}"}
-
-    return {"statusCode": 200, "body": json.dumps(generation)}
+        logger.error(f"Error in lambda_handler: {str(e)}")
+        return CORSResponse.error_response(f"Internal server error: {str(e)}", 500)

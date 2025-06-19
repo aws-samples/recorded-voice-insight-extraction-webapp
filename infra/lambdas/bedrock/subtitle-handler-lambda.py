@@ -23,6 +23,7 @@ import os
 import boto3
 import botocore.exceptions
 from .subtitle_utils import translate_vtt
+from lambda_utils.cors_utils import CORSResponse
 
 logger = logging.getLogger()
 logger.setLevel("DEBUG")
@@ -43,80 +44,92 @@ def lambda_handler(event, context):
 
     logger.debug(f"{event=}")
 
-    if "body" in event:
-        event = json.loads(event["body"])
-
-    username = event.get("username", None)
-    transcript_job_id = event.get("transcript_job_id", None)
-    translation_start_time = event.get("translation_start_time", None)
-    translation_duration = event.get("translation_duration", None)
-    translation_destination_language = event.get(
-        "translation_destination_language", None
-    )
-
-    # Assert username and transcript_job_id are always supplied
-    assert username and transcript_job_id, (
-        f"Missing username and/or transcript_job_id. {username=} {transcript_job_id=}"
-    )
-
-    # Assert that if ANY of the translation arguments are supplied, they ALL are
-    # Create a list of the translation-related variables and count how many are None
-    none_count = [
-        translation_start_time,
-        translation_duration,
-        translation_destination_language,
-    ].count(None)
-    assert none_count == 0 or none_count == 3, (
-        f"Translation parameters must be either all provided or all omitted: {translation_start_time=} {translation_duration=} {translation_destination_language=}"
-    )
-
-    # Retrieve the full_transcript from s3 via the job_id
-    logger.info(
-        f"Attempting to retrieve: s3://{S3_BUCKET}/{TRANSCRIPTS_PREFIX}/{username}/{transcript_job_id}.vtt"
-    )
     try:
-        full_transcript_vtt_string = (
-            s3_client.get_object(
-                Bucket=S3_BUCKET,
-                Key=f"{TRANSCRIPTS_PREFIX}/{username}/{transcript_job_id}.vtt",
-            )["Body"]
-            .read()
-            .decode("utf-8")
+        if "body" in event:
+            event = json.loads(event["body"])
+
+        username = event.get("username", None)
+        transcript_job_id = event.get("transcript_job_id", None)
+        translation_start_time = event.get("translation_start_time", None)
+        translation_duration = event.get("translation_duration", None)
+        translation_destination_language = event.get(
+            "translation_destination_language", None
         )
+
+        # Assert username and transcript_job_id are always supplied
+        if not (username and transcript_job_id):
+            return CORSResponse.error_response(
+                f"Missing username and/or transcript_job_id. username={username} transcript_job_id={transcript_job_id}",
+                400,
+            )
+
+        # Assert that if ANY of the translation arguments are supplied, they ALL are
+        # Create a list of the translation-related variables and count how many are None
+        none_count = [
+            translation_start_time,
+            translation_duration,
+            translation_destination_language,
+        ].count(None)
+
+        if not (none_count == 0 or none_count == 3):
+            return CORSResponse.error_response(
+                f"Translation parameters must be either all provided or all omitted: translation_start_time={translation_start_time} translation_duration={translation_duration} translation_destination_language={translation_destination_language}",
+                400,
+            )
+
+        # Retrieve the full_transcript from s3 via the job_id
+        logger.info(
+            f"Attempting to retrieve: s3://{S3_BUCKET}/{TRANSCRIPTS_PREFIX}/{username}/{transcript_job_id}.vtt"
+        )
+        try:
+            full_transcript_vtt_string = (
+                s3_client.get_object(
+                    Bucket=S3_BUCKET,
+                    Key=f"{TRANSCRIPTS_PREFIX}/{username}/{transcript_job_id}.vtt",
+                )["Body"]
+                .read()
+                .decode("utf-8")
+            )
+
+        except Exception as e:
+            return CORSResponse.error_response(
+                f"Failed to retrieve transcript: {str(e)}", 500
+            )
+
+        # If no translation is needed, return vtt string directly
+        if not translation_start_time:
+            return CORSResponse.success_response(full_transcript_vtt_string)
+
+        # If translation is needed, translate
+        try:
+            translated_vtt_string = translate_vtt(
+                foundation_model_id=FOUNDATION_MODEL_ID,
+                vtt_string=full_transcript_vtt_string,
+                target_language=translation_destination_language,
+                start_time_seconds=float(translation_start_time),
+                end_time_seconds=float(translation_start_time)
+                + float(translation_duration),
+            )
+        # If LLM performing translation is throttled, return 503.
+        # The frontend should catch the 503 code and display a warning to the user.
+        except botocore.exceptions.ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code in [
+                "ThrottlingException",
+                "TooManyRequestsException",
+                "RequestLimitExceeded",
+            ]:
+                return {
+                    "statusCode": 503,
+                    "headers": CORSResponse.get_cors_headers(),
+                    "body": json.dumps({"message": f"Throttling error: {str(e)}"}),
+                }
+            else:
+                # Re-raise if it's not a throttling error
+                raise
+
+        return CORSResponse.success_response(translated_vtt_string)
 
     except Exception as e:
-        return {"statusCode": 500, "body": f"Internal server error: {e}"}
-
-    # If no translation is needed, return vtt string directly
-    if not translation_start_time:
-        return {"statusCode": 200, "body": json.dumps(full_transcript_vtt_string)}
-
-    # If translation is needed, translate
-    try:
-        translated_vtt_string = translate_vtt(
-            foundation_model_id=FOUNDATION_MODEL_ID,
-            vtt_string=full_transcript_vtt_string,
-            target_language=translation_destination_language,
-            start_time_seconds=float(translation_start_time),
-            end_time_seconds=float(translation_start_time)
-            + float(translation_duration),
-        )
-    # If LLM performing translation is throttled, return 503.
-    # The frontend should catch the 503 code and display a warning to the user.
-    except botocore.exceptions.ClientError as e:
-        error_code = e.response.get("Error", {}).get("Code", "")
-        if error_code in [
-            "ThrottlingException",
-            "TooManyRequestsException",
-            "RequestLimitExceeded",
-        ]:
-            return {
-                "statusCode": 503,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"message": f"Throttling error: {str(e)}"}),
-            }
-        else:
-            # Re-raise if it's not a throttling error
-            raise
-
-    return {"statusCode": 200, "body": json.dumps(translated_vtt_string)}
+        logger.error(f"Error in lambda_handler: {str(e)}")
+        return CORSResponse.error_response(f"Internal server error: {str(e)}", 500)
