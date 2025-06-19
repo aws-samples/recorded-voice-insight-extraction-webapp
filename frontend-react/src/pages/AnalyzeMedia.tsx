@@ -11,13 +11,10 @@ import {
   Alert,
 } from '@cloudscape-design/components';
 import { AnalysisResults } from '../components/AnalysisResults';
+import { useAnalysisApi } from '../hooks/useAnalysisApi';
 import { 
-  retrieveAllItems, 
-  getAnalysisTemplates,
-  performCompleteAnalysis 
-} from '../api/analysis';
-import { 
-  AnalysisPageState 
+  AnalysisPageState,
+  Job
 } from '../types/analysis';
 
 const initialState: AnalysisPageState = {
@@ -33,6 +30,7 @@ const initialState: AnalysisPageState = {
 export const AnalyzeMedia: React.FC = () => {
   const [state, setState] = useState<AnalysisPageState>(initialState);
   const username = localStorage.getItem('username') || ''; // Get from your auth context
+  const { retrieveAllItems, getAnalysisTemplates, submitAnalysis } = useAnalysisApi();
 
   // Load completed jobs and analysis templates on component mount
   useEffect(() => {
@@ -45,7 +43,7 @@ export const AnalyzeMedia: React.FC = () => {
 
         setState(prev => ({
           ...prev,
-          completedJobs: jobs.filter(job => job.job_status === 'Completed'),
+          completedJobs: jobs.filter((job: Job) => job.job_status === 'Completed'),
           analysisTemplates: templates
         }));
       } catch (error) {
@@ -100,15 +98,20 @@ export const AnalyzeMedia: React.FC = () => {
         throw new Error('Invalid template selected');
       }
 
-      const result = await performCompleteAnalysis(
-        state.selectedMediaName,
-        templateId,
-        username
+      const template = state.analysisTemplates.find(t => t.template_id === templateId);
+      if (!template) {
+        throw new Error('Template not found');
+      }
+
+      const result = await submitAnalysis(
+        username,
+        [state.selectedMediaName],
+        template
       );
 
       setState(prev => ({
         ...prev,
-        analysisResult: result,
+        analysisResult: `Analysis submitted with job ID: ${result.jobId}`,
         isLoading: false
       }));
     } catch (error) {

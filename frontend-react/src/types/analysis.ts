@@ -101,17 +101,13 @@ export interface AnalysisPageState {
  * DynamoDB operations for analysis
  */
 export interface DynamoDBRequest {
-  action: 
-    | "retrieve_all_items"
-    | "retrieve_analysis_by_jobid"
-    | "store_analysis_result"
-    | "retrieve_jobid_by_media_name";
+  action: string;
   username: string;
-  max_rows?: number;
-  job_id?: string;
-  template_id?: number;
-  analysis_result?: string;
-  media_name?: string;
+  maxRows?: number;
+  jobId?: string;
+  templateId?: number;
+  analysisResult?: string;
+  mediaName?: string;
 }
 
 /**

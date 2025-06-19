@@ -1,32 +1,24 @@
-import { JobData } from '../types/chat';
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: MIT-0
 
-export const retrieveAllItems = async (
-  username: string,
-  authToken: string,
-  maxRows?: number
-): Promise<JobData[]> => {
+import { Job } from '../types/job';
+import useHttp from '../hooks/useHttp';
+
+// Create HTTP client instance
+const httpClient = useHttp();
+
+export const retrieveAllItems = async (username: string): Promise<Job[]> => {
+  const requestBody = {
+    action: 'retrieve_all_items',
+    username,
+    max_rows: 100,
+  };
+
   try {
-    const response = await fetch('/api/ddb', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authToken,
-      },
-      body: JSON.stringify({
-        action: 'retrieve_all_items',
-        username,
-        max_rows: maxRows,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data;
+    const response = await httpClient.post<Job[]>('/ddb', requestBody);
+    return response.data || [];
   } catch (error) {
-    console.error('Error fetching items:', error);
+    console.error('Error retrieving items:', error);
     throw error;
   }
 };

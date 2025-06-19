@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: MIT-0
 
 import { Job, DDBRequest } from '../types/job';
+import useHttp from '../hooks/useHttp';
 
-// Use the proxy URL in development
-const API_BASE_URL = '/api';
+// Create HTTP client instance
+const httpClient = useHttp();
 
 export const retrieveAllItems = async (
   username: string,
   maxRows: number | null,
-  authToken: string
+  _authToken?: string // Underscore prefix to indicate unused parameter
 ): Promise<Job[]> => {
   const requestBody: DDBRequest = {
     action: 'retrieve_all_items',
@@ -18,20 +19,8 @@ export const retrieveAllItems = async (
   };
 
   try {
-    const response = await fetch(`${API_BASE_URL}/ddb`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authToken,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-    }
-
-    const result = await response.json();
+    const response = await httpClient.post<Job[]>('/ddb', requestBody);
+    const result = response.data;
 
     // Handle empty results
     if (!result || result.length === 0) {

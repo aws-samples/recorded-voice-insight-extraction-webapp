@@ -75,7 +75,7 @@ const ChatWithMediaPage: React.FC = () => {
 
       try {
         setDataError('');
-        const data = await retrieveAllItems(username, idToken);
+        const data = await retrieveAllItems(username);
         
         const completedJobs = data.filter(
           job => job.job_status === 'Completed' || job.job_status === 'BDA Analysis Complete'
