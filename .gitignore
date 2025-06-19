@@ -78,5 +78,5 @@ package.json
 temp/
 assets/streamlit/temp/
 notebooks/tmp/
-frontend-react/public/aws-exports.json
-frontend-react/node_modules*
+frontend/public/aws-exports.json
+frontend/node_modules*
