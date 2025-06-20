@@ -5,7 +5,6 @@ import {
 import { useNavigationPanelState } from "../common/hooks/use-navigation-panel-state";
 import { useState } from "react";
 import { useOnFollow } from "../common/hooks/use-on-follow";
-import { APP_NAME } from "../common/constants";
 import { useLocation } from "react-router-dom";
 
 export default function NavigationPanel() {
@@ -18,13 +17,13 @@ export default function NavigationPanel() {
     const items: SideNavigationProps.Item[] = [
       {
         type: "link",
-        text: "File Upload",
-        href: "/file-upload",
+        text: "Home",
+        href: "/home",
       },
       {
         type: "link",
-        text: "Job Status",
-        href: "/job-status",
+        text: "File Management",
+        href: "/file-management",
       },
       {
         type: "link",
@@ -35,11 +34,6 @@ export default function NavigationPanel() {
         type: "link",
         text: "Analyze Your Media",
         href: "/analyze",
-      },
-      {
-        type: "link",
-        text: "File Management",
-        href: "/file-management",
       },
     ];
 
@@ -74,7 +68,7 @@ export default function NavigationPanel() {
     <SideNavigation
       onFollow={onFollow}
       onChange={onChange}
-      header={{ href: "/file-upload", text: APP_NAME }}
+      header={{ href: "/home", text: "Pages" }}
       activeHref={location.pathname}
       items={items.map((value, idx) => {
         const item = { ...value };

@@ -40,6 +40,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
     // Shift+Enter will allow newline (default behavior)
   };
 
+  // Calculate rows based on content length (simple heuristic)
+  const calculateRows = (text: string) => {
+    if (!text) return 1;
+    const lines = text.split('\n').length;
+    const estimatedLines = Math.ceil(text.length / 80); // Rough estimate based on character count
+    return Math.min(Math.max(lines, estimatedLines, 1), 4); // Min 1, max 4 rows
+  };
+
   return (
     <Box>
       <SpaceBetween direction="vertical" size="s">
@@ -49,7 +57,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled}
-          rows={3}
+          rows={calculateRows(inputValue)}
         />
         <Box float="right">
           <Button

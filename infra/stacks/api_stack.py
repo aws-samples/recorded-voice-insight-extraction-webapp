@@ -63,7 +63,7 @@ class ReVIEWAPIStack(NestedStack):
         self.associate_lambda_with_gateway(presigned_url_lambda, "s3-presigned")
         self.associate_lambda_with_gateway(kb_job_deletion_lambda, "kb-job-deletion")
         self.associate_lambda_with_gateway(subtitle_lambda, "subtitles")
-        self.associate_lambda_with_gateway_get(
+        self.associate_lambda_with_gateway_crud(
             analysis_templates_lambda, "analysis-templates"
         )
 
@@ -251,6 +251,35 @@ class ReVIEWAPIStack(NestedStack):
             authorizer=self.authorizer,
             authorization_type=apigw.AuthorizationType.COGNITO,
         )
+
+    def associate_lambda_with_gateway_crud(
+        self, my_lambda: _lambda.Function, resource_name: str
+    ):
+        # Create a resource for the Lambda function
+        resource = self.api.root.add_resource(resource_name)
+
+        # Integrate Lambda function with API Gateway
+        # Lambda functions now handle CORS headers themselves
+        integration = apigw.LambdaIntegration(my_lambda)
+
+        # Add CRUD methods to resource, with Cognito authorizer
+        for method in ["GET", "POST", "PUT", "DELETE"]:
+            resource.add_method(
+                method,
+                integration,
+                authorizer=self.authorizer,
+                authorization_type=apigw.AuthorizationType.COGNITO,
+            )
+
+        # Add a sub-resource for operations on specific template IDs
+        template_resource = resource.add_resource("{template_id}")
+        for method in ["GET", "PUT", "DELETE"]:
+            template_resource.add_method(
+                method,
+                integration,
+                authorizer=self.authorizer,
+                authorization_type=apigw.AuthorizationType.COGNITO,
+            )
 
     def create_WS_gateway(self, kb_query_lambda):
         self.web_socket_api = apigwv2.WebSocketApi(

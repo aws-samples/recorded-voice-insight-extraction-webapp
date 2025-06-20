@@ -322,8 +322,8 @@ const ChatWithMediaPage: React.FC = () => {
               ),
               
               <Box key="media-selection">
-                <Header variant="h3" description="Select media files to analyze">
-                  Pick media file to analyze:
+                <Header variant="h3" description="Leave blank to chat with all media files">
+                  Select media file(s) to chat with
                 </Header>
                 <SpaceBetween size="s">
                   <Multiselect
@@ -335,11 +335,6 @@ const ChatWithMediaPage: React.FC = () => {
                     filteringType="auto"
                     disabled={isSending}
                   />
-                  {selectedMediaNames.length > 0 && (
-                    <Box variant="small" margin={{ top: "xs" }} color="text-body-secondary">
-                      Selected: {selectedMediaNames.map(option => option.label).join(', ')}
-                    </Box>
-                  )}
                   
                   <SpaceBetween size="s" direction="horizontal">
                     <Checkbox
@@ -367,12 +362,15 @@ const ChatWithMediaPage: React.FC = () => {
                 </SpaceBetween>
               </Box>,
               
-              <Box key="chat-container">
-                <ChatContainer 
-                  messages={messages} 
-                  onCitationClick={handleCitationClick}
-                />
-              </Box>,
+              // Only show chat container if there are messages
+              messages.length > 0 && (
+                <Box key="chat-container">
+                  <ChatContainer 
+                    messages={messages} 
+                    onCitationClick={handleCitationClick}
+                  />
+                </Box>
+              ),
               
               <Box key="chat-input">
                 <ChatInput

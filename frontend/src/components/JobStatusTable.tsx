@@ -79,7 +79,7 @@ const JobStatusTable: React.FC<JobStatusTableProps> = ({
           variant="h1"
           actions={
             <Button onClick={onRefresh} loading={loading}>
-              Refresh Table
+              Manually Refresh Table
             </Button>
           }
         >
@@ -96,10 +96,10 @@ const JobStatusTable: React.FC<JobStatusTableProps> = ({
     <SpaceBetween size="l">
       <Header
         variant="h1"
-        description="Monitor the status of your transcription jobs"
+        description="Monitor the status of your media processing jobs"
         actions={
           <Button onClick={onRefresh} loading={loading}>
-            Refresh Table
+            Manually Refresh Table
           </Button>
         }
       >
@@ -126,7 +126,7 @@ const JobStatusTable: React.FC<JobStatusTableProps> = ({
                 No jobs found
               </Box>
               <Box variant="p" padding={{ bottom: 's' }} color="inherit">
-                Upload a media file to see transcription jobs here.
+                Upload a media file to see media processing jobs here.
               </Box>
             </Box>
           }
@@ -134,7 +134,7 @@ const JobStatusTable: React.FC<JobStatusTableProps> = ({
             <Header
               counter={jobs.length > 0 ? `(${jobs.length})` : ''}
             >
-              Transcription Jobs
+              Media Processing Jobs
             </Header>
           }
         />

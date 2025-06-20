@@ -1,0 +1,38 @@
+[
+    {
+        "template_id": "default-1",
+        "template_short_name": "Basic Meeting Summary",
+        "template_description": "Create a summary of a generic meeting, including topics discussed, action items, next steps, etc.",
+        "system_prompt": "You are an intelligent assistant who analyzes meetings based on transcriptions of those meetings.",
+        "template_prompt": "Please create a short summary of the meeting based on the transcription provided within <meeting_transcription></meeting_transcription> tags.\n<meeting_transcription>\n{transcript}\n</meeting_transcription>. Meeting summary:\n",
+        "model_id": "us.amazon.nova-pro-v1:0",
+        "bedrock_kwargs": {
+            "temperature": 0.1,
+            "maxTokens": 2000
+        }
+    },
+    {
+        "template_id": "default-2",
+        "template_short_name": "Extract Next Steps",
+        "template_description": "Extract any described next step action items",
+        "system_prompt": "You are an intelligent assistant who analyzes meetings based on transcriptions of those meetings.",
+        "template_prompt": "Extract any action items or next steps described in the meeting and return them in a bulleted list. If it's obvious who is responsible for each one, add their name to each task as the owner. If no action items are described in the meeting, simply state that no next steps were discussed.\n<meeting_transcription>\n{transcript}\n</meeting_transcription>\n",
+        "model_id": "us.amazon.nova-pro-v1:0",
+        "bedrock_kwargs": {
+            "temperature": 0.1,
+            "maxTokens": 2000
+        }
+    },
+    {
+        "template_id": "default-3",
+        "template_short_name": "Define Chapters",
+        "template_description": "Identify logical chapter breaks in the transcript",
+        "system_prompt": "You are an intelligent assistant who analyzes transcripts from audio or video files.",
+        "template_prompt": "Here is a transcription of the audio or video file:\n<transcription>\n{transcript}\n</transcription>\nNow, analyze the transcript and attempt to divide it up into logical chapters. Return a numbered list where each number includes a name for the chapter which you have come up with, along with a start time for that chapter.",
+        "model_id": "us.amazon.nova-pro-v1:0",
+        "bedrock_kwargs": {
+            "temperature": 0.1,
+            "maxTokens": 2000
+        }
+    }
+]

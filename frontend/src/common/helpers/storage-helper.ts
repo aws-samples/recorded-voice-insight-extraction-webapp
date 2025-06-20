@@ -29,7 +29,7 @@ export abstract class StorageHelper {
     const value =
       localStorage.getItem(NAVIGATION_PANEL_STATE_STORAGE_NAME) ??
       JSON.stringify({
-        collapsed: true,
+        collapsed: false,
       });
 
     let state: NavigationPanelState | null = null;

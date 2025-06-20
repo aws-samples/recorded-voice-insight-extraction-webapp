@@ -6,30 +6,55 @@ import {
   ContentLayout,
   Header,
   SpaceBetween,
-  Multiselect,
-  MultiselectProps,
-  Button,
+  FileUpload as CloudscapeFileUpload,
+  FileUploadProps,
+  Checkbox,
   Alert,
   Box,
+  Button,
+  Grid,
+  Container,
+  Multiselect,
+  MultiselectProps,
 } from '@cloudscape-design/components';
 import { getCurrentUser } from 'aws-amplify/auth';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import BaseAppLayout from '../components/base-app-layout';
-import { retrieveAllItems } from '../api/db';
+import JobStatusTable from '../components/JobStatusTable';
+import { uploadToS3 } from '../api/upload';
 import { deleteFileByJobId } from '../api/fileManagement';
+import { useAnalysisApi } from '../hooks/useAnalysisApi';
+import { checkValidFileExtension, urlEncodeFilename, getValidExtensionsString } from '../utils/fileUtils';
 import { Job } from '../types/job';
 
 const FileManagementPage: React.FC = () => {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [selectedFiles, setSelectedFiles] = useState<MultiselectProps.Option[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [deleting, setDeleting] = useState<boolean>(false);
-  const [username, setUsername] = useState<string>('');
-  const [authToken, setAuthToken] = useState<string>('');
-  const [alert, setAlert] = useState<{
+  // File Upload State
+  const [files, setFiles] = useState<File[]>([]);
+  const [useBda, setUseBda] = useState<boolean>(false);
+  const [uploading, setUploading] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadStatus, setUploadStatus] = useState<{
     type: 'success' | 'error' | 'info' | null;
     message: string;
   }>({ type: null, message: '' });
+  const [lastUploadedFile, setLastUploadedFile] = useState<string>('');
+
+  // Job Status State
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [isManualRefresh, setIsManualRefresh] = useState<boolean>(false);
+  const { loading: jobsLoading, error: jobsError, retrieveAllItems: fetchJobsData, clearError } = useAnalysisApi();
+
+  // File Management State
+  const [selectedFiles, setSelectedFiles] = useState<MultiselectProps.Option[]>([]);
+  const [deleting, setDeleting] = useState<boolean>(false);
+  const [fileManagementAlert, setFileManagementAlert] = useState<{
+    type: 'success' | 'error' | 'info' | null;
+    message: string;
+  }>({ type: null, message: '' });
+
+  // Authentication State
+  const [username, setUsername] = useState<string>('');
+  const [authToken, setAuthToken] = useState<string>('');
 
   // Initialize authentication
   useEffect(() => {
@@ -42,14 +67,14 @@ const FileManagementPage: React.FC = () => {
           setUsername(user.username);
           setAuthToken(`Bearer ${session.tokens.idToken.toString()}`);
         } else {
-          setAlert({
+          setUploadStatus({
             type: 'error',
             message: 'Authentication required. Please log in.',
           });
         }
       } catch (err) {
         console.error('Authentication error:', err);
-        setAlert({
+        setUploadStatus({
           type: 'error',
           message: 'Authentication failed. Please log in.',
         });
@@ -60,36 +85,138 @@ const FileManagementPage: React.FC = () => {
   }, []);
 
   // Fetch jobs data
-  const fetchJobs = async () => {
-    if (!username || !authToken) {
+  const fetchJobs = async (isManual: boolean = false) => {
+    if (!username) {
       return;
     }
 
-    setLoading(true);
-    setAlert({ type: null, message: '' });
+    if (isManual) {
+      setIsManualRefresh(true);
+    }
+
+    clearError();
 
     try {
-      const jobsData = await retrieveAllItems(username, null, authToken);
+      const jobsData = await fetchJobsData(username, 100);
       setJobs(jobsData);
     } catch (err) {
       console.error('Error fetching jobs:', err);
-      setAlert({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Failed to load files',
-      });
     } finally {
-      setLoading(false);
+      if (isManual) {
+        setIsManualRefresh(false);
+      }
     }
   };
 
   // Fetch jobs when authentication is ready
   useEffect(() => {
-    if (username && authToken) {
+    if (username) {
       fetchJobs();
     }
-  }, [username, authToken]);
+  }, [username]);
 
-  // Convert jobs to multiselect options, sorted alphabetically
+  // Auto-refresh jobs table every 10 seconds
+  useEffect(() => {
+    if (!username) return;
+
+    const interval = setInterval(() => {
+      // Only refresh if not currently loading to avoid overlapping requests
+      if (!jobsLoading && !isManualRefresh) {
+        fetchJobs(false); // false = automatic refresh, no loading indicator
+      }
+    }, 10000); // 10 seconds
+
+    // Cleanup interval on component unmount or when username changes
+    return () => clearInterval(interval);
+  }, [username, jobsLoading, isManualRefresh]);
+
+  // File Upload Handlers
+  const handleFileChange: FileUploadProps['onChange'] = ({ detail }) => {
+    setFiles(detail.value);
+    setUploadStatus({ type: null, message: '' });
+    setUploadProgress(0);
+  };
+
+  const handleUpload = async () => {
+    if (files.length === 0) {
+      setUploadStatus({
+        type: 'error',
+        message: 'Please select a file to upload.',
+      });
+      return;
+    }
+
+    if (!username || !authToken) {
+      setUploadStatus({
+        type: 'error',
+        message: 'Authentication required. Please refresh the page and log in.',
+      });
+      return;
+    }
+
+    const file = files[0];
+    
+    if (lastUploadedFile === file.name) {
+      return;
+    }
+
+    if (!checkValidFileExtension(file.name)) {
+      setUploadStatus({
+        type: 'error',
+        message: `Invalid file extension. Allowed extensions are: ${getValidExtensionsString()}.`,
+      });
+      return;
+    }
+
+    const urlEncodedFilename = urlEncodeFilename(file.name);
+    const isRenamed = urlEncodedFilename !== file.name;
+
+    setUploading(true);
+    setUploadProgress(0);
+    setUploadStatus({
+      type: 'info',
+      message: `${isRenamed ? `Renaming file to ${urlEncodedFilename}... ` : ''}Uploading file ${urlEncodedFilename}...`,
+    });
+
+    try {
+      const success = await uploadToS3(
+        file, 
+        urlEncodedFilename, 
+        username, 
+        undefined,
+        useBda,
+        (progress) => setUploadProgress(progress)
+      );
+      
+      if (success) {
+        const analysisType = useBda ? 'Bedrock Data Automation analysis' : 'transcription';
+        setUploadStatus({
+          type: 'success',
+          message: `${urlEncodedFilename} successfully uploaded and submitted for ${analysisType}.`,
+        });
+        setLastUploadedFile(file.name);
+        setFiles([]);
+        // Refresh jobs table after successful upload
+        fetchJobs(false);
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
+      setUploadStatus({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Upload failed. Please try again.',
+      });
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  // Job Status Handlers
+  const handleRefreshJobs = () => {
+    fetchJobs(true); // true = manual refresh, show loading indicator
+  };
+
+  // File Management Handlers
   const fileOptions: MultiselectProps.Option[] = jobs
     .map(job => ({
       label: job.media_name,
@@ -98,15 +225,13 @@ const FileManagementPage: React.FC = () => {
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
-  // Handle file selection change
   const handleSelectionChange = ({ detail }: any) => {
     setSelectedFiles(detail.selectedOptions);
   };
 
-  // Handle delete button click
   const handleDelete = async () => {
     if (selectedFiles.length === 0) {
-      setAlert({
+      setFileManagementAlert({
         type: 'error',
         message: 'Please select files to delete.',
       });
@@ -114,7 +239,7 @@ const FileManagementPage: React.FC = () => {
     }
 
     if (!username || !authToken) {
-      setAlert({
+      setFileManagementAlert({
         type: 'error',
         message: 'Authentication required. Please refresh the page and log in.',
       });
@@ -122,16 +247,15 @@ const FileManagementPage: React.FC = () => {
     }
 
     setDeleting(true);
-    setAlert({ type: null, message: '' });
+    setFileManagementAlert({ type: null, message: '' });
 
     try {
-      // Delete files sequentially (matching Streamlit behavior)
       for (const selectedFile of selectedFiles) {
         const mediaName = selectedFile.value as string;
         const job = jobs.find(j => j.media_name === mediaName);
         
         if (job) {
-          setAlert({
+          setFileManagementAlert({
             type: 'info',
             message: `Deleting ${mediaName}...`,
           });
@@ -140,18 +264,17 @@ const FileManagementPage: React.FC = () => {
         }
       }
 
-      setAlert({
+      setFileManagementAlert({
         type: 'success',
         message: 'File deletion complete.',
       });
 
-      // Clear selection and refresh the file list
       setSelectedFiles([]);
-      await fetchJobs();
+      await fetchJobs(false);
 
     } catch (error) {
       console.error('Delete failed:', error);
-      setAlert({
+      setFileManagementAlert({
         type: 'error',
         message: error instanceof Error ? error.message : 'Delete failed. Please try again.',
       });
@@ -167,50 +290,158 @@ const FileManagementPage: React.FC = () => {
           header={
             <Header
               variant="h1"
-              description="Manage uploaded files"
+              description="Upload, monitor, and manage your media files"
             >
               File Management
             </Header>
           }
         >
           <SpaceBetween size="l">
-            {alert.type && (
-              <Alert
-                type={alert.type}
-                dismissible
-                onDismiss={() => setAlert({ type: null, message: '' })}
+            <Grid
+              gridDefinition={[
+                { colspan: { default: 12, xs: 6 } }, // File Upload - Upper Left
+                { colspan: { default: 12, xs: 6 } }, // File Management - Upper Right
+                { colspan: 12 } // Job Status - Full Width Below
+              ]}
+            >
+              {/* File Upload Block - Upper Left */}
+              <Container
+                header={
+                  <Header
+                    variant="h2"
+                    description="Upload a video or audio recording"
+                  >
+                    File Upload
+                  </Header>
+                }
               >
-                {alert.message}
-              </Alert>
-            )}
+                <SpaceBetween size="m">
+                  {uploadStatus.type && (
+                    <Alert
+                      type={uploadStatus.type}
+                      dismissible
+                      onDismiss={() => setUploadStatus({ type: null, message: '' })}
+                    >
+                      {uploadStatus.message}
+                    </Alert>
+                  )}
 
-            <Box>
-              <SpaceBetween size="m">
-                <Header variant="h3">
-                  Choose files to delete:
-                </Header>
+                  {uploading && (
+                    <Box margin={{ bottom: "m" }}>
+                      <div style={{ padding: "16px", border: "1px solid #ddd", borderRadius: "8px" }}>
+                        <div style={{ marginBottom: "8px", fontWeight: "bold" }}>
+                          Upload Progress: {Math.round(uploadProgress)}%
+                        </div>
+                        <div style={{ 
+                          width: "100%", 
+                          height: "8px", 
+                          backgroundColor: "#e0e0e0", 
+                          borderRadius: "4px",
+                          overflow: "hidden"
+                        }}>
+                          <div style={{
+                            width: `${uploadProgress}%`,
+                            height: "100%",
+                            backgroundColor: "#0073bb",
+                            transition: "width 0.3s ease"
+                          }} />
+                        </div>
+                      </div>
+                    </Box>
+                  )}
 
-                <Multiselect
-                  selectedOptions={selectedFiles}
-                  onChange={handleSelectionChange}
-                  options={fileOptions}
-                  placeholder="Select file(s) to permanently delete"
-                  empty="No files available"
-                  loadingText="Loading files..."
-                  statusType={loading ? "loading" : "finished"}
-                  filteringType="auto"
+                  <CloudscapeFileUpload
+                    onChange={handleFileChange}
+                    value={files}
+                    i18nStrings={{
+                      uploadButtonText: (e) => (e ? 'Choose files' : 'Choose file'),
+                      dropzoneText: (e) =>
+                        e ? 'Drop files to upload' : 'Drop file to upload',
+                      removeFileAriaLabel: (e) => `Remove file ${e + 1}`,
+                      limitShowFewer: 'Show fewer files',
+                      limitShowMore: 'Show more files',
+                      errorIconAriaLabel: 'Error',
+                    }}
+                    multiple={false}
+                    accept={`.${getValidExtensionsString().split(', ').join(',.')}`}
+                    showFileLastModified
+                    showFileSize
+                    showFileThumbnail
+                    constraintText={`Supported formats: ${getValidExtensionsString()}`}
+                  />
+
+                  <Checkbox
+                    onChange={({ detail }) => setUseBda(detail.checked)}
+                    checked={useBda}
+                  >
+                    Analyze file with Bedrock Data Automation
+                  </Checkbox>
+
+                  <Button
+                    variant="primary"
+                    onClick={handleUpload}
+                    loading={uploading}
+                    disabled={files.length === 0 || !username || !authToken}
+                  >
+                    Upload File
+                  </Button>
+                </SpaceBetween>
+              </Container>
+
+              {/* File Management Block - Upper Right */}
+              <Container
+                header={
+                  <Header
+                    variant="h2"
+                    description="Remove uploaded files"
+                  >
+                    File Deletion
+                  </Header>
+                }
+              >
+                <SpaceBetween size="m">
+                  {fileManagementAlert.type && (
+                    <Alert
+                      type={fileManagementAlert.type}
+                      dismissible
+                      onDismiss={() => setFileManagementAlert({ type: null, message: '' })}
+                    >
+                      {fileManagementAlert.message}
+                    </Alert>
+                  )}
+
+                  <Multiselect
+                    selectedOptions={selectedFiles}
+                    onChange={handleSelectionChange}
+                    options={fileOptions}
+                    placeholder="Select file(s) to permanently delete"
+                    empty="No files available"
+                    loadingText="Loading files..."
+                    statusType={jobsLoading ? "loading" : "finished"}
+                    filteringType="auto"
+                  />
+
+                  <Button
+                    variant="primary"
+                    onClick={handleDelete}
+                    loading={deleting}
+                    disabled={selectedFiles.length === 0 || !username || !authToken}
+                  >
+                    Delete Permanently
+                  </Button>
+                </SpaceBetween>
+              </Container>
+
+              {/* Job Status Block - Full Width Below */}
+              <Container>
+                <JobStatusTable
+                  jobs={jobs}
+                  loading={jobsLoading && isManualRefresh}
+                  error={jobsError}
+                  onRefresh={handleRefreshJobs}
                 />
-
-                <Button
-                  variant="primary"
-                  onClick={handleDelete}
-                  loading={deleting}
-                  disabled={selectedFiles.length === 0 || !username || !authToken}
-                >
-                  Delete Permanently
-                </Button>
-              </SpaceBetween>
-            </Box>
+              </Container>
+            </Grid>
           </SpaceBetween>
         </ContentLayout>
       }

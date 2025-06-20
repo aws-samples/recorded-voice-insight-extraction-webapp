@@ -119,26 +119,40 @@ class LLM:
     def generate(
         self, model_id: str, system_prompt: str, prompt: str, kwargs: dict = {}
     ) -> str:
-        """Generate using messages API"""
+        """Generate using Converse API for better model compatibility"""
 
         logger.debug("BEGIN Prompt\n" + "=" * 20)
         logger.debug(prompt)
         logger.debug("END Prompt\n" + "=" * 20)
 
-        body = {
-            "system": system_prompt,
-            "messages": [{"role": "user", "content": prompt}],
-            "anthropic_version": "",
-            **kwargs,
+        # Build inference config from kwargs
+        inference_config = {}
+        
+        # Map common parameters to Converse API format
+        if "temperature" in kwargs:
+            inference_config["temperature"] = kwargs["temperature"]
+        if "maxTokens" in kwargs:
+            inference_config["maxTokens"] = kwargs["maxTokens"]
+        if "topP" in kwargs:
+            inference_config["topP"] = kwargs["topP"]
+        if "stopSequences" in kwargs:
+            inference_config["stopSequences"] = kwargs["stopSequences"]
+
+        # Build the converse request
+        converse_kwargs = {
+            "modelId": model_id,
+            "system": [{"text": system_prompt}],
+            "messages": [
+                {"role": "user", "content": [{"text": prompt}]}
+            ],
+            "inferenceConfig": inference_config
         }
-        logger.info(f"body = {body}")
 
-        response = self.boto3_bedrock.invoke_model(
-            modelId=model_id, body=json.dumps(body)
-        )
-        response = json.loads(response["body"].read().decode("utf-8"))
+        logger.info(f"converse_kwargs = {converse_kwargs}")
 
-        completion = response["content"][0]["text"]
+        response = self.boto3_bedrock.converse(**converse_kwargs)
+        
+        completion = response["output"]["message"]["content"][0]["text"]
 
         logger.debug("BEGIN Completion\n" + "=" * 20)
         logger.debug(completion)

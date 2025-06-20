@@ -29,15 +29,16 @@ export type JobStatus =
  * Represents an analysis template
  */
 export interface AnalysisTemplate {
-  template_id: number;
+  template_id: string;
   template_short_name: string;
   template_description: string;
   template_prompt: string;
   system_prompt?: string;
   model_id?: string;
+  user_id?: string;
   bedrock_kwargs?: {
     temperature: number;
-    max_tokens: number;
+    maxTokens: number;
     topP?: number;
     topK?: number;
     stopSequences?: string[];
@@ -53,7 +54,7 @@ export interface AnalysisRequest {
   main_prompt: string;
   bedrock_kwargs: {
     temperature: number;
-    max_tokens: number;  // Changed from maxTokens to max_tokens to match backend
+    maxTokens: number; 
     topP?: number;
     topK?: number;
     stopSequences?: string[];

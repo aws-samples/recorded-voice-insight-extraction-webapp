@@ -98,10 +98,6 @@ def _retrieve_jobid_by_media_name(table, media_name: str, username: str) -> str 
         return None
 
 
-def _template_id_to_dynamo_field_name(template_id: int) -> str:
-    return f"llm_analysis_template_{template_id}"
-
-
 def retrieve_all_items(table, username) -> dict:
     """Query dynamodb table for rows from this username and return
     specific columns w/ optional max # of rows"""
@@ -111,39 +107,6 @@ def retrieve_all_items(table, username) -> dict:
     ]
 
     return query_results
-
-
-def retrieve_analysis_by_jobid(
-    table, job_id: str, username: str, template_id: int
-) -> str | None:
-    """Retrieve analysis from dynamodb table by job_id
-    (if analysis is cached, else none)"""
-
-    llm_ana_key = _template_id_to_dynamo_field_name(template_id)
-    response = table.get_item(
-        Key={"username": username, "UUID": job_id}, ProjectionExpression=llm_ana_key
-    )["Item"]
-    try:
-        return response[llm_ana_key]
-    except KeyError:
-        return None
-
-
-def store_analysis_result(
-    table, job_id: str, username: str, template_id: int, analysis_result: str
-) -> str | None:
-    """Store completed analysis in dynamodb table"""
-
-    llm_ana_key = _template_id_to_dynamo_field_name(template_id)
-
-    table.update_item(
-        Key={"username": username, "UUID": job_id},
-        UpdateExpression="SET #new_attr = :new_value",
-        ExpressionAttributeNames={"#new_attr": llm_ana_key},
-        ExpressionAttributeValues={":new_value": analysis_result},
-    )
-
-    return
 
 
 def _delete_job_by_id(table, username: str, job_id: str):

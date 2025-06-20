@@ -21,6 +21,7 @@ import os
 
 import boto3
 import ddb.ddb_utils as ddb_utils
+import ddb.analysis_templates_utils as analysis_templates_utils
 from schemas.job_status import JobStatus
 from lambda_utils.cors_utils import CORSResponse
 
@@ -29,9 +30,16 @@ logger.setLevel("INFO")
 
 TABLE_NAME = os.environ["DYNAMO_TABLE_NAME"]
 BDA_UUID_MAP_TABLE_NAME = os.environ["BDA_MAP_DYNAMO_TABLE_NAME"]
+ANALYSIS_TEMPLATES_TABLE_NAME = os.environ.get("ANALYSIS_TEMPLATES_TABLE_NAME")
+
 dyn_resource = boto3.resource("dynamodb")
 table = dyn_resource.Table(name=TABLE_NAME)
 bda_uuid_map_table = dyn_resource.Table(name=BDA_UUID_MAP_TABLE_NAME)
+
+# Analysis templates table (optional for backward compatibility)
+analysis_templates_table = None
+if ANALYSIS_TEMPLATES_TABLE_NAME:
+    analysis_templates_table = dyn_resource.Table(name=ANALYSIS_TEMPLATES_TABLE_NAME)
 
 
 def lambda_handler(event, context):
@@ -51,26 +59,6 @@ def lambda_handler(event, context):
         if action == "retrieve_all_items":
             username = event["username"]
             result = ddb_utils.retrieve_all_items(table=table, username=username)
-        elif action == "retrieve_analysis_by_jobid":
-            job_id = event["job_id"]
-            username = event["username"]
-            template_id = event["template_id"]
-            result = ddb_utils.retrieve_analysis_by_jobid(
-                table=table, job_id=job_id, username=username, template_id=template_id
-            )
-        elif action == "store_analysis_result":
-            job_id = event["job_id"]
-            username = event["username"]
-            template_id = event["template_id"]
-            analysis_result = event["analysis_result"]
-            ddb_utils.store_analysis_result(
-                table=table,
-                job_id=job_id,
-                username=username,
-                template_id=template_id,
-                analysis_result=analysis_result,
-            )
-            result = "Analysis stored successfully"
         elif action == "update_ddb_entry":
             job_id = event["job_id"]
             username = event["username"]
@@ -130,6 +118,68 @@ def lambda_handler(event, context):
             bda_uuid = event["bda_uuid"]
             result = ddb_utils._retrieve_jobid_and_username_by_bda_uuid(
                 table=bda_uuid_map_table, bda_uuid=bda_uuid
+            )
+        # Analysis Templates actions
+        elif action == "get_analysis_templates":
+            if not analysis_templates_table:
+                return CORSResponse.error_response("Analysis templates table not configured", 500)
+            user_id = event["user_id"]
+            result = analysis_templates_utils.get_templates_for_user(
+                table=analysis_templates_table, user_id=user_id
+            )
+        elif action == "create_analysis_template":
+            if not analysis_templates_table:
+                return CORSResponse.error_response("Analysis templates table not configured", 500)
+            user_id = event["user_id"]
+            template_id = event["template_id"]
+            template_short_name = event["template_short_name"]
+            template_description = event["template_description"]
+            system_prompt = event["system_prompt"]
+            template_prompt = event["template_prompt"]
+            model_id = event["model_id"]
+            bedrock_kwargs = event["bedrock_kwargs"]
+            result = analysis_templates_utils.create_user_template(
+                table=analysis_templates_table,
+                user_id=user_id,
+                template_id=template_id,
+                template_short_name=template_short_name,
+                template_description=template_description,
+                system_prompt=system_prompt,
+                template_prompt=template_prompt,
+                model_id=model_id,
+                bedrock_kwargs=bedrock_kwargs
+            )
+        elif action == "update_analysis_template":
+            if not analysis_templates_table:
+                return CORSResponse.error_response("Analysis templates table not configured", 500)
+            user_id = event["user_id"]
+            template_id = event["template_id"]
+            updates = event["updates"]
+            result = analysis_templates_utils.update_user_template(
+                table=analysis_templates_table,
+                user_id=user_id,
+                template_id=template_id,
+                updates=updates
+            )
+        elif action == "delete_analysis_template":
+            if not analysis_templates_table:
+                return CORSResponse.error_response("Analysis templates table not configured", 500)
+            user_id = event["user_id"]
+            template_id = event["template_id"]
+            result = analysis_templates_utils.delete_user_template(
+                table=analysis_templates_table,
+                user_id=user_id,
+                template_id=template_id
+            )
+        elif action == "get_analysis_template_by_id":
+            if not analysis_templates_table:
+                return CORSResponse.error_response("Analysis templates table not configured", 500)
+            user_id = event["user_id"]
+            template_id = event["template_id"]
+            result = analysis_templates_utils.get_template_by_id(
+                table=analysis_templates_table,
+                user_id=user_id,
+                template_id=template_id
             )
         else:
             return CORSResponse.error_response("Invalid action", 400)

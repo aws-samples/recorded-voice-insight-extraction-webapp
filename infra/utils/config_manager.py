@@ -57,6 +57,7 @@ class ConfigManager:
 
         dynamo_db_table_name = f"{stack_name_base}-app-table"
         bda_map_ddb_table_name = f"{stack_name_base}-bda-map-table"
+        analysis_templates_table_name = f"{stack_name_base}-analysis-templates-table"
         oss_collection_name = f"{stack_name_base}-collection"
         oss_index_name = f"{stack_name_base}-idx"
         props = {
@@ -69,6 +70,7 @@ class ConfigManager:
             "s3_bda_processed_output_prefix": self.s3_bda_processed_output_prefix,
             "ddb_table_name": dynamo_db_table_name,
             "bda_map_ddb_table_name": bda_map_ddb_table_name,
+            "analysis_templates_table_name": analysis_templates_table_name,
             "oss_collection_name": oss_collection_name,
             "oss_index_name": oss_index_name,
             "embedding_model_id": self.config["embedding"]["model_id"],
