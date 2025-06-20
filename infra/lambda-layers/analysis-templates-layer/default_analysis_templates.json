@@ -22,5 +22,17 @@
             "temperature": 0.1,
             "maxTokens": 2000
         }
+    },
+    {
+        "template_id": "default-3",
+        "template_short_name": "Define Chapters",
+        "template_description": "Identify logical chapter breaks in the transcript",
+        "system_prompt": "You are an intelligent assistant who analyzes transcripts from audio or video files.",
+        "template_prompt": "Here is a transcription of the audio or video file:\n<transcription>\n{transcript}\n</transcription>\nNow, analyze the transcript and attempt to divide it up into logical chapters. Return a numbered list where each number includes a name for the chapter which you have come up with, along with a start time for that chapter.",
+        "model_id": "us.amazon.nova-pro-v1:0",
+        "bedrock_kwargs": {
+            "temperature": 0.1,
+            "maxTokens": 2000
+        }
     }
 ]
