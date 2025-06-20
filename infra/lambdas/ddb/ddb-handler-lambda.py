@@ -54,93 +54,6 @@ def lambda_handler(event, context):
 
     action = event["action"]
 
-<<<<<<< Updated upstream
-    if action == "retrieve_all_items":
-        username = event["username"]
-        result = ddb_utils.retrieve_all_items(table=table, username=username)
-    elif action == "retrieve_analysis_by_jobid":
-        job_id = event["job_id"]
-        username = event["username"]
-        template_id = event["template_id"]
-        result = ddb_utils.retrieve_analysis_by_jobid(
-            table=table, job_id=job_id, username=username, template_id=template_id
-        )
-    elif action == "store_analysis_result":
-        job_id = event["job_id"]
-        username = event["username"]
-        template_id = event["template_id"]
-        analysis_result = event["analysis_result"]
-        ddb_utils.store_analysis_result(
-            table=table,
-            job_id=job_id,
-            username=username,
-            template_id=template_id,
-            analysis_result=analysis_result,
-        )
-        result = "Analysis stored successfully"
-    elif action == "update_ddb_entry":
-        job_id = event["job_id"]
-        username = event["username"]
-        new_item_name = event["new_item_name"]
-        new_item_value = event["new_item_value"]
-        result = ddb_utils._update_ddb_entry(
-            table=table,
-            uuid=job_id,
-            username=username,
-            new_item_name=new_item_name,
-            new_item_value=new_item_value,
-        )
-    elif action == "update_job_status":
-        job_id = event["job_id"]
-        username = event["username"]
-        new_status = JobStatus(event["new_status"])
-        result = ddb_utils._update_job_status(
-            table=table, uuid=job_id, username=username, new_status=new_status
-        )
-    elif action == "create_ddb_entry":
-        job_id = event["job_id"]
-        media_uri = event["media_uri"]
-        username = event["username"]
-        result = ddb_utils._create_ddb_entry(
-            table=table, uuid=job_id, media_uri=media_uri, username=username
-        )
-    elif action == "retrieve_media_name_by_jobid":
-        job_id = event["job_id"]
-        username = event["username"]
-        result = ddb_utils._retrieve_media_name_by_jobid(
-            table=table, job_id=job_id, username=username
-        )
-    elif action == "retrieve_jobid_by_media_name":
-        media_name = event["media_name"]
-        username = event["username"]
-        result = ddb_utils._retrieve_jobid_by_media_name(
-            table=table, media_name=media_name, username=username
-        )
-    elif action == "delete_ddb_entry":
-        job_id = event["job_id"]
-        username = event["username"]
-        result = ddb_utils._delete_job_by_id(
-            table=table, username=username, job_id=job_id
-        )
-        # TODO: delete from bda_mapping table if entry exists
-    elif action == "store_bda_mapping":
-        job_id = event["job_id"]
-        bda_uuid = event["bda_uuid"]
-        username = event["username"]
-        result = ddb_utils._create_bda_map_entry(
-            table=bda_uuid_map_table,
-            bda_uuid=bda_uuid,
-            job_id=job_id,
-            username=username,
-        )
-    elif action == "retrieve_jobid_and_username_by_bda_uuid":
-        bda_uuid = event["bda_uuid"]
-        result = ddb_utils._retrieve_jobid_and_username_by_bda_uuid(
-            table=bda_uuid_map_table, bda_uuid=bda_uuid
-        )
-    else:
-        return {"statusCode": 400, "body": json.dumps("Invalid action")}
-=======
         if action == "retrieve_all_items":
             username = event["username"]
             result = ddb_utils.retrieve_all_items(table=table, username=username)
@@ -288,6 +201,5 @@ def lambda_handler(event, context):
             )
         else:
             return CORSResponse.error_response("Invalid action", 400)
->>>>>>> Stashed changes
 
     return {"statusCode": 200, "body": json.dumps(result)}

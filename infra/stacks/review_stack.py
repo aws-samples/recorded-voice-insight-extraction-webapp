@@ -65,24 +65,28 @@ class ReVIEWStack(Stack):
             presigned_url_lambda=self.backend_stack.presigned_url_lambda,
             kb_job_deletion_lambda=self.rag_stack.kb_sync_construct.deletion_lambda,
             subtitle_lambda=self.backend_stack.subtitle_lambda,
+            analysis_templates_lambda=self.backend_stack.analysis_templates_lambda,
             source_bucket=self.backend_stack.bucket,
         )
 
-        # Frontend stack (streamlit application code, VPC, ECS, fargate, etc)
-        # Websocket url it needs is prefixed with "wss://"
+        # Frontend stack (React application in S3 behind CloudFront)
+        # Use SSM parameters instead of direct resource references to avoid dependency issues
         self.frontend_stack = ReVIEWFrontendStack(
             self,
             props=props,
-            backend_api_url=self.api_stack.api.url,
-            websocket_api_url=self.api_stack.web_socket_api_stage.url,
-            cognito_pool=self.api_stack.cognito_user_pool,
         )
+
+        # Add explicit dependencies to ensure frontend is deployed after backend stacks
+        # This ensures SSM parameters are created before frontend tries to read them
+        self.frontend_stack.add_dependency(self.backend_stack)
+        self.frontend_stack.add_dependency(self.rag_stack)
+        self.frontend_stack.add_dependency(self.api_stack)
 
         # Save cfn distribution domain name as output, for convenience
         CfnOutput(
             self,
             "ReVIEW Frontend URL",
-            value=self.frontend_stack.cfn_distribution.domain_name,
+            value=self.frontend_stack.distribution.distribution_domain_name,
         )
         # Add source backend bucket to CFN output for users to easily find
         CfnOutput(
