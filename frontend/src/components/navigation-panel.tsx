@@ -17,8 +17,13 @@ export default function NavigationPanel() {
     const items: SideNavigationProps.Item[] = [
       {
         type: "link",
-        text: "File Management",
+        text: "Home",
         href: "/home",
+      },
+      {
+        type: "link",
+        text: "File Management",
+        href: "/file-management",
       },
       {
         type: "link",
