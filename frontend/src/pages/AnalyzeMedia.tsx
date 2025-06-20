@@ -139,7 +139,7 @@ export const AnalyzeMedia: React.FC = () => {
 
   return (
     <SpaceBetween size="l">
-      <Container header={<Header variant="h1">Analyze Your Media</Header>}>
+      <Container header={<Header variant="h1">Run an Analysis</Header>}>
         <SpaceBetween size="m">
           {state.error && (
             <Alert type="error" header="Error">
@@ -171,7 +171,7 @@ export const AnalyzeMedia: React.FC = () => {
             }
             onChange={handleTemplateChange}
             options={templateOptions}
-            placeholder="Select an analysis type"
+            placeholder="Select an analysis template"
             filteringType="auto"
             selectedAriaLabel="Selected"
           />

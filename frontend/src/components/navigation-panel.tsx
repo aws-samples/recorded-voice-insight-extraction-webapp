@@ -18,13 +18,8 @@ export default function NavigationPanel() {
     const items: SideNavigationProps.Item[] = [
       {
         type: "link",
-        text: "File Upload",
-        href: "/file-upload",
-      },
-      {
-        type: "link",
-        text: "Job Status",
-        href: "/job-status",
+        text: "Home",
+        href: "/home",
       },
       {
         type: "link",
@@ -35,11 +30,6 @@ export default function NavigationPanel() {
         type: "link",
         text: "Analyze Your Media",
         href: "/analyze",
-      },
-      {
-        type: "link",
-        text: "File Management",
-        href: "/file-management",
       },
     ];
 
@@ -74,7 +64,7 @@ export default function NavigationPanel() {
     <SideNavigation
       onFollow={onFollow}
       onChange={onChange}
-      header={{ href: "/file-upload", text: APP_NAME }}
+      header={{ href: "/home", text: APP_NAME }}
       activeHref={location.pathname}
       items={items.map((value, idx) => {
         const item = { ...value };
