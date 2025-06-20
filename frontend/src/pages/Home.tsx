@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   ContentLayout,
   Header,
@@ -15,16 +15,9 @@ import {
 } from '@cloudscape-design/components';
 import { useNavigate } from 'react-router-dom';
 import BaseAppLayout from '../components/base-app-layout';
-import { useNavigationPanelState } from '../common/hooks/use-navigation-panel-state';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const [, setNavigationPanelState] = useNavigationPanelState();
-
-  // Close navigation panel when home page loads
-  useEffect(() => {
-    setNavigationPanelState({ collapsed: true });
-  }, [setNavigationPanelState]);
 
   const handleGetStarted = () => {
     navigate('/file-management'); // Navigate to File Management page
@@ -78,18 +71,22 @@ const HomePage: React.FC = () => {
             </Container>
 
             {/* Feature Overview */}
-            <Grid
-              gridDefinition={[
-                { colspan: { default: 12, s: 4 } },
-                { colspan: { default: 12, s: 4 } },
-                { colspan: { default: 12, s: 4 } }
-              ]}
-            >
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", 
+              gap: "16px",
+              alignItems: "stretch"
+            }}>
               {/* File Management */}
-              <div style={{ minHeight: "280px", display: "flex", flexDirection: "column" }}>
-                <Container>
-                  <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                    <SpaceBetween size="m">
+              <Container>
+                <div style={{ 
+                  height: "100%", 
+                  minHeight: "320px",
+                  display: "flex", 
+                  flexDirection: "column", 
+                  justifyContent: "space-between" 
+                }}>
+                  <SpaceBetween size="m">
                   <Box textAlign="center">
                     <Icon name="folder" size="large" />
                   </Box>
@@ -109,16 +106,20 @@ const HomePage: React.FC = () => {
                       Manage Files
                     </Button>
                   </Box>
-                    </SpaceBetween>
-                  </div>
-                </Container>
-              </div>
+                  </SpaceBetween>
+                </div>
+              </Container>
 
               {/* Chat with Media */}
-              <div style={{ minHeight: "280px", display: "flex", flexDirection: "column" }}>
-                <Container>
-                  <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                    <SpaceBetween size="m">
+              <Container>
+                <div style={{ 
+                  height: "100%", 
+                  minHeight: "320px",
+                  display: "flex", 
+                  flexDirection: "column", 
+                  justifyContent: "space-between" 
+                }}>
+                  <SpaceBetween size="m">
                   <Box textAlign="center">
                     <Icon name="contact" size="large" />
                   </Box>
@@ -138,16 +139,20 @@ const HomePage: React.FC = () => {
                       Start Chatting
                     </Button>
                   </Box>
-                    </SpaceBetween>
-                  </div>
-                </Container>
-              </div>
+                  </SpaceBetween>
+                </div>
+              </Container>
 
               {/* Analyze Media */}
-              <div style={{ minHeight: "280px", display: "flex", flexDirection: "column" }}>
-                <Container>
-                  <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                    <SpaceBetween size="m">
+              <Container>
+                <div style={{ 
+                  height: "100%", 
+                  minHeight: "320px",
+                  display: "flex", 
+                  flexDirection: "column", 
+                  justifyContent: "space-between" 
+                }}>
+                  <SpaceBetween size="m">
                   <Box textAlign="center">
                     <Icon name="search" size="large" />
                   </Box>
@@ -167,11 +172,10 @@ const HomePage: React.FC = () => {
                       Analyze Content
                     </Button>
                   </Box>
-                    </SpaceBetween>
-                  </div>
-                </Container>
-              </div>
-            </Grid>
+                  </SpaceBetween>
+                </div>
+              </Container>
+            </div>
 
             {/* Quick Start Guide */}
             <Container
