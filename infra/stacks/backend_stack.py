@@ -322,7 +322,9 @@ class ReVIEWBackendStack(NestedStack):
             environment={
                 "DYNAMO_TABLE_NAME": self.props["ddb_table_name"],
                 "BDA_MAP_DYNAMO_TABLE_NAME": self.props["bda_map_ddb_table_name"],
-                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
+                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props[
+                    "analysis_templates_table_name"
+                ],
             },
             timeout=Duration.seconds(15),
             role=self.ddb_lambda_execution_role,
@@ -519,8 +521,6 @@ class ReVIEWBackendStack(NestedStack):
             role=self.subtitle_lambda_role,
         )
 
-<<<<<<< Updated upstream
-=======
         # Analysis Templates Lambda - serves analysis templates for the frontend
         self.analysis_templates_lambda = _lambda.Function(
             self,
@@ -531,7 +531,9 @@ class ReVIEWBackendStack(NestedStack):
             handler="analysis.analysis-templates-lambda.lambda_handler",
             code=_lambda.Code.from_asset("lambdas"),
             environment={
-                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
+                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props[
+                    "analysis_templates_table_name"
+                ],
             },
             timeout=Duration.seconds(30),
             role=self.ddb_lambda_execution_role,
@@ -547,7 +549,9 @@ class ReVIEWBackendStack(NestedStack):
             handler="analysis.populate-default-templates-lambda.lambda_handler",
             code=_lambda.Code.from_asset("lambdas"),
             environment={
-                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
+                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props[
+                    "analysis_templates_table_name"
+                ],
             },
             timeout=Duration.seconds(60),
             role=self.ddb_lambda_execution_role,
@@ -581,11 +585,12 @@ class ReVIEWBackendStack(NestedStack):
         self.llm_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 actions=["s3:GetObject"],
-                resources=[f"{self.bucket.bucket_arn}/{self.props['s3_text_transcripts_prefix']}/*"],
+                resources=[
+                    f"{self.bucket.bucket_arn}/{self.props['s3_text_transcripts_prefix']}/*"
+                ],
             )
         )
 
->>>>>>> Stashed changes
     def setup_events(self):
         # Create event notification to the bucket for lambda functions
         # When an s3:ObjectCreated:* event happens in the bucket, the
@@ -686,34 +691,38 @@ class ReVIEWBackendStack(NestedStack):
                 action="invoke",
                 parameters={
                     "FunctionName": self.populate_default_templates_lambda.function_name,
-                    "Payload": json.dumps({
-                        "RequestType": "Create",
-                        "ResourceProperties": {}
-                    })
+                    "Payload": json.dumps(
+                        {"RequestType": "Create", "ResourceProperties": {}}
+                    ),
                 },
-                physical_resource_id=cr.PhysicalResourceId.of("populate-default-templates")
+                physical_resource_id=cr.PhysicalResourceId.of(
+                    "populate-default-templates"
+                ),
             ),
             on_update=cr.AwsSdkCall(
-                service="Lambda", 
+                service="Lambda",
                 action="invoke",
                 parameters={
                     "FunctionName": self.populate_default_templates_lambda.function_name,
-                    "Payload": json.dumps({
-                        "RequestType": "Update",
-                        "ResourceProperties": {}
-                    })
-                }
+                    "Payload": json.dumps(
+                        {"RequestType": "Update", "ResourceProperties": {}}
+                    ),
+                },
             ),
-            policy=cr.AwsCustomResourcePolicy.from_statements([
-                iam.PolicyStatement(
-                    actions=["lambda:InvokeFunction"],
-                    resources=[self.populate_default_templates_lambda.function_arn]
-                )
-            ])
+            policy=cr.AwsCustomResourcePolicy.from_statements(
+                [
+                    iam.PolicyStatement(
+                        actions=["lambda:InvokeFunction"],
+                        resources=[self.populate_default_templates_lambda.function_arn],
+                    )
+                ]
+            ),
         )
-        
+
         # Ensure the custom resource runs after the table is created
-        self.populate_templates_custom_resource.node.add_dependency(self.analysis_templates_table)
+        self.populate_templates_custom_resource.node.add_dependency(
+            self.analysis_templates_table
+        )
 
     def setup_cdk_nag(self):
         """Use this function to enable cdk_nag package to block deployment of possibly insecure stack elements"""
