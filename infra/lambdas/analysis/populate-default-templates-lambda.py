@@ -65,7 +65,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     "system_prompt": template["system_prompt"],
                     "template_prompt": template["template_prompt"],
                     "model_id": template["model_id"],
-                    "bedrock_kwargs": template["bedrock_kwargs"]
+                    "bedrock_kwargs": json.dumps(template["bedrock_kwargs"])  # Serialize as JSON string
                 }
                 
                 # Use put_item with condition to avoid overwriting existing templates

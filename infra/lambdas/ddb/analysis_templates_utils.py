@@ -5,11 +5,37 @@
 Utility functions for managing analysis templates in DynamoDB
 """
 
+import json
 import logging
 from typing import Dict, List, Any, Optional
 from boto3.dynamodb.conditions import Key
 
 logger = logging.getLogger()
+
+
+def _serialize_bedrock_kwargs(bedrock_kwargs: Dict[str, Any]) -> str:
+    """Serialize bedrock_kwargs to JSON string for DynamoDB storage"""
+    return json.dumps(bedrock_kwargs)
+
+
+def _deserialize_bedrock_kwargs(bedrock_kwargs_str: str) -> Dict[str, Any]:
+    """Deserialize bedrock_kwargs from JSON string"""
+    try:
+        return json.loads(bedrock_kwargs_str)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning(f"Failed to deserialize bedrock_kwargs: {bedrock_kwargs_str}")
+        return {"temperature": 0.1, "max_tokens": 2000}  # Default fallback
+
+
+def _format_template_for_response(template: Dict[str, Any]) -> Dict[str, Any]:
+    """Format a template from DynamoDB for API response"""
+    formatted = template.copy()
+    
+    # Deserialize bedrock_kwargs if it's a string
+    if isinstance(formatted.get("bedrock_kwargs"), str):
+        formatted["bedrock_kwargs"] = _deserialize_bedrock_kwargs(formatted["bedrock_kwargs"])
+    
+    return formatted
 
 
 def get_templates_for_user(table, user_id: str) -> List[Dict[str, Any]]:
@@ -30,14 +56,20 @@ def get_templates_for_user(table, user_id: str) -> List[Dict[str, Any]]:
         default_response = table.query(
             KeyConditionExpression=Key('user_id').eq('default')
         )
-        templates.extend(default_response.get('Items', []))
+        default_templates = default_response.get('Items', [])
         
         # Get user-specific templates if user_id is not 'default'
         if user_id != 'default':
             user_response = table.query(
                 KeyConditionExpression=Key('user_id').eq(user_id)
             )
-            templates.extend(user_response.get('Items', []))
+            user_templates = user_response.get('Items', [])
+            default_templates.extend(user_templates)
+        
+        # Format templates for response
+        for template in default_templates:
+            formatted_template = _format_template_for_response(template)
+            templates.append(formatted_template)
         
         logger.info(f"Retrieved {len(templates)} templates for user {user_id}")
         return templates
@@ -84,7 +116,7 @@ def create_user_template(
             "system_prompt": system_prompt,
             "template_prompt": template_prompt,
             "model_id": model_id,
-            "bedrock_kwargs": bedrock_kwargs
+            "bedrock_kwargs": _serialize_bedrock_kwargs(bedrock_kwargs)
         }
         
         # Use put_item with condition to prevent overwriting
@@ -94,7 +126,9 @@ def create_user_template(
         )
         
         logger.info(f"Created template {template_id} for user {user_id}")
-        return item
+        
+        # Return formatted template for response
+        return _format_template_for_response(item)
         
     except Exception as e:
         logger.error(f"Error creating template {template_id} for user {user_id}: {str(e)}")
@@ -132,6 +166,10 @@ def update_user_template(
             attr_name = f"#{key}"
             attr_value = f":{key}"
             
+            # Serialize bedrock_kwargs if present
+            if key == "bedrock_kwargs" and isinstance(value, dict):
+                value = _serialize_bedrock_kwargs(value)
+            
             update_expression += f"{attr_name} = {attr_value}, "
             expression_attribute_names[attr_name] = key
             expression_attribute_values[attr_value] = value
@@ -151,7 +189,9 @@ def update_user_template(
         )
         
         logger.info(f"Updated template {template_id} for user {user_id}")
-        return response['Attributes']
+        
+        # Return formatted template for response
+        return _format_template_for_response(response['Attributes'])
         
     except Exception as e:
         logger.error(f"Error updating template {template_id} for user {user_id}: {str(e)}")
@@ -214,7 +254,7 @@ def get_template_by_id(table, user_id: str, template_id: str) -> Optional[Dict[s
                     }
                 )
                 if 'Item' in response:
-                    return response['Item']
+                    return _format_template_for_response(response['Item'])
             except Exception:
                 pass  # Continue to check default templates
         
@@ -227,7 +267,7 @@ def get_template_by_id(table, user_id: str, template_id: str) -> Optional[Dict[s
                 }
             )
             if 'Item' in response:
-                return response['Item']
+                return _format_template_for_response(response['Item'])
         except Exception:
             pass
         

@@ -23,6 +23,7 @@ import boto3
 import ddb.ddb_utils as ddb_utils
 import ddb.analysis_templates_utils as analysis_templates_utils
 from schemas.job_status import JobStatus
+from lambda_utils.cors_utils import CORSResponse
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -49,34 +50,15 @@ def lambda_handler(event, context):
 
     logger.debug(f"{event=}")
 
-    if "body" in event:
-        event = json.loads(event["body"])
+    try:
+        if "body" in event:
+            event = json.loads(event["body"])
 
-    action = event["action"]
+        action = event["action"]
 
         if action == "retrieve_all_items":
             username = event["username"]
             result = ddb_utils.retrieve_all_items(table=table, username=username)
-        elif action == "retrieve_analysis_by_jobid":
-            job_id = event["job_id"]
-            username = event["username"]
-            template_id = event["template_id"]
-            result = ddb_utils.retrieve_analysis_by_jobid(
-                table=table, job_id=job_id, username=username, template_id=template_id
-            )
-        elif action == "store_analysis_result":
-            job_id = event["job_id"]
-            username = event["username"]
-            template_id = event["template_id"]
-            analysis_result = event["analysis_result"]
-            ddb_utils.store_analysis_result(
-                table=table,
-                job_id=job_id,
-                username=username,
-                template_id=template_id,
-                analysis_result=analysis_result,
-            )
-            result = "Analysis stored successfully"
         elif action == "update_ddb_entry":
             job_id = event["job_id"]
             username = event["username"]
@@ -202,4 +184,8 @@ def lambda_handler(event, context):
         else:
             return CORSResponse.error_response("Invalid action", 400)
 
-    return {"statusCode": 200, "body": json.dumps(result)}
+        return CORSResponse.success_response(result)
+        
+    except Exception as e:
+        logger.error(f"Error in lambda_handler: {str(e)}")
+        return CORSResponse.error_response(f"Internal server error: {str(e)}", 500)

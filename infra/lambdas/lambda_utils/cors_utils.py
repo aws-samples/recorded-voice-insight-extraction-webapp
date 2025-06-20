@@ -24,7 +24,7 @@ class CORSResponse:
         return {
             'statusCode': status_code,
             'headers': CORSResponse.get_cors_headers(),
-            'body': json.dumps(body) if not isinstance(body, str) else body
+            'body': json.dumps(body)
         }
     
     @staticmethod
