@@ -29,12 +29,13 @@ export type JobStatus =
  * Represents an analysis template
  */
 export interface AnalysisTemplate {
-  template_id: number;
+  template_id: string;
   template_short_name: string;
   template_description: string;
   template_prompt: string;
   system_prompt?: string;
   model_id?: string;
+  user_id?: string;
   bedrock_kwargs?: {
     temperature: number;
     max_tokens: number;

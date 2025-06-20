@@ -15,8 +15,8 @@ import {
   Textarea,
   Input,
 } from '@cloudscape-design/components';
-import { AnalysisResults } from '../components/AnalysisResults';
 import { useAnalysisApi } from '../hooks/useAnalysisApi';
+import useHttp from '../hooks/useHttp';
 import { 
   AnalysisPageState,
   Job
@@ -40,6 +40,11 @@ interface CreateAnalysisState {
   isCreating: boolean;
   createError: string | null;
   createSuccess: string | null;
+  currentView: 'menu' | 'create' | 'edit' | 'remove';
+  selectedTemplateForEdit: string | null; // template_id of selected template for editing
+  editingTemplateId: string | null; // ID of template being edited
+  selectedTemplateForDelete: string | null; // template_id of selected template for deletion
+  isDeleting: boolean;
 }
 
 export const AnalyzeMedia: React.FC = () => {
@@ -51,10 +56,16 @@ export const AnalyzeMedia: React.FC = () => {
     isCreating: false,
     createError: null,
     createSuccess: null,
+    currentView: 'menu',
+    selectedTemplateForEdit: null,
+    editingTemplateId: null,
+    selectedTemplateForDelete: null,
+    isDeleting: false,
   });
   
   const username = localStorage.getItem('username') || ''; // Get from your auth context
   const { retrieveAllItems, getAnalysisTemplates, submitAnalysis } = useAnalysisApi();
+  const http = useHttp();
 
   // Load completed jobs and analysis templates on component mount
   useEffect(() => {
@@ -161,6 +172,17 @@ export const AnalyzeMedia: React.FC = () => {
     description: template.template_description
   }));
 
+  // Get user-created templates only (exclude default templates)
+  const userTemplates = state.analysisTemplates.filter(template => 
+    template.user_id && template.user_id !== 'default'
+  );
+
+  const userTemplateOptions = userTemplates.map(template => ({
+    label: template.template_short_name,
+    value: template.template_id,
+    description: template.template_description
+  }));
+
   // Create Analysis Handlers
   const handleCreateAnalysis = async () => {
     if (!createState.analysisName.trim() || !createState.analysisDescription.trim() || !createState.analysisPrompt.trim()) {
@@ -174,31 +196,24 @@ export const AnalyzeMedia: React.FC = () => {
     setCreateState(prev => ({ ...prev, isCreating: true, createError: null, createSuccess: null }));
 
     try {
-      const authToken = localStorage.getItem('authToken');
-      if (!authToken) {
-        throw new Error('Authentication token not found');
+      const isEditing = createState.editingTemplateId !== null;
+      const templateData = {
+        template_short_name: createState.analysisName,
+        template_description: createState.analysisDescription,
+        template_prompt: createState.analysisPrompt,
+        bedrock_kwargs: { temperature: 0.1, max_tokens: 2000 }
+      };
+
+      let response;
+      if (isEditing) {
+        // Update existing template
+        response = await http.put(`/analysis-templates/${createState.editingTemplateId}`, templateData);
+      } else {
+        // Create new template
+        response = await http.post('/analysis-templates', templateData);
       }
 
-      const response = await fetch('/api/analysis-templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authToken,
-        },
-        body: JSON.stringify({
-          template_short_name: createState.analysisName,
-          template_description: createState.analysisDescription,
-          template_prompt: createState.analysisPrompt,
-          bedrock_kwargs: { temperature: 0.1, max_tokens: 2000 }
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const newTemplate = await response.json();
+      const template = response.data;
       
       // Refresh the templates list
       const updatedTemplates = await getAnalysisTemplates();
@@ -211,15 +226,166 @@ export const AnalyzeMedia: React.FC = () => {
         analysisPrompt: '',
         isCreating: false,
         createError: null,
-        createSuccess: `Analysis template "${newTemplate.template_short_name}" created successfully!`
+        createSuccess: `Analysis template "${template.template_short_name}" ${isEditing ? 'updated' : 'created'} successfully!`,
+        currentView: 'menu',
+        selectedTemplateForEdit: null,
+        editingTemplateId: null,
+        selectedTemplateForDelete: null,
+        isDeleting: false,
       });
 
-    } catch (error) {
-      console.error('Error creating analysis template:', error);
+    } catch (error: any) {
+      console.error('Error saving analysis template:', error);
+      let errorMessage = 'Failed to save analysis template. Please try again.';
+      
+      // Extract error message from response if available
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.status) {
+        errorMessage = `HTTP error! status: ${error.response.status}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       setCreateState(prev => ({
         ...prev,
         isCreating: false,
-        createError: error instanceof Error ? error.message : 'Failed to create analysis template. Please try again.'
+        createError: errorMessage
+      }));
+    }
+  };
+
+  // Navigation handlers for Custom Analysis section
+  const handleShowCreateForm = () => {
+    setCreateState(prev => ({ 
+      ...prev, 
+      currentView: 'create',
+      createError: null,
+      createSuccess: null,
+      analysisName: '',
+      analysisDescription: '',
+      analysisPrompt: '',
+      editingTemplateId: null,
+    }));
+  };
+
+  const handleShowEditForm = () => {
+    setCreateState(prev => ({ 
+      ...prev, 
+      currentView: 'edit',
+      createError: null,
+      createSuccess: null,
+      selectedTemplateForEdit: null,
+      analysisName: '',
+      analysisDescription: '',
+      analysisPrompt: '',
+      editingTemplateId: null,
+    }));
+  };
+
+  const handleShowRemoveForm = () => {
+    setCreateState(prev => ({ 
+      ...prev, 
+      currentView: 'remove',
+      createError: null,
+      createSuccess: null,
+      selectedTemplateForDelete: null,
+    }));
+  };
+
+  const handleBackToMenu = () => {
+    setCreateState(prev => ({ 
+      ...prev, 
+      currentView: 'menu',
+      analysisName: '',
+      analysisDescription: '',
+      analysisPrompt: '',
+      createError: null,
+      createSuccess: null,
+      selectedTemplateForEdit: null,
+      editingTemplateId: null,
+      selectedTemplateForDelete: null,
+      isDeleting: false,
+    }));
+  };
+
+  // Handle template selection for editing
+  const handleTemplateSelectionForEdit = ({ detail }: any) => {
+    const templateId = detail.selectedOption.value;
+    const selectedTemplate = userTemplates.find(template => template.template_id === templateId);
+    
+    if (selectedTemplate) {
+      setCreateState(prev => ({
+        ...prev,
+        selectedTemplateForEdit: templateId,
+        analysisName: selectedTemplate.template_short_name,
+        analysisDescription: selectedTemplate.template_description,
+        analysisPrompt: selectedTemplate.template_prompt,
+        editingTemplateId: templateId,
+      }));
+    }
+  };
+
+  // Handle template selection for deletion
+  const handleTemplateSelectionForDelete = ({ detail }: any) => {
+    const templateId = detail.selectedOption.value;
+    setCreateState(prev => ({
+      ...prev,
+      selectedTemplateForDelete: templateId,
+    }));
+  };
+
+  // Handle template deletion
+  const handleDeleteAnalysis = async () => {
+    if (!createState.selectedTemplateForDelete) {
+      return;
+    }
+
+    setCreateState(prev => ({ ...prev, isDeleting: true, createError: null }));
+
+    try {
+      await http.delete(`/analysis-templates/${createState.selectedTemplateForDelete}`);
+      
+      // Refresh the templates list
+      const updatedTemplates = await getAnalysisTemplates();
+      setState(prev => ({ ...prev, analysisTemplates: updatedTemplates }));
+
+      // Get the deleted template name for success message
+      const deletedTemplate = userTemplates.find(t => t.template_id === createState.selectedTemplateForDelete);
+      const templateName = deletedTemplate?.template_short_name || 'Template';
+
+      // Reset form and show success
+      setCreateState({
+        analysisName: '',
+        analysisDescription: '',
+        analysisPrompt: '',
+        isCreating: false,
+        createError: null,
+        createSuccess: `Analysis template "${templateName}" deleted successfully!`,
+        currentView: 'menu',
+        selectedTemplateForEdit: null,
+        editingTemplateId: null,
+        selectedTemplateForDelete: null,
+        isDeleting: false,
+      });
+
+    } catch (error: any) {
+      console.error('Error deleting analysis template:', error);
+      let errorMessage = 'Failed to delete analysis template. Please try again.';
+      
+      // Extract error message from response if available
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.status) {
+        errorMessage = `HTTP error! status: ${error.response.status}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setCreateState(prev => ({
+        ...prev,
+        isDeleting: false,
+        createError: errorMessage
       }));
     }
   };
@@ -292,51 +458,259 @@ export const AnalyzeMedia: React.FC = () => {
             </SpaceBetween>
           </Container>
 
-          {/* Create an Analysis Block - Upper Right */}
-          <Container header={<Header variant="h2">Create an Analysis</Header>}>
+          {/* Custom Analysis Block - Upper Right */}
+          <Container header={<Header variant="h2">Custom Analysis</Header>}>
             <SpaceBetween size="m">
-              {createState.createError && (
-                <Alert type="error" dismissible onDismiss={() => setCreateState(prev => ({ ...prev, createError: null }))}>
-                  {createState.createError}
-                </Alert>
-              )}
-
               {createState.createSuccess && (
                 <Alert type="success" dismissible onDismiss={() => setCreateState(prev => ({ ...prev, createSuccess: null }))}>
                   {createState.createSuccess}
                 </Alert>
               )}
 
-              <Input
-                value={createState.analysisName}
-                onChange={({ detail }) => setCreateState(prev => ({ ...prev, analysisName: detail.value }))}
-                placeholder="Bullet Point Summary"
-                disabled={createState.isCreating}
-              />
+              {createState.currentView === 'menu' && (
+                <SpaceBetween size="s">
+                  <Button
+                    variant="primary"
+                    onClick={handleShowCreateForm}
+                    fullWidth
+                  >
+                    Create a new analysis
+                  </Button>
+                  <Button
+                    variant="normal"
+                    onClick={handleShowEditForm}
+                    fullWidth
+                  >
+                    Edit an existing analysis
+                  </Button>
+                  <Button
+                    variant="normal"
+                    onClick={handleShowRemoveForm}
+                    fullWidth
+                  >
+                    Remove an analysis
+                  </Button>
+                </SpaceBetween>
+              )}
 
-              <Input
-                value={createState.analysisDescription}
-                onChange={({ detail }) => setCreateState(prev => ({ ...prev, analysisDescription: detail.value }))}
-                placeholder="Generates a short summary in bullet points"
-                disabled={createState.isCreating}
-              />
+              {createState.currentView === 'create' && (
+                <SpaceBetween size="m">
+                  {createState.createError && (
+                    <Alert type="error" dismissible onDismiss={() => setCreateState(prev => ({ ...prev, createError: null }))}>
+                      {createState.createError}
+                    </Alert>
+                  )}
 
-              <Textarea
-                value={createState.analysisPrompt}
-                onChange={({ detail }) => setCreateState(prev => ({ ...prev, analysisPrompt: detail.value }))}
-                placeholder={'Enter your analysis prompt here. Be sure to include the keyword "{transcript}" where the media transcript will be added. For example:\n\nAnalyze the following transcript of a meeting:\n{transcript}\nNow write a bullet point summary of the transcript.'}
-                rows={6}
-                disabled={createState.isCreating}
-              />
+                  <div>
+                    <Box variant="awsui-key-label">Name</Box>
+                    <Input
+                      value={createState.analysisName}
+                      onChange={({ detail }) => setCreateState(prev => ({ ...prev, analysisName: detail.value }))}
+                      placeholder="Bullet Point Summary"
+                      disabled={createState.isCreating}
+                    />
+                  </div>
 
-              <Button
-                variant="primary"
-                onClick={handleCreateAnalysis}
-                loading={createState.isCreating}
-                disabled={!createState.analysisName.trim() || !createState.analysisDescription.trim() || !createState.analysisPrompt.trim()}
-              >
-                Store Analysis
-              </Button>
+                  <div>
+                    <Box variant="awsui-key-label">Description</Box>
+                    <Input
+                      value={createState.analysisDescription}
+                      onChange={({ detail }) => setCreateState(prev => ({ ...prev, analysisDescription: detail.value }))}
+                      placeholder="Generates a short summary in bullet points"
+                      disabled={createState.isCreating}
+                    />
+                  </div>
+
+                  <div>
+                    <Box variant="awsui-key-label">Prompt</Box>
+                    <Textarea
+                      value={createState.analysisPrompt}
+                      onChange={({ detail }) => setCreateState(prev => ({ ...prev, analysisPrompt: detail.value }))}
+                      placeholder={'Enter your analysis prompt here. Be sure to include the keyword "{transcript}" where the media transcript will be added. For example:\n\nAnalyze the following transcript of a meeting:\n{transcript}\nNow write a bullet point summary of the transcript.'}
+                      rows={6}
+                      disabled={createState.isCreating}
+                    />
+                  </div>
+
+                  <SpaceBetween size="s" direction="horizontal">
+                    <Button
+                      variant="primary"
+                      onClick={handleCreateAnalysis}
+                      loading={createState.isCreating}
+                      disabled={!createState.analysisName.trim() || !createState.analysisDescription.trim() || !createState.analysisPrompt.trim()}
+                    >
+                      Store Analysis
+                    </Button>
+                    <Button
+                      variant="normal"
+                      onClick={handleBackToMenu}
+                      disabled={createState.isCreating}
+                    >
+                      Back
+                    </Button>
+                  </SpaceBetween>
+                </SpaceBetween>
+              )}
+
+              {createState.currentView === 'edit' && (
+                <SpaceBetween size="m">
+                  {createState.createError && (
+                    <Alert type="error" dismissible onDismiss={() => setCreateState(prev => ({ ...prev, createError: null }))}>
+                      {createState.createError}
+                    </Alert>
+                  )}
+
+                  {userTemplateOptions.length === 0 ? (
+                    <SpaceBetween size="m">
+                      <Box variant="p" color="text-status-inactive">
+                        No custom analysis templates found. Create one first to edit.
+                      </Box>
+                      <Button
+                        variant="normal"
+                        onClick={handleBackToMenu}
+                      >
+                        Back
+                      </Button>
+                    </SpaceBetween>
+                  ) : (
+                    <SpaceBetween size="m">
+                      <Select
+                        selectedOption={
+                          createState.selectedTemplateForEdit
+                            ? userTemplateOptions.find(option => option.value === createState.selectedTemplateForEdit) || null
+                            : null
+                        }
+                        onChange={handleTemplateSelectionForEdit}
+                        options={userTemplateOptions}
+                        placeholder="Select an analysis template to edit"
+                        filteringType="auto"
+                        selectedAriaLabel="Selected"
+                      />
+
+                      {createState.selectedTemplateForEdit && (
+                        <SpaceBetween size="m">
+                          <div>
+                            <Box variant="awsui-key-label">Name</Box>
+                            <Input
+                              value={createState.analysisName}
+                              onChange={({ detail }) => setCreateState(prev => ({ ...prev, analysisName: detail.value }))}
+                              placeholder="Analysis Name"
+                              disabled={createState.isCreating}
+                            />
+                          </div>
+
+                          <div>
+                            <Box variant="awsui-key-label">Description</Box>
+                            <Input
+                              value={createState.analysisDescription}
+                              onChange={({ detail }) => setCreateState(prev => ({ ...prev, analysisDescription: detail.value }))}
+                              placeholder="Analysis Description"
+                              disabled={createState.isCreating}
+                            />
+                          </div>
+
+                          <div>
+                            <Box variant="awsui-key-label">Prompt</Box>
+                            <Textarea
+                              value={createState.analysisPrompt}
+                              onChange={({ detail }) => setCreateState(prev => ({ ...prev, analysisPrompt: detail.value }))}
+                              placeholder={'Enter your analysis prompt here. Be sure to include the keyword "{transcript}" where the media transcript will be added.'}
+                              rows={6}
+                              disabled={createState.isCreating}
+                            />
+                          </div>
+
+                          <SpaceBetween size="s" direction="horizontal">
+                            <Button
+                              variant="primary"
+                              onClick={handleCreateAnalysis}
+                              loading={createState.isCreating}
+                              disabled={!createState.analysisName.trim() || !createState.analysisDescription.trim() || !createState.analysisPrompt.trim()}
+                            >
+                              Update Analysis
+                            </Button>
+                            <Button
+                              variant="normal"
+                              onClick={handleBackToMenu}
+                              disabled={createState.isCreating}
+                            >
+                              Back
+                            </Button>
+                          </SpaceBetween>
+                        </SpaceBetween>
+                      )}
+
+                      {!createState.selectedTemplateForEdit && (
+                        <Button
+                          variant="normal"
+                          onClick={handleBackToMenu}
+                        >
+                          Back
+                        </Button>
+                      )}
+                    </SpaceBetween>
+                  )}
+                </SpaceBetween>
+              )}
+
+              {createState.currentView === 'remove' && (
+                <SpaceBetween size="m">
+                  {createState.createError && (
+                    <Alert type="error" dismissible onDismiss={() => setCreateState(prev => ({ ...prev, createError: null }))}>
+                      {createState.createError}
+                    </Alert>
+                  )}
+
+                  {userTemplateOptions.length === 0 ? (
+                    <SpaceBetween size="m">
+                      <Box variant="p" color="text-status-inactive">
+                        No custom analysis templates found. Create one first to delete.
+                      </Box>
+                      <Button
+                        variant="normal"
+                        onClick={handleBackToMenu}
+                      >
+                        Back
+                      </Button>
+                    </SpaceBetween>
+                  ) : (
+                    <SpaceBetween size="m">
+                      <Select
+                        selectedOption={
+                          createState.selectedTemplateForDelete
+                            ? userTemplateOptions.find(option => option.value === createState.selectedTemplateForDelete) || null
+                            : null
+                        }
+                        onChange={handleTemplateSelectionForDelete}
+                        options={userTemplateOptions}
+                        placeholder="Select an analysis template to delete"
+                        filteringType="auto"
+                        selectedAriaLabel="Selected"
+                        disabled={createState.isDeleting}
+                      />
+
+                      <SpaceBetween size="s" direction="horizontal">
+                        {createState.selectedTemplateForDelete && (
+                          <Button
+                            variant="primary"
+                            onClick={handleDeleteAnalysis}
+                            loading={createState.isDeleting}
+                          >
+                            Permanently Delete
+                          </Button>
+                        )}
+                        <Button
+                          variant="normal"
+                          onClick={handleBackToMenu}
+                          disabled={createState.isDeleting}
+                        >
+                          Back
+                        </Button>
+                      </SpaceBetween>
+                    </SpaceBetween>
+                  )}
+                </SpaceBetween>
+              )}
             </SpaceBetween>
           </Container>
 

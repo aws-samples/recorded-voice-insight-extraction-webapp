@@ -292,7 +292,7 @@ const HomePage: React.FC = () => {
               variant="h1"
               description="Upload, monitor, and manage your media files"
             >
-              Recorded Voice Insight Extraction Webapp
+              File Management
             </Header>
           }
         >
@@ -393,9 +393,9 @@ const HomePage: React.FC = () => {
                 header={
                   <Header
                     variant="h2"
-                    description="Manage uploaded files"
+                    description="Remove uploaded files"
                   >
-                    File Management
+                    File Deletion
                   </Header>
                 }
               >
@@ -409,10 +409,6 @@ const HomePage: React.FC = () => {
                       {fileManagementAlert.message}
                     </Alert>
                   )}
-
-                  <Header variant="h3">
-                    Choose files to delete:
-                  </Header>
 
                   <Multiselect
                     selectedOptions={selectedFiles}

@@ -552,8 +552,10 @@ class ReVIEWBackendStack(NestedStack):
             handler="analysis.analysis-templates-lambda.lambda_handler",
             code=_lambda.Code.from_asset("lambdas"),
             environment={
-                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
-                "LLM_MODEL_ID": self.props["llm"]["model_id"],
+                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props[
+                    "analysis_templates_table_name"
+                ],
+                "LLM_MODEL_ID": self.props["llm_model_id"],
             },
             timeout=Duration.seconds(30),
             role=self.ddb_lambda_execution_role,
@@ -569,7 +571,9 @@ class ReVIEWBackendStack(NestedStack):
             handler="analysis.populate-default-templates-lambda.lambda_handler",
             code=_lambda.Code.from_asset("lambdas"),
             environment={
-                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
+                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props[
+                    "analysis_templates_table_name"
+                ],
             },
             timeout=Duration.seconds(60),
             role=self.ddb_lambda_execution_role,
