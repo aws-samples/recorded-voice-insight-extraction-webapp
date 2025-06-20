@@ -64,7 +64,7 @@ export default function NavigationPanel() {
     <SideNavigation
       onFollow={onFollow}
       onChange={onChange}
-      header={{ href: "/home", text: APP_NAME }}
+      header={{ href: "/home", text: "Pages" }}
       activeHref={location.pathname}
       items={items.map((value, idx) => {
         const item = { ...value };

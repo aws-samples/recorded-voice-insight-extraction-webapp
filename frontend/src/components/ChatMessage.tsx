@@ -87,11 +87,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           </Box>
         }
       >
-        <SpaceBetween size="s">
+        <div>
           <Box 
             key="message-content"
-            variant="div" 
-            margin={{ top: 'xs' }}
+            variant="div"
             color={isUser ? 'inherit' : 'text-body-secondary'}
           >
             {isUser ? messageText : processedContent}
@@ -99,7 +98,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           
           {/* Show citation summary for assistant messages */}
           {!isUser && allCitations.length > 0 && (
-            <div key="citation-sources" style={{ borderTop: '1px solid #e9ebed', paddingTop: '8px' }}>
+            <div key="citation-sources" style={{ borderTop: '1px solid #e9ebed', paddingTop: '8px', marginTop: '8px' }}>
               <Box 
                 variant="small" 
                 color="text-body-secondary"
@@ -128,7 +127,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
               </Box>
             </div>
           )}
-        </SpaceBetween>
+        </div>
       </Container>
     </Box>
   );

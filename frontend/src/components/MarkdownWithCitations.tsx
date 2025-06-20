@@ -48,7 +48,7 @@ const MarkdownWithCitations: React.FC<MarkdownWithCitationsProps> = ({
       const timeout = setTimeout(() => {
         console.log(`🎯 Citation [${citationNumber}] hover delay completed - showing media!`);
         handleCitationTrigger();
-      }, 500); // 500ms delay
+      }, 1000); // 1000ms delay (1 second)
       
       setHoverTimeout(timeout);
     };
