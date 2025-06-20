@@ -5,7 +5,6 @@ import {
 import { useNavigationPanelState } from "../common/hooks/use-navigation-panel-state";
 import { useState } from "react";
 import { useOnFollow } from "../common/hooks/use-on-follow";
-import { APP_NAME } from "../common/constants";
 import { useLocation } from "react-router-dom";
 
 export default function NavigationPanel() {

@@ -553,6 +553,7 @@ class ReVIEWBackendStack(NestedStack):
             code=_lambda.Code.from_asset("lambdas"),
             environment={
                 "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
+                "LLM_MODEL_ID": self.props["llm"]["model_id"],
             },
             timeout=Duration.seconds(30),
             role=self.ddb_lambda_execution_role,

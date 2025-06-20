@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Box,
   Container,
-  SpaceBetween,
 } from '@cloudscape-design/components';
 import { ChatMessage as ChatMessageType } from '../types/chat';
 import { ProcessedCitation, processPartialAnswersForMarkdown, extractAllCitations, formatTimestamp } from '../utils/citationUtils';
