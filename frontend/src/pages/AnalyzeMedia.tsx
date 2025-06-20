@@ -201,7 +201,7 @@ export const AnalyzeMedia: React.FC = () => {
         template_short_name: createState.analysisName,
         template_description: createState.analysisDescription,
         template_prompt: createState.analysisPrompt,
-        bedrock_kwargs: { temperature: 0.1, max_tokens: 2000 }
+        bedrock_kwargs: { temperature: 0.1, maxTokens: 2000 }
       };
 
       let response;

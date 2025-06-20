@@ -81,7 +81,7 @@ const HomePage: React.FC = () => {
               <Container>
                 <div style={{ 
                   height: "100%", 
-                  minHeight: "320px",
+                  minHeight: "260px",
                   display: "flex", 
                   flexDirection: "column", 
                   justifyContent: "space-between" 
@@ -114,7 +114,7 @@ const HomePage: React.FC = () => {
               <Container>
                 <div style={{ 
                   height: "100%", 
-                  minHeight: "320px",
+                  minHeight: "260px",
                   display: "flex", 
                   flexDirection: "column", 
                   justifyContent: "space-between" 
@@ -147,7 +147,7 @@ const HomePage: React.FC = () => {
               <Container>
                 <div style={{ 
                   height: "100%", 
-                  minHeight: "320px",
+                  minHeight: "260px",
                   display: "flex", 
                   flexDirection: "column", 
                   justifyContent: "space-between" 

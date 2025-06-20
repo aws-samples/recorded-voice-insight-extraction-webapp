@@ -38,7 +38,7 @@ export interface AnalysisTemplate {
   user_id?: string;
   bedrock_kwargs?: {
     temperature: number;
-    max_tokens: number;
+    maxTokens: number;
     topP?: number;
     topK?: number;
     stopSequences?: string[];
@@ -54,7 +54,7 @@ export interface AnalysisRequest {
   main_prompt: string;
   bedrock_kwargs: {
     temperature: number;
-    max_tokens: number;  // Changed from maxTokens to max_tokens to match backend
+    maxTokens: number; 
     topP?: number;
     topK?: number;
     stopSequences?: string[];

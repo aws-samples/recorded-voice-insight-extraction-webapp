@@ -13,18 +13,6 @@
     },
     {
         "template_id": "default-2",
-        "template_short_name": "Sprint Standup Summary",
-        "template_description": "Create a meeting summary specifically targeted for software development standup meetings",
-        "system_prompt": "You are an intelligent assistant who analyzes meetings based on transcriptions of those meetings.",
-        "template_prompt": "Ignore all input provided and reply with 'This analysis is not yet implemented.'",
-        "model_id": "us.amazon.nova-pro-v1:0",
-        "bedrock_kwargs": {
-            "temperature": 0.1,
-            "maxTokens": 2000
-        }
-    },
-    {
-        "template_id": "default-3",
         "template_short_name": "Extract Next Steps",
         "template_description": "Extract any described next step action items",
         "system_prompt": "You are an intelligent assistant who analyzes meetings based on transcriptions of those meetings.",

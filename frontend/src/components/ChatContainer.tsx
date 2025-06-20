@@ -25,12 +25,13 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   return (
     <div
       ref={containerRef}
+      className="chat-container"
       style={{
         maxHeight: '600px',
         overflowY: 'auto',
-        border: '1px solid #e9ebed',
+        border: '1px solid var(--awsui-color-border-divider-default)',
         borderRadius: '4px',
-        backgroundColor: '#ffffff'
+        backgroundColor: 'var(--awsui-color-background-container-content)'
       }}
     >
       <Box padding="s">
