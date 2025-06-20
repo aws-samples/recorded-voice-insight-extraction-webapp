@@ -551,9 +551,44 @@ class ReVIEWBackendStack(NestedStack):
             runtime=_lambda.Runtime.PYTHON_3_10,
             handler="analysis.analysis-templates-lambda.lambda_handler",
             code=_lambda.Code.from_asset("lambdas"),
+            environment={
+                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
+            },
             timeout=Duration.seconds(30),
-            role=self.ddb_lambda_execution_role,  # Simple role since it doesn't need special permissions
+            role=self.ddb_lambda_execution_role,
         )
+
+        # Lambda to populate default analysis templates at deployment time
+        self.populate_default_templates_lambda = _lambda.Function(
+            self,
+            self.props["stack_name_base"] + "-PopulateDefaultTemplatesLambda",
+            function_name=f"{self.props['stack_name_base']}-PopulateDefaultTemplatesLambda",
+            description="Function to populate default analysis templates in DynamoDB",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="analysis.populate-default-templates-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            environment={
+                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
+            },
+            timeout=Duration.seconds(60),
+            role=self.ddb_lambda_execution_role,
+        )
+
+        # Create a Lambda layer with the default templates JSON file
+        self.default_templates_layer = PythonLayerVersion(
+            self,
+            "default_templates_layer",
+            entry="lambda-layers/analysis-templates-layer",  # directory containing default_analysis_templates.json
+            compatible_runtimes=[
+                _lambda.Runtime.PYTHON_3_10,
+                _lambda.Runtime.PYTHON_3_12,
+            ],
+            license="MIT-0",
+            description="Layer containing default analysis templates JSON file",
+        )
+
+        # Add the layer to the populate templates lambda
+        self.populate_default_templates_lambda.add_layers(self.default_templates_layer)
 
         # Add additional permissions to LLM Lambda role now that other Lambdas are created
         # Permission to invoke DDB Lambda for transcript retrieval
