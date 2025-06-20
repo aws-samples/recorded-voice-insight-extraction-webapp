@@ -20,9 +20,11 @@ import aws_cdk.aws_lambda as _lambda
 import aws_cdk.aws_logs as logs
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_s3_notifications as s3n
+import aws_cdk.custom_resources as cr
 from aws_cdk import Duration, RemovalPolicy, NestedStack, Aspects
 from constructs import Construct
 from aws_cdk.aws_lambda_python_alpha import PythonLayerVersion
+import json
 
 import cdk_nag
 
@@ -55,6 +57,7 @@ class ReVIEWBackendStack(NestedStack):
         self.setup_roles()
         self.setup_lambdas()
         self.setup_events()
+        self.setup_default_templates_population()
 
         # Attach cdk_nag to ensure AWS Solutions security level
         # Uncomment to check stack security before deploying
@@ -220,6 +223,7 @@ class ReVIEWBackendStack(NestedStack):
                             resources=[
                                 self.dynamodb_table.table_arn,
                                 self.bda_uuid_mapping_table.table_arn,
+                                self.analysis_templates_table.table_arn,
                             ],
                         )
                     ]
@@ -318,6 +322,7 @@ class ReVIEWBackendStack(NestedStack):
             environment={
                 "DYNAMO_TABLE_NAME": self.props["ddb_table_name"],
                 "BDA_MAP_DYNAMO_TABLE_NAME": self.props["bda_map_ddb_table_name"],
+                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
             },
             timeout=Duration.seconds(15),
             role=self.ddb_lambda_execution_role,
@@ -514,6 +519,73 @@ class ReVIEWBackendStack(NestedStack):
             role=self.subtitle_lambda_role,
         )
 
+<<<<<<< Updated upstream
+=======
+        # Analysis Templates Lambda - serves analysis templates for the frontend
+        self.analysis_templates_lambda = _lambda.Function(
+            self,
+            self.props["stack_name_base"] + "-AnalysisTemplatesLambda",
+            function_name=f"{self.props['stack_name_base']}-AnalysisTemplatesLambda",
+            description="Function for ReVIEW to serve analysis templates.",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="analysis.analysis-templates-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            environment={
+                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
+            },
+            timeout=Duration.seconds(30),
+            role=self.ddb_lambda_execution_role,
+        )
+
+        # Lambda to populate default analysis templates at deployment time
+        self.populate_default_templates_lambda = _lambda.Function(
+            self,
+            self.props["stack_name_base"] + "-PopulateDefaultTemplatesLambda",
+            function_name=f"{self.props['stack_name_base']}-PopulateDefaultTemplatesLambda",
+            description="Function to populate default analysis templates in DynamoDB",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="analysis.populate-default-templates-lambda.lambda_handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            environment={
+                "ANALYSIS_TEMPLATES_TABLE_NAME": self.props["analysis_templates_table_name"],
+            },
+            timeout=Duration.seconds(60),
+            role=self.ddb_lambda_execution_role,
+        )
+
+        # Create a Lambda layer with the default templates JSON file
+        self.default_templates_layer = PythonLayerVersion(
+            self,
+            "default_templates_layer",
+            entry="lambda-layers/analysis-templates-layer",  # directory containing default_analysis_templates.json
+            compatible_runtimes=[
+                _lambda.Runtime.PYTHON_3_10,
+                _lambda.Runtime.PYTHON_3_12,
+            ],
+            license="MIT-0",
+            description="Layer containing default analysis templates JSON file",
+        )
+
+        # Add the layer to the populate templates lambda
+        self.populate_default_templates_lambda.add_layers(self.default_templates_layer)
+
+        # Add additional permissions to LLM Lambda role now that other Lambdas are created
+        # Permission to invoke DDB Lambda for transcript retrieval
+        self.llm_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.ddb_handler_lambda.function_arn],
+            )
+        )
+        # Permission to read transcript files from S3
+        self.llm_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject"],
+                resources=[f"{self.bucket.bucket_arn}/{self.props['s3_text_transcripts_prefix']}/*"],
+            )
+        )
+
+>>>>>>> Stashed changes
     def setup_events(self):
         # Create event notification to the bucket for lambda functions
         # When an s3:ObjectCreated:* event happens in the bucket, the
@@ -585,6 +657,63 @@ class ReVIEWBackendStack(NestedStack):
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
             removal_policy=RemovalPolicy.DESTROY,
         )
+
+        # Analysis templates table to store both default and user-specific templates
+        # Partition key is user_id (with "default" for built-in templates)
+        # Sort key is template_id
+        self.analysis_templates_table = dynamodb.Table(
+            self,
+            f"{self.props['stack_name_base']}-AnalysisTemplatesTable",
+            table_name=self.props["analysis_templates_table_name"],
+            partition_key=dynamodb.Attribute(
+                name="user_id", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="template_id", type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+    def setup_default_templates_population(self):
+        """Create custom resource to populate default analysis templates"""
+        # Custom resource to populate default templates
+        self.populate_templates_custom_resource = cr.AwsCustomResource(
+            self,
+            f"{self.props['stack_name_base']}-PopulateDefaultTemplates",
+            on_create=cr.AwsSdkCall(
+                service="Lambda",
+                action="invoke",
+                parameters={
+                    "FunctionName": self.populate_default_templates_lambda.function_name,
+                    "Payload": json.dumps({
+                        "RequestType": "Create",
+                        "ResourceProperties": {}
+                    })
+                },
+                physical_resource_id=cr.PhysicalResourceId.of("populate-default-templates")
+            ),
+            on_update=cr.AwsSdkCall(
+                service="Lambda", 
+                action="invoke",
+                parameters={
+                    "FunctionName": self.populate_default_templates_lambda.function_name,
+                    "Payload": json.dumps({
+                        "RequestType": "Update",
+                        "ResourceProperties": {}
+                    })
+                }
+            ),
+            policy=cr.AwsCustomResourcePolicy.from_statements([
+                iam.PolicyStatement(
+                    actions=["lambda:InvokeFunction"],
+                    resources=[self.populate_default_templates_lambda.function_arn]
+                )
+            ])
+        )
+        
+        # Ensure the custom resource runs after the table is created
+        self.populate_templates_custom_resource.node.add_dependency(self.analysis_templates_table)
 
     def setup_cdk_nag(self):
         """Use this function to enable cdk_nag package to block deployment of possibly insecure stack elements"""
