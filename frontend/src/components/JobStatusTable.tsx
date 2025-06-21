@@ -33,7 +33,7 @@ const JobStatusTable: React.FC<JobStatusTableProps> = ({
     if (status === 'Failed') {
       return 'text-status-error' as const;
     }
-    if (status?.includes('Queue') || status?.includes('Transcribing') || status?.includes('Indexing') || status?.includes('Processing')) {
+    if (status?.includes('Queue') || status?.includes('Transcribing') || status?.includes('Indexing') || status?.includes('Processing') || status?.includes('Transcription Complete')) {
       return 'text-status-info' as const;
     }
     return undefined; // Use default color
