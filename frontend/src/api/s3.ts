@@ -34,8 +34,12 @@ export async function getMediaPresignedUrl(
     const response = await httpClient.post<string>('/s3-presigned', requestBody);
     console.log(`✅ Received presigned URL response:`, response.data);
     
-    // The backend returns the presigned URL directly as a string, not in a 'url' field
-    return typeof response.data === 'string' ? response.data : response.data;
+    // Ensure we return a valid string URL
+    if (typeof response.data === 'string' && response.data.trim() !== '') {
+      return response.data;
+    } else {
+      throw new Error('Invalid presigned URL received from server');
+    }
   } catch (error) {
     console.error(`❌ Presigned URL request failed:`, error);
     throw new Error(`Failed to get presigned URL: ${error}`);
