@@ -1,4 +1,4 @@
-stack_name_base: "kazureview"
+stack_name_base: "review-app"
 
 embedding:
   model_id: "amazon.titan-embed-text-v2:0"
