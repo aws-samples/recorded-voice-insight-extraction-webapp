@@ -108,6 +108,13 @@ components:
             - create_ddb_entry
             - retrieve_media_name_by_jobid
             - delete_ddb_entry
+            - store_bda_mapping
+            - retrieve_jobid_and_username_by_bda_uuid
+            - get_analysis_templates
+            - create_analysis_template
+            - update_analysis_template
+            - delete_analysis_template
+            - get_analysis_template_by_id
         username:
           type: string
           description: Username of the current user
@@ -155,6 +162,42 @@ components:
           type: string
           description: URI of the media file (for create_ddb_entry)
           example: "s3://bucket/recordings/user123/meeting_recording.mp4"
+        bda_uuid:
+          type: string
+          description: BDA-assigned UUID (for BDA mapping operations)
+          example: "bda-550e8400-e29b-41d4-a716-446655440000"
+        user_id:
+          type: string
+          description: User ID for analysis template operations
+          example: "user123"
+        template_short_name:
+          type: string
+          description: Short name for analysis template (for create/update operations)
+          example: "Meeting Summary"
+        template_description:
+          type: string
+          description: Description for analysis template (for create/update operations)
+          example: "Generates a comprehensive summary of meeting discussions"
+        system_prompt:
+          type: string
+          description: System prompt for analysis template (for create/update operations)
+          example: "You are an intelligent assistant who analyzes transcripts."
+        template_prompt:
+          type: string
+          description: Template prompt for analysis template (for create/update operations)
+          example: "Please provide a summary of the following transcript: {transcript}"
+        model_id:
+          type: string
+          description: Bedrock model ID for analysis template (for create/update operations)
+          example: "us.amazon.nova-pro-v1:0"
+        bedrock_kwargs:
+          type: object
+          description: Bedrock parameters for analysis template (for create/update operations)
+          example: {"temperature": 0.1, "maxTokens": 2000}
+        updates:
+          type: object
+          description: Updates object for template modification (for update_analysis_template)
+          example: {"template_short_name": "Updated Summary", "template_description": "Updated description"}
     
     DDBResponse:
       oneOf:
@@ -308,6 +351,129 @@ components:
       description: VTT subtitle content
       example: "WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nHello, welcome to the meeting.\n\n00:00:06.000 --> 00:00:10.000\nLet's discuss the agenda for today."
     
+    # Analysis Templates Request/Response
+    AnalysisTemplate:
+      type: object
+      properties:
+        user_id:
+          type: string
+          description: User ID (username or 'default' for built-in templates)
+          example: "user123"
+        template_id:
+          type: string
+          description: Unique template identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        template_short_name:
+          type: string
+          description: Short name for the template
+          example: "Meeting Summary"
+        template_description:
+          type: string
+          description: Description of what the template does
+          example: "Generates a comprehensive summary of meeting discussions"
+        system_prompt:
+          type: string
+          description: System prompt for the LLM
+          example: "You are an intelligent assistant who analyzes transcripts and other information extracted from audio and video files."
+        template_prompt:
+          type: string
+          description: Template prompt with placeholders
+          example: "Please provide a summary of the following meeting transcript: {transcript}"
+        model_id:
+          type: string
+          description: Bedrock model ID to use
+          example: "us.amazon.nova-pro-v1:0"
+        bedrock_kwargs:
+          type: object
+          description: Additional parameters for Bedrock
+          properties:
+            temperature:
+              type: number
+              example: 0.1
+            maxTokens:
+              type: integer
+              example: 2000
+        created_at:
+          type: string
+          description: Template creation timestamp
+          example: "2024-04-29T12:34:56Z"
+        updated_at:
+          type: string
+          description: Template last update timestamp
+          example: "2024-04-29T12:34:56Z"
+    
+    CreateAnalysisTemplateRequest:
+      type: object
+      required:
+        - template_short_name
+        - template_description
+        - template_prompt
+      properties:
+        template_short_name:
+          type: string
+          description: Short name for the template
+          example: "Meeting Summary"
+        template_description:
+          type: string
+          description: Description of what the template does
+          example: "Generates a comprehensive summary of meeting discussions"
+        system_prompt:
+          type: string
+          description: System prompt for the LLM (optional, defaults to standard prompt)
+          example: "You are an intelligent assistant who analyzes transcripts and other information extracted from audio and video files."
+        template_prompt:
+          type: string
+          description: Template prompt with placeholders
+          example: "Please provide a summary of the following meeting transcript: {transcript}"
+        model_id:
+          type: string
+          description: Bedrock model ID to use (optional, defaults to configured model)
+          example: "us.amazon.nova-pro-v1:0"
+        bedrock_kwargs:
+          type: object
+          description: Additional parameters for Bedrock (optional)
+          properties:
+            temperature:
+              type: number
+              example: 0.1
+            maxTokens:
+              type: integer
+              example: 2000
+    
+    UpdateAnalysisTemplateRequest:
+      type: object
+      properties:
+        template_short_name:
+          type: string
+          description: Short name for the template
+          example: "Meeting Summary"
+        template_description:
+          type: string
+          description: Description of what the template does
+          example: "Generates a comprehensive summary of meeting discussions"
+        system_prompt:
+          type: string
+          description: System prompt for the LLM
+          example: "You are an intelligent assistant who analyzes transcripts and other information extracted from audio and video files."
+        template_prompt:
+          type: string
+          description: Template prompt with placeholders
+          example: "Please provide a summary of the following meeting transcript: {transcript}"
+        model_id:
+          type: string
+          description: Bedrock model ID to use
+          example: "us.amazon.nova-pro-v1:0"
+        bedrock_kwargs:
+          type: object
+          description: Additional parameters for Bedrock
+          properties:
+            temperature:
+              type: number
+              example: 0.1
+            maxTokens:
+              type: integer
+              example: 2000
+
     # WebSocket Message Schemas
     WebSocketMessage:
       type: object
@@ -500,6 +666,54 @@ paths:
                   action: "delete_ddb_entry"
                   job_id: "550e8400-e29b-41d4-a716-446655440000"
                   username: "user123"
+              storeBDAMapping:
+                summary: Store BDA UUID mapping
+                value:
+                  action: "store_bda_mapping"
+                  job_id: "550e8400-e29b-41d4-a716-446655440000"
+                  bda_uuid: "bda-550e8400-e29b-41d4-a716-446655440000"
+                  username: "user123"
+              retrieveBDAMapping:
+                summary: Retrieve job ID and username by BDA UUID
+                value:
+                  action: "retrieve_jobid_and_username_by_bda_uuid"
+                  bda_uuid: "bda-550e8400-e29b-41d4-a716-446655440000"
+              getAnalysisTemplates:
+                summary: Get analysis templates for user
+                value:
+                  action: "get_analysis_templates"
+                  user_id: "user123"
+              createAnalysisTemplate:
+                summary: Create analysis template
+                value:
+                  action: "create_analysis_template"
+                  user_id: "user123"
+                  template_id: "550e8400-e29b-41d4-a716-446655440000"
+                  template_short_name: "Meeting Summary"
+                  template_description: "Generates meeting summaries"
+                  system_prompt: "You are an intelligent assistant."
+                  template_prompt: "Summarize this transcript: {transcript}"
+                  model_id: "us.amazon.nova-pro-v1:0"
+                  bedrock_kwargs: {"temperature": 0.1, "maxTokens": 2000}
+              updateAnalysisTemplate:
+                summary: Update analysis template
+                value:
+                  action: "update_analysis_template"
+                  user_id: "user123"
+                  template_id: "550e8400-e29b-41d4-a716-446655440000"
+                  updates: {"template_short_name": "Updated Summary"}
+              deleteAnalysisTemplate:
+                summary: Delete analysis template
+                value:
+                  action: "delete_analysis_template"
+                  user_id: "user123"
+                  template_id: "550e8400-e29b-41d4-a716-446655440000"
+              getAnalysisTemplateById:
+                summary: Get specific analysis template
+                value:
+                  action: "get_analysis_template_by_id"
+                  user_id: "user123"
+                  template_id: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         '200':
           description: Successful response
@@ -694,3 +908,287 @@ paths:
                   message:
                     type: string
                     example: "Throttling error: RequestLimitExceeded"
+
+  /analysis-templates:
+    get:
+      summary: Retrieve analysis templates
+      description: |
+        Retrieve all analysis templates available to the user.
+        This includes both default templates (built-in) and user-created custom templates.
+      security:
+        - cognitoAuth: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnalysisTemplate'
+              example: [
+                {
+                  "user_id": "default",
+                  "template_id": "1",
+                  "template_short_name": "Meeting Summary",
+                  "template_description": "Generates a comprehensive summary of meeting discussions",
+                  "system_prompt": "You are an intelligent assistant who analyzes transcripts and other information extracted from audio and video files.",
+                  "template_prompt": "Please provide a summary of the following meeting transcript: {transcript}",
+                  "model_id": "us.amazon.nova-pro-v1:0",
+                  "bedrock_kwargs": {"temperature": 0.1, "maxTokens": 2000},
+                  "created_at": "2024-04-29T12:34:56Z",
+                  "updated_at": "2024-04-29T12:34:56Z"
+                },
+                {
+                  "user_id": "user123",
+                  "template_id": "550e8400-e29b-41d4-a716-446655440000",
+                  "template_short_name": "Custom Action Items",
+                  "template_description": "Extract action items and assign responsibilities",
+                  "system_prompt": "You are an intelligent assistant who analyzes transcripts and other information extracted from audio and video files.",
+                  "template_prompt": "Extract all action items from this meeting transcript and identify who is responsible: {transcript}",
+                  "model_id": "us.amazon.nova-pro-v1:0",
+                  "bedrock_kwargs": {"temperature": 0.1, "maxTokens": 2000},
+                  "created_at": "2024-04-29T14:20:30Z",
+                  "updated_at": "2024-04-29T14:20:30Z"
+                }
+              ]
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    post:
+      summary: Create analysis template
+      description: |
+        Create a new custom analysis template for the authenticated user.
+        Templates can be used to generate consistent analysis outputs from transcripts.
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAnalysisTemplateRequest'
+            example:
+              template_short_name: "Custom Action Items"
+              template_description: "Extract action items and assign responsibilities"
+              template_prompt: "Extract all action items from this meeting transcript and identify who is responsible: {transcript}"
+              system_prompt: "You are an intelligent assistant who analyzes transcripts and other information extracted from audio and video files."
+              model_id: "us.amazon.nova-pro-v1:0"
+              bedrock_kwargs: {"temperature": 0.1, "maxTokens": 2000}
+      responses:
+        '200':
+          description: Template created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisTemplate'
+              example:
+                user_id: "user123"
+                template_id: "550e8400-e29b-41d4-a716-446655440000"
+                template_short_name: "Custom Action Items"
+                template_description: "Extract action items and assign responsibilities"
+                system_prompt: "You are an intelligent assistant who analyzes transcripts and other information extracted from audio and video files."
+                template_prompt: "Extract all action items from this meeting transcript and identify who is responsible: {transcript}"
+                model_id: "us.amazon.nova-pro-v1:0"
+                bedrock_kwargs: {"temperature": 0.1, "maxTokens": 2000}
+                created_at: "2024-04-29T14:20:30Z"
+                updated_at: "2024-04-29T14:20:30Z"
+        '400':
+          description: Bad request (missing required fields or invalid JSON)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 400
+                body: "Missing required field: template_short_name"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict (template already exists)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /analysis-templates/{template_id}:
+    get:
+      summary: Retrieve specific analysis template
+      description: |
+        Retrieve a specific analysis template by ID.
+        Users can only access their own templates and default templates.
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          description: The unique identifier of the template
+          schema:
+            type: string
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisTemplate'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    put:
+      summary: Update analysis template
+      description: |
+        Update an existing custom analysis template.
+        Only user-created templates can be updated (not default templates).
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          description: The unique identifier of the template to update
+          schema:
+            type: string
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAnalysisTemplateRequest'
+            example:
+              template_short_name: "Updated Action Items"
+              template_description: "Extract action items, assign responsibilities, and set deadlines"
+              template_prompt: "Extract all action items from this meeting transcript, identify who is responsible, and suggest deadlines: {transcript}"
+      responses:
+        '200':
+          description: Template updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisTemplate'
+        '400':
+          description: Bad request (invalid JSON)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (cannot update default templates)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 403
+                body: "Cannot update default templates"
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    delete:
+      summary: Delete analysis template
+      description: |
+        Delete a custom analysis template.
+        Only user-created templates can be deleted (not default templates).
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          description: The unique identifier of the template to delete
+          schema:
+            type: string
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Template deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Template deleted successfully"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden (cannot delete default templates)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                statusCode: 403
+                body: "Cannot delete default templates"
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
