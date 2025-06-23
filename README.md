@@ -37,7 +37,7 @@ Additionally, this application includes the capability to use an LLM to analyze 
   - Stream a continuous response back to the frontend for an optimal user experience.
   - Respond in the same language as the question asked regardless the language of the source media, given the LLM used knows that language.
   - Display subtitles during video playback in any language, regardless of the language of the video.
-- Provided analysis templates allow for easy GenAI summarization, document generation, next-steps and blockers identifications, and more.
+- Customizable analysis templates allow for easy GenAI summarization, document generation, next-steps and blockers identifications, and more. Users can create, modify, and manage their own analysis templates through the web interface.
 - Complete frontend/backend separation via API Gateway to enable users to replace the React frontend if desired. REST API primarily used, along with websockets for streaming responses.
 
 Here is an overview of the architecture for the solution.
@@ -57,7 +57,7 @@ Here is an overview of the architecture for the solution.
 * **(2)** The React page authenticates users through Cognito, and uses that authentication to enable access to API Gateway APIs.
 * **(3 and 4)** The frontend uploads media files to an S3 bucket by first requesting a presigned URL and then POSTing the file to it. The media files then automatically transcribed and/or processed with Bedrock Data Automation. Once transcripts are created in s3, an EventBridge notification triggers an AWS Step Functions workflow to asynchronously sync the transcripts (and track the sync job status) with a Bedrock Knowledge Base. The Knowledge Base handles chunking, embedding, and later retrieval. 
 * **(5)** The application functionality leverages Large Language Models in Bedrock to analyze transcripts (or chunks of transcripts retrieved from the knowledge base **(6)**) and identify timestamps at which to replay media to the users. This pathway is also used for translating subtitles from one language to another.
-* **(7)** DynamoDB is used to track job processing statuses and cache previous LLM responses.
+* **(7)** DynamoDB is used to track job processing statuses and store analysis templates.
 
 Here are the details of the [AWS Step Functions](https://aws.amazon.com/step-functions/) workflow for knowledge base sync and checking sync status, which gets triggered initially via [Amazon Event Bridge](https://aws.amazon.com/eventbridge/) by a transcript appearing in s3:
 <p align="center">
@@ -167,7 +167,7 @@ At a high level, the steps to replace the frontend are:
 
 1. Determine an OAuth provider or other way to authorize the new frontend to access the API Gateway via bearer token. Currently, Cognito is used.
 2. Connect the new frontend to the `/s3-presigned` endpoint. This endpoint will generate presigned urls for the frontend to `POST` and `GET` files to and from s3.
-3. Connect the new frontend to the three `POST` REST API endpoints: `/llm`, `/ddb`, `/kb-job-deletion` to access large language models, dynamodb, and knowledge base job deletion respectively.
+3. Connect the new frontend to the REST API endpoints: `/llm`, `/ddb`, `/s3-presigned`, `/kb-job-deletion`, `/subtitles`, and `/analysis-templates` to access large language models, database operations, file management, knowledge base operations, subtitle services, and analysis template management respectively.
 4. Connect to the WebSocket API for streaming responses from the knowledge base queries. This is essential for the chat functionality to provide real-time streaming responses with citations.
 5. Leverage the `FullQAnswer` pydantic model (defined in `infra/lambdas/schemas/qa_response.py`) to parse the LLM responses in the chat application. This model includes citations which reference specific timestamps in media files.
 
