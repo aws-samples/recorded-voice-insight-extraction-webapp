@@ -70,6 +70,7 @@ const HomePage: React.FC = () => {
                         variant="primary"
                         onClick={handleGetStarted}
                         iconName="upload"
+                        className="hero-cta-button"
                       >
                         Get Started - Upload Files
                       </Button>

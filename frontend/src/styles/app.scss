@@ -39,6 +39,32 @@ body.awsui-dark-mode {
   overflow: hidden;
 }
 
+/* Enhanced CTA button styling */
+.hero-cta-button {
+  transition: all 0.2s ease-in-out;
+  background-color: #0073bb !important;
+  border-color: #0073bb !important;
+  color: white !important;
+}
+
+.hero-cta-button:hover {
+  transform: translateY(-1px);
+  background-color: #005a9e !important;
+  border-color: #005a9e !important;
+  color: white !important;
+}
+
+.hero-cta-button:active {
+  transform: translateY(0);
+  color: white !important;
+}
+
+/* Ensure button text and icon are white */
+.hero-cta-button span,
+.hero-cta-button .awsui-icon {
+  color: white !important;
+}
+
 .hero-overlay {
   position: absolute;
   top: 0;
