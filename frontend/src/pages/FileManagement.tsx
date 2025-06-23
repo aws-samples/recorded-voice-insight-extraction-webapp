@@ -196,8 +196,14 @@ const FileManagementPage: React.FC = () => {
         });
         setLastUploadedFile(file.name);
         setFiles([]);
-        // Refresh jobs table after successful upload
+        
+        // Refresh jobs table immediately after successful upload
         fetchJobs(false);
+        
+        // Additional refresh after 1 second to ensure the new job appears
+        setTimeout(() => {
+          fetchJobs(false);
+        }, 1000);
       }
     } catch (error) {
       console.error('Upload failed:', error);
