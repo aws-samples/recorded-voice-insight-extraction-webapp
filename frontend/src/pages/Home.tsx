@@ -15,6 +15,7 @@ import {
 } from '@cloudscape-design/components';
 import { useNavigate } from 'react-router-dom';
 import BaseAppLayout from '../components/base-app-layout';
+import '../styles/app.scss';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -40,7 +41,7 @@ const HomePage: React.FC = () => {
               <Header
                 variant="h1"
               >
-                Welcome to <span style={{ color: "#bd6500" }}>ReVIEW</span>
+                Welcome to <span style={{ color: "#F98125" }}>ReVIEW</span>
               </Header>
             </Box>
           }
@@ -48,26 +49,34 @@ const HomePage: React.FC = () => {
           <SpaceBetween size="xl">
             {/* Main Introduction */}
             <Container>
-              <SpaceBetween size="m">
-                <Box textAlign="center">
-                  <Box variant="h1" padding={{ bottom: "s" }}>
-                    <span style={{ color: "#bd6500", fontWeight: "bold" }}>Re</span>corded <span style={{ color: "#bd6500", fontWeight: "bold" }}>V</span>oice <span style={{ color: "#bd6500", fontWeight: "bold" }}>I</span>nsight <span style={{ color: "#bd6500", fontWeight: "bold" }}>E</span>xtraction <span style={{ color: "#bd6500", fontWeight: "bold" }}>W</span>ebapp
-                  </Box>
-                  <Box variant="h4" color="text-body-secondary">
-                    Transform your audio and video recordings into actionable insights using AI
-                  </Box>
-                </Box>
+              <div className="hero-background">
+                {/* Overlay for better text readability */}
+                <div className="hero-overlay" />
+                
+                {/* Content */}
+                <div className="hero-content">
+                  <SpaceBetween size="m">
+                    <Box textAlign="center">
+                      <Box variant="h1" padding={{ bottom: "s" }}>
+                        <span style={{ color: "#F98125", fontWeight: "bold" }}>Re</span><span style={{ color: "white" }}>corded </span><span style={{ color: "#F98125", fontWeight: "bold" }}>V</span><span style={{ color: "white" }}>oice </span><span style={{ color: "#F98125", fontWeight: "bold" }}>I</span><span style={{ color: "white" }}>nsight </span><span style={{ color: "#F98125", fontWeight: "bold" }}>E</span><span style={{ color: "white" }}>xtraction </span><span style={{ color: "#F98125", fontWeight: "bold" }}>W</span><span style={{ color: "white" }}>ebapp</span>
+                      </Box>
+                      <div style={{ color: "rgba(255, 255, 255, 0.9)", fontSize: "1.125rem", fontWeight: "400", lineHeight: "1.4" }}>
+                        Transform your audio and video recordings into actionable insights using AI
+                      </div>
+                    </Box>
 
-                <Box textAlign="center">
-                  <Button
-                    variant="primary"
-                    onClick={handleGetStarted}
-                    iconName="upload"
-                  >
-                    Get Started - Upload Files
-                  </Button>
-                </Box>
-              </SpaceBetween>
+                    <Box textAlign="center">
+                      <Button
+                        variant="primary"
+                        onClick={handleGetStarted}
+                        iconName="upload"
+                      >
+                        Get Started - Upload Files
+                      </Button>
+                    </Box>
+                  </SpaceBetween>
+                </div>
+              </div>
             </Container>
 
             {/* Feature Overview */}

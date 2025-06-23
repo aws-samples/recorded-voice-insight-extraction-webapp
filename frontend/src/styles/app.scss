@@ -23,3 +23,64 @@ body {
 body.awsui-dark-mode {
   background-color: #0e1b2a;
 }
+
+/* Hero section background styles */
+.hero-background {
+  background-image: url('/images/ReVIEW-UI-banner.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  min-height: 230px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(14, 27, 42, 0.4);
+  border-radius: 8px;
+}
+
+/* Dark mode overlay - same as light mode now */
+body.awsui-dark-mode .hero-overlay {
+  background-color: rgba(14, 27, 42, 0.4);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+/* Force white text in hero section for both light and dark modes */
+.hero-content .awsui-util-color-text-body-default,
+.hero-content [data-awsui-referrer-id] {
+  color: white !important;
+}
+
+/* Ensure subtitle text is white */
+.hero-content .awsui-util-color-text-body-secondary {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .hero-background {
+    min-height: 180px;
+    background-position: center top;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-background {
+    min-height: 150px;
+  }
+}
