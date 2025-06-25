@@ -163,6 +163,29 @@ class PromptBuilder:
 
 class ResponseProcessor:
     @staticmethod
+    def hhmm_to_seconds(time_str: str) -> int:
+        """Convert 'hh:mm:ss' format to integer seconds. Throws exception for invalid formats."""
+        if not isinstance(time_str, str):
+            raise ValueError(f"Expected string timestamp, got {type(time_str)}: {time_str}")
+        
+        parts = time_str.split(':')
+        if len(parts) != 3:
+            raise ValueError(f"Invalid timestamp format. Expected 'hh:mm:ss', got: {time_str}")
+        
+        try:
+            hours, minutes, seconds = map(int, parts)
+        except ValueError:
+            raise ValueError(f"Invalid timestamp format. Non-integer components in: {time_str}")
+        
+        if hours < 0 or minutes < 0 or seconds < 0:
+            raise ValueError(f"Invalid timestamp format. Negative values not allowed: {time_str}")
+        
+        if minutes >= 60 or seconds >= 60:
+            raise ValueError(f"Invalid timestamp format. Minutes/seconds must be < 60: {time_str}")
+        
+        return hours * 3600 + minutes * 60 + seconds
+
+    @staticmethod
     def postprocess_generation(generation_response_string: str) -> dict:
         pattern = r"<json>\s*(.*?)\s*</json>"
         matches = re.findall(pattern, generation_response_string, re.DOTALL)
@@ -171,7 +194,15 @@ class ResponseProcessor:
 
         match = matches[0].strip("\n")
         try:
-            return json.loads(match)
+            result = json.loads(match)
+            # Convert timestamps from hh:mm:ss to integer seconds
+            if "answer" in result and isinstance(result["answer"], list):
+                for answer in result["answer"]:
+                    if "citations" in answer and isinstance(answer["citations"], list):
+                        for citation in answer["citations"]:
+                            if "timestamp" in citation:
+                                citation["timestamp"] = ResponseProcessor.hhmm_to_seconds(citation["timestamp"])
+            return result
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON data: {e}")
 
@@ -233,7 +264,7 @@ class ResponseProcessor:
                                     valid_citations.append(
                                         {
                                             "media_name": citation["media_name"],
-                                            "timestamp": citation["timestamp"],
+                                            "timestamp": ResponseProcessor.hhmm_to_seconds(citation["timestamp"]),
                                         }
                                     )
                             if valid_citations:
@@ -339,7 +370,7 @@ class ResponseProcessor:
                                 valid_citations.append(
                                     {
                                         "media_name": citation["media_name"],
-                                        "timestamp": citation["timestamp"],
+                                        "timestamp": ResponseProcessor.hhmm_to_seconds(citation["timestamp"]),
                                     }
                                 )
                         if valid_citations:
