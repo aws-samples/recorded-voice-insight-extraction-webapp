@@ -128,7 +128,7 @@ const FileManagementPage: React.FC = () => {
 
     // Cleanup interval on component unmount or when username changes
     return () => clearInterval(interval);
-  }, [username, jobsLoading, isManualRefresh]);
+  }, [username]); // Remove jobsLoading and isManualRefresh from dependencies
 
   // File Upload Handlers
   const handleFileChange: FileUploadProps['onChange'] = ({ detail }) => {
@@ -197,13 +197,11 @@ const FileManagementPage: React.FC = () => {
         setLastUploadedFile(file.name);
         setFiles([]);
         
-        // Refresh jobs table immediately after successful upload
-        fetchJobs(false);
-        
-        // Additional refresh after 1 second to ensure the new job appears
+        // Refresh jobs table after successful upload
+        // Wait a bit longer for backend to process and create DDB entry
         setTimeout(() => {
           fetchJobs(false);
-        }, 1000);
+        }, 2000); // 2 seconds instead of immediate + 1 second
       }
     } catch (error) {
       console.error('Upload failed:', error);
