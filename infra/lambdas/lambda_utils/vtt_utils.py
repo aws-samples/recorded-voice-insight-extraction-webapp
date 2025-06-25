@@ -46,19 +46,44 @@ def time_to_seconds(time_str):
 
 
 def build_timestamped_segmented_transcript(vtt_string: str) -> str:
-    """Convert vtt from Amazon Transcribe into a string that
-    has integer timestamps easy for the LLM to comprehend
+    """
+    Convert vtt from Amazon Transcribe into a string that
+    has [hh:mm:ss] timestamps easy for the LLM to comprehend.
+    Hours, mins, and seconds should always be 2 digits, leading with 0 as necessary.
+    Hours will never be above 99. Mins and seconds will never be above 59.
 
-    [1] Hello.\n
-    [3] Thanks, for having me.\n
-    [10] This is a transcript!\n
+    Args:
+        vtt_string (str): WebVTT formatted string from Amazon Transcribe
+
+    Returns:
+        str: Formatted transcript with [hh:mm:ss] timestamps
+
+    Example:
+        Input: WebVTT with captions at various timestamps
+        Output:
+            [00:00:00] Hello.
+            [00:00:03] Thanks, for having me.
+            [03:41:32] This is a transcript!
     """
 
     # Convert vtt_string into webvtt object
     vtt = webvtt.from_string(vtt_string)
-    return "\n".join(
-        [f"[{int(time_to_seconds(caption.start))}] {caption.text}" for caption in vtt]
-    )
+
+    result_lines = []
+    for caption in vtt:
+        # Convert start time to total seconds
+        total_seconds = int(time_to_seconds(caption.start))
+
+        # Convert to hours, minutes, seconds
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+
+        # Format as [hh:mm:ss]
+        timestamp = f"[{hours:02d}:{minutes:02d}:{seconds:02d}]"
+        result_lines.append(f"{timestamp} {caption.text}")
+
+    return "\n".join(result_lines)
 
 
 def bda_output_to_vtt(bda_output: dict) -> str:

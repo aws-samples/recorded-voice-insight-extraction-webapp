@@ -43,14 +43,12 @@ Additionally, this application includes the capability to use an LLM to analyze 
 Here is an overview of the architecture for the solution.
 
 Below is a screenshot of the chat functionality. Here, the user asked "What are Hyperpods" to a collection of uploaded videos of public AWS presentations. Since one of the videos mentioned the announcement of SageMaker HyperPods, ReVIEW is able to answer and provide several citations throughout its answer (left). When hovering over a citation, the relevant video is auto played at the relevant timestamp (right). This is the critical user experience that allows the users to verify accuracy of LLM-generated answers for themselves.
-<div style="display: flex; justify-content: space-between; align-items: center;">
-  <div style="flex: 1; padding-right: 10px;">
-    <img src="diagram/ReVIEW-chat-screenshot-20250623-left.png" alt="chat_screenshot" width="100%">
-  </div>
-  <div style="flex: 1; padding-left: 10px;">
-    <img src="diagram/ReVIEW-chat-screenshot-20250623-right.png" alt="chat_screenshot" width="100%">
-  </div>
-</div>
+<table>
+  <tr>
+    <td width="50%"><img src="diagram/ReVIEW-chat-screenshot-20250623-left.png" alt="chat_screenshot" width="100%"></td>
+    <td width="50%"><img src="diagram/ReVIEW-chat-screenshot-20250623-right.png" alt="chat_screenshot" width="100%"></td>
+  </tr>
+</table>
 There is also the ability for users to display subtitles to the video in any language, which completely removes the barrier from people trying to understand videos which were not recorded in their native language.
 
 
