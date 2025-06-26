@@ -153,7 +153,7 @@ def create_index_with_retries(oss_http_client, index_name, request_body):
 
 def delete_index_if_present(oss_http_client, index_name):
     try:
-        response = oss_http_client.indices.delete(index=index_name)
+        response = oss_http_client.indices.delete(index_name)
         logger.info(response)
         logger.info("Deleted index {}, sleeping for 1 min".format(index_name))
         sleep(sleep_1min())

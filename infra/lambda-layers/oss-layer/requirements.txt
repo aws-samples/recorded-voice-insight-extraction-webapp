@@ -2,4 +2,4 @@ aws-lambda-powertools
 boto3
 requests
 requests-aws4auth
-opensearch-py
+opensearch-py==2.4.2
