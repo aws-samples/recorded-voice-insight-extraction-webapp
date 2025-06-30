@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/compare/main...develop)
 
+## [1.3.1](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/releases/tag/v1.3.1) - 2025-06-30
+
+### ✨ New Features
+- Replaced [seconds] time format in all LLM prompts to enable chatbot to answer questions like "summarize what happens in the first 15 minutes" without having to do internal math converting 15 minutes to 900 seconds.
+
+### 🐛 Bug Fixes
+- Bug fix related to opensearch py library updating without backwards compatibility ([this issue](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/issues/7)).
+
 ## [1.3.0](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/releases/tag/v1.3.0) - 2025-06-23
 
 ### 🚀 Major Architecture Changes
