@@ -22,6 +22,20 @@ export const urlEncodeFilename = (filename: string): string => {
 };
 
 /**
+ * URL decode a filename using decodeURIComponent
+ * @param filename The URL-encoded filename to decode
+ * @returns The decoded filename
+ */
+export const urlDecodeFilename = (filename: string): string => {
+  try {
+    return decodeURIComponent(filename);
+  } catch (error) {
+    // If decoding fails, return original filename
+    return filename;
+  }
+};
+
+/**
  * Get the list of valid file extensions as a string for display
  * @returns Comma-separated string of valid extensions
  */

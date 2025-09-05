@@ -12,6 +12,7 @@ import {
   Alert,
 } from '@cloudscape-design/components';
 import { Job } from '../types/job';
+import { urlDecodeFilename } from '../utils/fileUtils';
 
 interface JobStatusTableProps {
   jobs: Job[];
@@ -43,7 +44,7 @@ const JobStatusTable: React.FC<JobStatusTableProps> = ({
     {
       id: 'media_name',
       header: 'Media Name',
-      cell: (item: Job) => item.media_name || '-',
+      cell: (item: Job) => urlDecodeFilename(item.media_name || '-'),
       sortingField: 'media_name',
     },
     {

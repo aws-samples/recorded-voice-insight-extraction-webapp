@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ProcessedCitation, formatTimestamp } from '../utils/citationUtils';
+import { urlDecodeFilename } from '../utils/fileUtils';
 
 interface MarkdownWithCitationsProps {
   content: string;
@@ -94,7 +95,7 @@ const MarkdownWithCitations: React.FC<MarkdownWithCitationsProps> = ({
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        title={`Hover to preview: ${citation.media_name} at ${formatTimestamp(citation.timestamp)}`}
+        title={`Hover to preview: ${urlDecodeFilename(citation.media_name)} at ${formatTimestamp(citation.timestamp)}`}
       >
         {citationNumber}
       </button>

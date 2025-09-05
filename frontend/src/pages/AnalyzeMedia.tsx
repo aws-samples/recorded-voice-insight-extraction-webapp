@@ -16,6 +16,7 @@ import {
   Input,
 } from '@cloudscape-design/components';
 import { useAnalysisApi } from '../hooks/useAnalysisApi';
+import { urlDecodeFilename } from '../utils/fileUtils';
 import useHttp from '../hooks/useHttp';
 import { 
   AnalysisPageState,
@@ -162,7 +163,7 @@ export const AnalyzeMedia: React.FC = () => {
 
   // Prepare options for select components
   const mediaOptions = state.completedJobs.map(job => ({
-    label: job.media_name,
+    label: urlDecodeFilename(job.media_name),
     value: job.media_name
   }));
 

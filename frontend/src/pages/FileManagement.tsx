@@ -24,7 +24,7 @@ import JobStatusTable from '../components/JobStatusTable';
 import { uploadToS3 } from '../api/upload';
 import { deleteFileByJobId } from '../api/fileManagement';
 import { useAnalysisApi } from '../hooks/useAnalysisApi';
-import { checkValidFileExtension, urlEncodeFilename, getValidExtensionsString } from '../utils/fileUtils';
+import { checkValidFileExtension, urlEncodeFilename, urlDecodeFilename, getValidExtensionsString } from '../utils/fileUtils';
 import { Job } from '../types/job';
 
 const FileManagementPage: React.FC = () => {
@@ -223,7 +223,7 @@ const FileManagementPage: React.FC = () => {
   // File Management Handlers
   const fileOptions: MultiselectProps.Option[] = jobs
     .map(job => ({
-      label: job.media_name,
+      label: urlDecodeFilename(job.media_name),
       value: job.media_name,
       description: `Status: ${job.job_status} | Created: ${job.job_creation_time}`,
     }))
@@ -259,9 +259,10 @@ const FileManagementPage: React.FC = () => {
         const job = jobs.find(j => j.media_name === mediaName);
         
         if (job) {
+          const decodedName = urlDecodeFilename(mediaName);
           setFileManagementAlert({
             type: 'info',
-            message: `Deleting ${mediaName}...`,
+            message: `Deleting ${decodedName}...`,
           });
           
           await deleteFileByJobId(job.UUID, username);
