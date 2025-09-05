@@ -169,13 +169,12 @@ const FileManagementPage: React.FC = () => {
     }
 
     const urlEncodedFilename = urlEncodeFilename(file.name);
-    const isRenamed = urlEncodedFilename !== file.name;
 
     setUploading(true);
     setUploadProgress(0);
     setUploadStatus({
       type: 'info',
-      message: `${isRenamed ? `Renaming file to ${urlEncodedFilename}... ` : ''}Uploading file ${urlEncodedFilename}...`,
+      message: `Uploading file ${file.name}...`,
     });
 
     try {
@@ -192,7 +191,7 @@ const FileManagementPage: React.FC = () => {
         const analysisType = useBda ? 'Bedrock Data Automation analysis' : 'transcription';
         setUploadStatus({
           type: 'success',
-          message: `${urlEncodedFilename} successfully uploaded and submitted for ${analysisType}.`,
+          message: `${file.name} successfully uploaded and submitted for ${analysisType}.`,
         });
         setLastUploadedFile(file.name);
         setFiles([]);
