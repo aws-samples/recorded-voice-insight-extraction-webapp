@@ -170,12 +170,14 @@ class ReVIEWBackendStack(NestedStack):
                 "S3Write": iam.PolicyDocument(
                     statements=[
                         iam.PolicyStatement(
-                            actions=["s3:PutObject"],
+                            actions=["s3:PutObject", "s3:CopyObject"],
                             resources=[
                                 f"{self.bucket.bucket_arn}/{self.props['s3_transcripts_prefix']}/*",
                                 f"{self.bucket.bucket_arn}/{self.props['s3_text_transcripts_prefix']}/*",
                                 f"{self.bucket.bucket_arn}/{self.props['s3_bda_raw_output_prefix']}/*",
                                 f"{self.bucket.bucket_arn}/{self.props['s3_bda_processed_output_prefix']}/*",
+                                f"{self.bucket.bucket_arn}/{self.props['s3_bda_recordings_prefix']}/*",
+                                f"{self.bucket.bucket_arn}/bda-processing/*",
                             ],
                         )
                     ]
@@ -519,6 +521,7 @@ class ReVIEWBackendStack(NestedStack):
                 "RECORDINGS_PREFIX": self.props["s3_recordings_prefix"],
                 "BDA_RECORDINGS_PREFIX": self.props["s3_bda_recordings_prefix"],
                 "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
+                "DDB_LAMBDA_NAME": self.ddb_handler_lambda.function_name,
             },
             timeout=Duration.seconds(30),
             role=self.presigned_url_lambda_role,
@@ -610,6 +613,14 @@ class ReVIEWBackendStack(NestedStack):
                 resources=[
                     f"{self.bucket.bucket_arn}/{self.props['s3_text_transcripts_prefix']}/*"
                 ],
+            )
+        )
+
+        # Grant presigned URL lambda permission to invoke DDB lambda for UUID lookup
+        self.presigned_url_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.ddb_handler_lambda.function_arn],
             )
         )
 
