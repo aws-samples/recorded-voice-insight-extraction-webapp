@@ -20,6 +20,7 @@ import { retrieveAllItems } from '../api/database';
 import { getMediaPresignedUrl } from '../api/s3';
 import { JobData, ChatMessage as ChatMessageType } from '../types/chat';
 import { ProcessedCitation } from '../utils/citationUtils';
+import { urlDecodeFilename } from '../utils/fileUtils';
 import ChatContainer from '../components/ChatContainer';
 import ChatInput from '../components/ChatInput';
 import MediaPlayer from '../components/MediaPlayer';
@@ -236,7 +237,7 @@ const ChatWithMediaPage: React.FC = () => {
 
   const mediaOptions: MultiselectProps.Option[] = jobData
     .map(job => ({
-      label: job.media_name,
+      label: urlDecodeFilename(job.media_name),
       value: job.media_name,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));

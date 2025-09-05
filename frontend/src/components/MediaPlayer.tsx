@@ -11,6 +11,7 @@ import {
   Spinner
 } from '@cloudscape-design/components';
 import { ProcessedCitation } from '../utils/citationUtils';
+import { urlDecodeFilename } from '../utils/fileUtils';
 import { retrieveSubtitles, SubtitleThrottlingError, SubtitleError } from '../api/subtitles';
 import { SupportedLanguage } from '../constants/languages';
 import { JobData } from '../types/chat';
@@ -429,7 +430,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
     <Modal
       visible={isVisible}
       onDismiss={onClose}
-      header={`${citation.media_name} - Citation ${citation.id}`}
+      header={`${urlDecodeFilename(citation.media_name)} - Citation ${citation.id}`}
       size="large"
       footer={
         <Box float="right">
@@ -542,7 +543,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({
         )}
 
         <Box variant="small" color="text-body-secondary">
-          <strong>Citation:</strong> {citation.media_name} at {citation.timestamp}s
+          <strong>Citation:</strong> {urlDecodeFilename(citation.media_name)} at {citation.timestamp}s
         </Box>
       </SpaceBetween>
     </Modal>

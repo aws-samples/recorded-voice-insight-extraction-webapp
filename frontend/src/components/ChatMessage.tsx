@@ -5,6 +5,7 @@ import {
 } from '@cloudscape-design/components';
 import { ChatMessage as ChatMessageType } from '../types/chat';
 import { ProcessedCitation, processPartialAnswersForMarkdown, extractAllCitations, formatTimestamp } from '../utils/citationUtils';
+import { urlDecodeFilename } from '../utils/fileUtils';
 import MarkdownWithCitations from './MarkdownWithCitations';
 
 interface ChatMessageProps {
@@ -117,9 +118,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         font: 'inherit',
                         fontSize: 'inherit'
                       }}
-                      title={`${citation.media_name} at ${formatTimestamp(citation.timestamp)}`}
+                      title={`${urlDecodeFilename(citation.media_name)} at ${formatTimestamp(citation.timestamp)}`}
                     >
-                      {citation.displayText} {citation.media_name} ({formatTimestamp(citation.timestamp)})
+                      {citation.displayText} {urlDecodeFilename(citation.media_name)} ({formatTimestamp(citation.timestamp)})
                     </button>
                   </span>
                 ))}
