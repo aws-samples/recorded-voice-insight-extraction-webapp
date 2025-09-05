@@ -43,6 +43,7 @@ REGION = os.environ["AWS_REGION"]
 # Create necessary BDA clients
 bda_client = boto3.client("bedrock-data-automation")
 bda_runtime_client = boto3.client("bedrock-data-automation-runtime")
+s3_client = boto3.client("s3")
 
 # Create a Lambda client so this lambda can invoke other lambdas
 lambda_client = boto3.client("lambda")
@@ -66,26 +67,43 @@ def lambda_handler(event, context):
     # Generate a random uuid for the job, which will be used
     # to track this bda through downstream tasks
     # (as the partition key in dynamodb)
-    # pattern = r"[^0-9a-zA-Z._-]"
-    # cleaned = re.sub(pattern, "", filename_without_extension)
-    # job_name = "{}_{}".format(cleaned, int(time.time()))
     job_name = str(uuid.uuid4())
     logger.debug(f"{job_name=}")
 
     media_uri = f"s3://{S3_BUCKET}/{recording_key}"
     username = extract_username_from_s3_URI(media_uri)
     logger.debug(f"{media_uri=}")
+
+    # Copy file to UUID-based name for BDA (BDA has strict filename requirements)
+    # Use a different prefix to avoid triggering this lambda again
+    uuid_filename = f"{job_name}{extension}"
+    # Copy to bda-processing prefix instead of bda-recordings to avoid event loop
+    uuid_key = f"bda-processing/{username}/{uuid_filename}"
+    uuid_media_uri = f"s3://{S3_BUCKET}/{uuid_key}"
+    
+    logger.debug(f"Copying from {recording_key} to {uuid_key}")
+    
+    try:
+        s3_client.copy_object(
+            Bucket=S3_BUCKET,
+            CopySource={'Bucket': S3_BUCKET, 'Key': recording_key},
+            Key=uuid_key
+        )
+        logger.info(f"Copied {recording_key} to {uuid_key} for BDA processing")
+    except Exception as e:
+        logger.error(f"Failed to copy file for BDA: {e}")
+        raise
     # Use job name (no spaces, etc) as the output file name, because output
     # has similar regex requirements
 
-    # Create item in dynamodb to track media_uri
+    # Create item in dynamodb to track media_uri (use original media_uri for display)
     response = invoke_lambda(
         lambda_client=lambda_client,
         lambda_function_name=DDB_LAMBDA_NAME,
         action="create_ddb_entry",
         params={"job_id": job_name, "media_uri": media_uri, "username": username},
     )
-    logger.debug(f"Response to creating dynamodb item {uuid}: {response}")
+    logger.debug(f"Response to creating dynamodb item {job_name}: {response}")
 
     # Create BDA project if it doesn't exist
     # (this should only happen once ever)
@@ -107,7 +125,7 @@ def lambda_handler(event, context):
     # Launch a BDA job
     try:
         bda_async_kwargs = {
-            "inputConfiguration": {"s3Uri": media_uri},
+            "inputConfiguration": {"s3Uri": uuid_media_uri},  # Use UUID-based URI for BDA
             "outputConfiguration": {
                 "s3Uri": os.path.join("s3://", S3_BUCKET, DESTINATION_PREFIX)
             },

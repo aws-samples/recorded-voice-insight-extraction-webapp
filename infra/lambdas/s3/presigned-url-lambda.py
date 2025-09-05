@@ -22,6 +22,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from lambda_utils.cors_utils import CORSResponse
+from lambda_utils.invoke_lambda import invoke_lambda
 
 logger = logging.getLogger()
 logger.setLevel("INFO")
@@ -30,11 +31,13 @@ S3_BUCKET = os.environ.get("S3_BUCKET")
 RECORDINGS_PREFIX = os.environ.get("RECORDINGS_PREFIX")
 BDA_RECORDINGS_PREFIX = os.environ.get("BDA_RECORDINGS_PREFIX")
 TEXT_TRANSCRIPTS_PREFIX = os.environ.get("TEXT_TRANSCRIPTS_PREFIX")
+DDB_LAMBDA_NAME = os.environ.get("DDB_LAMBDA_NAME")
 PRESIGNED_URL_EXPIRATION_SECONDS = int(1800)
 
 # Create s3 client to generate presigned urls (s3v4 signing b/c this s3 bucket is encrypted)
 config = Config(signature_version="s3v4")
 s3_client = boto3.client("s3", config=config)
+lambda_client = boto3.client("lambda")
 
 
 def lambda_handler(event, context):
@@ -76,10 +79,26 @@ def lambda_handler(event, context):
             try:
                 # Check both normal recordings prefix, and BDA recordings prefix
                 # and return presigned url to whichever exists
-                possible_keys = (
+                possible_keys = [
                     f"{RECORDINGS_PREFIX}/{username}/{media_file_name}",
                     f"{BDA_RECORDINGS_PREFIX}/{username}/{media_file_name}",
-                )
+                ]
+                
+                # For BDA files, also check UUID-based filename in bda-processing prefix
+                try:
+                    job_id = invoke_lambda(
+                        lambda_client=lambda_client,
+                        lambda_function_name=DDB_LAMBDA_NAME,
+                        action="retrieve_jobid_by_media_name",
+                        params={"media_name": media_file_name, "username": username},
+                    )
+                    if job_id:
+                        # Get file extension from original filename
+                        extension = os.path.splitext(media_file_name)[1]
+                        uuid_filename = f"{job_id}{extension}"
+                        possible_keys.append(f"bda-processing/{username}/{uuid_filename}")
+                except Exception as e:
+                    logging.warning(f"Could not retrieve job ID for {media_file_name}: {e}")
 
                 for key in possible_keys:
                     if check_if_file_exists(bucket_name=S3_BUCKET, key=key):

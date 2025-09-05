@@ -111,6 +111,15 @@ def lambda_handler(event, context):
             f"{TRANSCRIPTS_PREFIX}/{username}/{UUID}.vtt",
             f"{BDA_TEXT_OUTPUT_PREFIX}/{username}/{UUID}.txt",
         ]
+        
+        # For BDA files, also delete the UUID-based copy in bda-processing prefix
+        # Get file extension from media_name to construct UUID filename
+        if media_name:
+            import os
+            extension = os.path.splitext(media_name)[1]
+            uuid_filename = f"{UUID}{extension}"
+            keys_to_delete.append(f"bda-processing/{username}/{uuid_filename}")
+        
         for key_to_delete in keys_to_delete:
             try:
                 _ = s3_client.delete_object(Bucket=SOURCE_BUCKET, Key=key_to_delete)
