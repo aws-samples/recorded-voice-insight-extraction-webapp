@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/compare/main...develop)
 
+## [1.3.2](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/releases/tag/v1.3.2) - 2025-01-15
+
+### 🐛 Bug Fixes
+- Fixed Bedrock Data Automation processing issue with filename requirements - files are now copied to UUID-based names when BDA processing is requested
+- Resolved duplicate file processing queue issues when using Bedrock Data Automation
+- Improved frontend filename display by URL-decoding filenames in the UI
+
+### 🔧 Dependencies
+- Updated axios from 1.10.0 to 1.11.0 in frontend
+- Updated form-data from 4.0.3 to 4.0.4 in frontend
+
 ## [1.3.1](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/releases/tag/v1.3.1) - 2025-06-30
 
 ### ✨ New Features
