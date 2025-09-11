@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/compare/main...develop)
 
-## [1.3.2](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/releases/tag/v1.3.2) - 2025-01-15
+## [1.3.2](https://github.com/aws-samples/recorded-voice-insight-extraction-webapp/releases/tag/v1.3.2) - 2025-09-10
 
 ### 🐛 Bug Fixes
 - Fixed Bedrock Data Automation processing issue with filename requirements - files are now copied to UUID-based names when BDA processing is requested
