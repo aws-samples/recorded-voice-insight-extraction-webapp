@@ -11,14 +11,6 @@ enum WebSocketStep {
   END = 'END'
 }
 
-// Error class for WebSocket timeouts
-export class WebSocketTimeoutError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'WebSocketTimeoutError';
-  }
-}
-
 // Interface for chat input message
 interface ChatInput {
   messages: string;
@@ -321,17 +313,12 @@ export class ChatWebSocketService {
 
       try {
         // Handle completion messages that aren't JSON
-        if (message === 'Message sent.' || message.trim() === '') {
-          console.log('✅ Message processing completed');
-          break;
+        if (message === 'Message sent.' || message === 'Streaming started' || message.trim() === '') {
+          console.log('✅ Message processing completed or started');
+          continue; // Continue waiting for actual streaming responses
         }
 
         const parsedResponse = JSON.parse(message);
-
-        // Check for timeout error
-        if (parsedResponse.message === 'Endpoint request timed out') {
-          throw new WebSocketTimeoutError('Endpoint request timed out');
-        }
 
         // Check for error status
         if (parsedResponse.status === 'ERROR') {
@@ -352,15 +339,11 @@ export class ChatWebSocketService {
         // Yield the parsed FullQAnswer
         yield parsedResponse as FullQAnswer;
 
-      } catch (error) {
-        if (error instanceof WebSocketTimeoutError) {
-          throw error;
-        }
-        
+      } catch (error) {        
         // Handle non-JSON completion messages
-        if (message === 'Message sent.' || message.trim() === '') {
-          console.log('✅ Message processing completed');
-          break;
+        if (message === 'Message sent.' || message === 'Streaming started' || message.trim() === '') {
+          console.log('✅ Message processing completed or started');
+          continue; // Continue waiting for actual streaming responses
         }
         
         console.error('Error parsing WebSocket message:', message, error);

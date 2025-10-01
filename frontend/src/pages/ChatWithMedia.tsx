@@ -24,7 +24,7 @@ import { urlDecodeFilename } from '../utils/fileUtils';
 import ChatContainer from '../components/ChatContainer';
 import ChatInput from '../components/ChatInput';
 import MediaPlayer from '../components/MediaPlayer';
-import { chatWebSocketService, WebSocketTimeoutError } from '../api/websocket';
+import { chatWebSocketService } from '../api/websocket';
 import { SUPPORTED_LANGUAGES, SupportedLanguage } from '../constants/languages';
 
 const ChatWithMediaPage: React.FC = () => {
@@ -218,9 +218,7 @@ const ChatWithMediaPage: React.FC = () => {
       
       let errorMessage = 'An error occurred while processing your request.';
       
-      if (error instanceof WebSocketTimeoutError) {
-        errorMessage = 'Request timed out. Please try again with a shorter question or fewer media files.';
-      } else if (error instanceof Error) {
+      if (error instanceof Error) {
         errorMessage = error.message;
       }
 
