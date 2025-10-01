@@ -70,6 +70,9 @@ class ReVIEWAPIStack(NestedStack):
         # Create DynamoDB table for WebSocket session management
         self.websocket_session_table = self.create_websocket_session_table()
 
+        # Create async streaming processor Lambda
+        self.async_streaming_lambda = self.create_async_streaming_lambda(knowledge_base)
+
         # Create lambda to query knowledge base (and stream responses to websocket)
         self.kb_query_lambda = self.create_query_lambda(knowledge_base)
 
@@ -370,7 +373,80 @@ class ReVIEWAPIStack(NestedStack):
             return_response=True,
         )
 
-    def create_query_lambda_role(self, knowledge_base: CfnKnowledgeBase) -> iam.Role:
+    def create_async_streaming_lambda(self, knowledge_base: CfnKnowledgeBase) -> _lambda.Function:
+        """Create async Lambda for streaming LLM responses"""
+        
+        async_streaming_lambda = _lambda.Function(
+            self,
+            f"{self.props['stack_name_base']}-AsyncStreamingLambda",
+            function_name=f"{self.props['stack_name_base']}-AsyncStreamingLambda",
+            description="Async Lambda for streaming LLM responses to WebSocket",
+            runtime=_lambda.Runtime.PYTHON_3_10,
+            handler="websockets.async_streaming_processor.handler",
+            code=_lambda.Code.from_asset("lambdas"),
+            timeout=Duration.minutes(15),  # Max Lambda timeout for long streaming
+            environment={
+                "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
+                "FOUNDATION_MODEL_ID": self.props["llm_model_id"],
+                "NUM_CHUNKS": self.props["kb_num_chunks"],
+                "S3_BUCKET": self.bucket.bucket_name,
+                "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
+                "BDA_OUTPUT_PREFIX": self.props["s3_bda_processed_output_prefix"],
+            },
+            role=self.create_async_streaming_lambda_role(knowledge_base=knowledge_base),
+        )
+
+        return async_streaming_lambda
+
+    def create_async_streaming_lambda_role(self, knowledge_base: CfnKnowledgeBase) -> iam.Role:
+        """Create role for async streaming Lambda"""
+        async_streaming_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-AsyncStreamingLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                )
+            ],
+            inline_policies={
+                "s3Access": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:GetObject", "s3:ListBucket"],
+                            resources=[f"{self.bucket.bucket_arn}*"],
+                        )
+                    ]
+                ),
+            },
+        )
+        
+        # Add API Gateway WebSocket permissions
+        async_streaming_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["execute-api:ManageConnections"],
+                resources=[
+                    "arn:aws:execute-api:*:*:*/*/DELETE/@connections/*",
+                    "arn:aws:execute-api:*:*:*/*/POST/@connections/*",
+                ],
+            )
+        )
+        
+        # Add Bedrock permissions
+        async_streaming_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:RetrieveAndGenerate",
+                    "bedrock:Retrieve",
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                ],
+                resources=["*"],
+            )
+        )
+
+        async_streaming_role.apply_removal_policy(RemovalPolicy.DESTROY)
+        return async_streaming_role
         """Create a role that allows lambda query Bedrock KB"""
         query_lambda_role = iam.Role(
             self,
@@ -437,6 +513,105 @@ class ReVIEWAPIStack(NestedStack):
                 resources=["*"],
             )
         )
+        # Add Lambda invoke permissions for async streaming
+        query_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.async_streaming_lambda.function_arn],
+            )
+        )
+
+        query_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
+        return query_lambda_role
+
+    def create_async_streaming_lambda_role(self, knowledge_base: CfnKnowledgeBase) -> iam.Role:
+        """Create role for async streaming Lambda"""
+        async_streaming_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-AsyncStreamingLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                )
+            ],
+            inline_policies={
+                "s3Access": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            actions=["s3:GetObject", "s3:ListBucket"],
+                            resources=[f"{self.bucket.bucket_arn}*"],
+                        )
+                    ]
+                ),
+            },
+        )
+        
+        # Add API Gateway WebSocket permissions
+        async_streaming_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["execute-api:ManageConnections"],
+                resources=[
+                    "arn:aws:execute-api:*:*:*/*/DELETE/@connections/*",
+                    "arn:aws:execute-api:*:*:*/*/POST/@connections/*",
+                ],
+            )
+        )
+        
+        # Add Bedrock permissions
+        async_streaming_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:RetrieveAndGenerate",
+                    "bedrock:Retrieve",
+                    "bedrock:InvokeModel",
+                    "bedrock:InvokeModelWithResponseStream",
+                ],
+                resources=["*"],
+            )
+        )
+
+        async_streaming_role.apply_removal_policy(RemovalPolicy.DESTROY)
+        return async_streaming_role
+
+    def create_query_lambda_role(self, knowledge_base: CfnKnowledgeBase) -> iam.Role:
+        """Create a role that allows lambda query Bedrock KB"""
+        query_lambda_role = iam.Role(
+            self,
+            f"{self.props['stack_name_base']}-KBQueryLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "CloudWatchLogsFullAccess"
+                )
+            ],
+        )
+        # Add DynamoDB permissions for WebSocket session management
+        query_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:DeleteItem",
+                ],
+                resources=[self.websocket_session_table.table_arn],
+            )
+        )
+        # Add Cognito permissions for token verification
+        query_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["cognito-idp:GetUser"],
+                resources=["*"],
+            )
+        )
+        # Add Lambda invoke permissions for async streaming
+        query_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[self.async_streaming_lambda.function_arn],
+            )
+        )
 
         query_lambda_role.apply_removal_policy(RemovalPolicy.DESTROY)
         return query_lambda_role
@@ -454,13 +629,8 @@ class ReVIEWAPIStack(NestedStack):
             code=_lambda.Code.from_asset("lambdas"),
             timeout=Duration.minutes(5),
             environment={
-                "KNOWLEDGE_BASE_ID": knowledge_base.attr_knowledge_base_id,
-                "FOUNDATION_MODEL_ID": self.props["llm_model_id"],
-                "NUM_CHUNKS": self.props["kb_num_chunks"],
-                "S3_BUCKET": self.bucket.bucket_name,
-                "TEXT_TRANSCRIPTS_PREFIX": self.props["s3_text_transcripts_prefix"],
-                "BDA_OUTPUT_PREFIX": self.props["s3_bda_processed_output_prefix"],
                 "WEBSOCKET_SESSION_TABLE_NAME": self.websocket_session_table.table_name,
+                "ASYNC_STREAMING_LAMBDA_NAME": self.async_streaming_lambda.function_name,
             },
             role=self.create_query_lambda_role(knowledge_base=knowledge_base),
         )
