@@ -318,7 +318,20 @@ export class ChatWebSocketService {
           continue; // Continue waiting for actual streaming responses
         }
 
-        const parsedResponse = JSON.parse(message);
+        let parsedResponse;
+        try {
+          parsedResponse = JSON.parse(message);
+        } catch (parseError) {
+          // Log first occurrence of parse error with more detail
+          console.warn('JSON parse failed, skipping message. First 200 chars:', message.substring(0, 200));
+          continue;
+        }
+
+        // Check for completion status
+        if (parsedResponse.status === 'COMPLETE') {
+          console.log('✅ Streaming completed');
+          break;
+        }
 
         // Check for error status
         if (parsedResponse.status === 'ERROR') {
@@ -339,15 +352,10 @@ export class ChatWebSocketService {
         // Yield the parsed FullQAnswer
         yield parsedResponse as FullQAnswer;
 
-      } catch (error) {        
-        // Handle non-JSON completion messages
-        if (message === 'Message sent.' || message === 'Streaming started' || message.trim() === '') {
-          console.log('✅ Message processing completed or started');
-          continue; // Continue waiting for actual streaming responses
-        }
-        
-        console.error('Error parsing WebSocket message:', message, error);
-        throw new Error(`Error parsing response: ${message}`);
+      } catch (error) {
+        console.error('Unexpected error in response generator:', error);
+        // Continue streaming even on unexpected errors
+        continue;
       }
     }
   }

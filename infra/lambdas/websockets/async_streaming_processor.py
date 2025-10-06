@@ -120,6 +120,9 @@ def handler(event, context):
                 if not send_to_connection(generation_event):
                     break
 
+        # Send completion signal
+        send_to_connection({"status": "COMPLETE"})
+        
         logger.info(f"Async streaming completed for connection {connection_id}")
         return {"statusCode": 200, "body": "Streaming completed"}
 
