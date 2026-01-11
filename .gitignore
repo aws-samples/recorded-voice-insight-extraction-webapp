@@ -80,3 +80,5 @@ assets/streamlit/temp/
 notebooks/tmp/
 frontend/public/aws-exports.json
 frontend/node_modules*
+
+.amazonq/agents/default.json
