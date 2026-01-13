@@ -8,5 +8,3 @@ __pycache__
 # CDK asset staging directory
 .cdk.staging
 cdk.out
-
-.amazonq/agents/default.json
