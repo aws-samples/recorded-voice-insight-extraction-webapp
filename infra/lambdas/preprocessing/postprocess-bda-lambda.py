@@ -58,7 +58,15 @@ def lambda_handler(event, context):
     # Therefore we have to use DDB to map this key to a user name and job id
     # bda_json_key looks like
     # some/prefix/bda-uuid/0/standard_output/0/result.json
-    bda_json_key = event["Records"][0]["s3"]["object"]["key"]
+    
+    # URL-decode the S3 object key from the event notification
+    # S3 event notifications URL-encode special characters in object keys.
+    # We decode the key for consistency with other S3 event handlers and to ensure
+    # proper handling when usernames with special characters are retrieved from DDB
+    # and used in subsequent file operations.
+    import urllib.parse
+    bda_json_key = urllib.parse.unquote_plus(event["Records"][0]["s3"]["object"]["key"])
+    logger.info(f"Processing BDA output: {bda_json_key}")
     bda_uuid = bda_json_key.split("/")[-5]
     logger.debug(f"{bda_uuid=}")
 
