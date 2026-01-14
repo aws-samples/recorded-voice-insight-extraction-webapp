@@ -47,9 +47,14 @@ def lambda_handler(event, context):
     logger.debug(f"{event=}")
     logger.debug(f"{context=}")
 
-    # Read in vtt file, dump to txt
-    vtt_transcript_key = event["Records"][0]["s3"]["object"]["key"]
-    logger.debug(f"{vtt_transcript_key=}")
+    # URL-decode the S3 object key from the event notification
+    # S3 event notifications URL-encode special characters in object keys.
+    # For example, @ becomes %40, spaces become +, etc.
+    # Since usernames can contain special characters (e.g., vincilb@amazon.com),
+    # we decode the key to match the actual S3 object path.
+    import urllib.parse
+    vtt_transcript_key = urllib.parse.unquote_plus(event["Records"][0]["s3"]["object"]["key"])
+    logger.info(f"Processing VTT file: {vtt_transcript_key}")
     username = extract_username_from_s3_URI(vtt_transcript_key)
     logger.debug(f"{username=}")
     filename = os.path.split(vtt_transcript_key)[1]
