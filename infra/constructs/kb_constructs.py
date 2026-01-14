@@ -51,11 +51,78 @@ class ReVIEWKnowledgeBaseRole(Construct):
         super().__init__(scope, construct_id, **kwargs)
 
         self.role_name = props["stack_name_base"] + "-kbrole"
-        # Setup KB role
         self.setup_kb_role(source_bucket=source_bucket)
 
     def setup_kb_role(self, source_bucket: s3.Bucket):
-        # Create KB Role
+        # Build inline policies based on vector store type
+        inline_policies = {
+            "FoundationModelPolicy": iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        sid="BedrockInvokeModelStatement",
+                        effect=iam.Effect.ALLOW,
+                        actions=["bedrock:InvokeModel"],
+                        resources=["arn:aws:bedrock:*::foundation-model/*"],
+                    )
+                ]
+            ),
+            "S3Policy": iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        sid="S3ListBucketStatement",
+                        effect=iam.Effect.ALLOW,
+                        actions=["s3:ListBucket"],
+                        resources=[source_bucket.bucket_arn],
+                    ),
+                    iam.PolicyStatement(
+                        sid="S3GetObjectStatement",
+                        effect=iam.Effect.ALLOW,
+                        actions=["s3:GetObject"],
+                        resources=[f"{source_bucket.bucket_arn}/*"],
+                    ),
+                ]
+            ),
+        }
+
+        # Only add AOSS policy if using OpenSearch Serverless
+        if self.props["vector_store_type"] == "OPENSEARCH_SERVERLESS":
+            inline_policies["OSSPolicy"] = iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        sid="OpenSearchServerlessAPIAccessAllStatement",
+                        effect=iam.Effect.ALLOW,
+                        actions=["aoss:APIAccessAll"],
+                        resources=["arn:aws:aoss:*:*:collection/*"],
+                    )
+                ]
+            )
+        elif self.props["vector_store_type"] == "S3":
+            # S3 Vectors permissions for vector bucket and index
+            bucket_name = f"{self.props['stack_name_base']}-{self.props['s3_vector_bucket_suffix']}"
+            inline_policies["S3VectorsPolicy"] = iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        sid="S3VectorsAccess",
+                        effect=iam.Effect.ALLOW,
+                        actions=[
+                            "s3vectors:CreateIndex",
+                            "s3vectors:DeleteIndex",
+                            "s3vectors:GetIndex",
+                            "s3vectors:ListIndexes",
+                            "s3vectors:PutVectors",
+                            "s3vectors:GetVectors",
+                            "s3vectors:DeleteVectors",
+                            "s3vectors:QueryVectors",
+                            "s3vectors:ListVectors",
+                        ],
+                        resources=[
+                            f"arn:aws:s3vectors:*:*:bucket/{bucket_name}",
+                            f"arn:aws:s3vectors:*:*:bucket/{bucket_name}/*",
+                        ],
+                    )
+                ]
+            )
+
         self.kb_role = iam.Role(
             self,
             "KB_Role",
@@ -68,98 +135,44 @@ class ReVIEWKnowledgeBaseRole(Construct):
                     },
                 },
             ),
-            inline_policies={
-                "FoundationModelPolicy": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            sid="BedrockInvokeModelStatement",
-                            effect=iam.Effect.ALLOW,
-                            actions=["bedrock:InvokeModel"],
-                            resources=["arn:aws:bedrock:*::foundation-model/*"],
-                        )
-                    ]
-                ),
-                "OSSPolicy": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            sid="OpenSearchServerlessAPIAccessAllStatement",
-                            effect=iam.Effect.ALLOW,
-                            actions=["aoss:APIAccessAll"],
-                            resources=["arn:aws:aoss:*:*:collection/*"],
-                        )
-                    ]
-                ),
-                "S3Policy": iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            sid="S3ListBucketStatement",
-                            effect=iam.Effect.ALLOW,
-                            actions=["s3:ListBucket"],
-                            resources=[source_bucket.bucket_arn],
-                        ),
-                        iam.PolicyStatement(
-                            sid="S3GetObjectStatement",
-                            effect=iam.Effect.ALLOW,
-                            actions=["s3:GetObject"],
-                            resources=[f"{source_bucket.bucket_arn}/*"],
-                        ),
-                    ]
-                ),
-            },
+            inline_policies=inline_policies,
         )
 
-        # Delete role when destroying the stack
         self.kb_role.apply_removal_policy(RemovalPolicy.DESTROY)
 
 
 class ReVIEWKnowledgeBaseConstruct(Construct):
-    """Construct to deploy Bedrock knowledge base on top of existing oss"""
+    """Construct to deploy Bedrock knowledge base with configurable vector store backend"""
 
     def __init__(
         self,
         scope,
         props: dict,
         kb_principal_role: iam.Role,
-        oss_collection_arn: str,
+        vector_store_arn: str,
         source_bucket: s3.Bucket,
+        vector_index_arn: str = None,
         **kwargs,
     ):
-        """Construct to deploy a knowledge base on top of existing OSS collection
-        kb_principal_role is the IAM role that KB uses
-        oss_collection_arn is the OSS collection ARN KB will use
-        source_bucket is the s3 bucket in which files to be synced appear"""
-
         self.props = props
         construct_id = props["stack_name_base"] + "-kbconstruct"
         super().__init__(scope, construct_id, **kwargs)
 
         self.source_bucket = source_bucket
-        # Create Knowledgebase
         self.knowledge_base = self.create_knowledge_base(
-            kb_principal_role, oss_collection_arn
+            kb_principal_role, vector_store_arn, vector_index_arn
         )
         self.data_source = self.create_data_source(self.knowledge_base)
 
     def create_knowledge_base(
-        self, kb_principal_role: iam.Role, oss_collection_arn: str
+        self, kb_principal_role: iam.Role, vector_store_arn: str, vector_index_arn: str = None
     ) -> CfnKnowledgeBase:
-        cfn_kb = CfnKnowledgeBase(
-            self,
-            self.props["stack_name_base"] + "-kb",
-            knowledge_base_configuration=CfnKnowledgeBase.KnowledgeBaseConfigurationProperty(
-                type="VECTOR",
-                vector_knowledge_base_configuration=CfnKnowledgeBase.VectorKnowledgeBaseConfigurationProperty(
-                    embedding_model_arn=self.props["embedding_model_arn"]
-                ),
-            ),
-            name=self.props["stack_name_base"] + "-kb",
-            role_arn=kb_principal_role.role_arn,
-            # the properties below are optional
-            description=self.props["stack_name_base"] + " RAG Knowledge base",
-            storage_configuration=CfnKnowledgeBase.StorageConfigurationProperty(
+        # Build storage configuration based on vector store type
+        if self.props["vector_store_type"] == "OPENSEARCH_SERVERLESS":
+            storage_config = CfnKnowledgeBase.StorageConfigurationProperty(
                 type="OPENSEARCH_SERVERLESS",
                 opensearch_serverless_configuration=bedrock.CfnKnowledgeBase.OpenSearchServerlessConfigurationProperty(
-                    collection_arn=oss_collection_arn,
+                    collection_arn=vector_store_arn,
                     field_mapping=bedrock.CfnKnowledgeBase.OpenSearchServerlessFieldMappingProperty(
                         metadata_field="AMAZON_BEDROCK_METADATA",
                         text_field="AMAZON_BEDROCK_TEXT_CHUNK",
@@ -167,11 +180,54 @@ class ReVIEWKnowledgeBaseConstruct(Construct):
                     ),
                     vector_index_name=self.props["oss_index_name"],
                 ),
-            ),
-        )
-        # Delete entire KB when destroying the stack
-        cfn_kb.apply_removal_policy(RemovalPolicy.DESTROY)
+            )
 
+            cfn_kb = CfnKnowledgeBase(
+                self,
+                self.props["stack_name_base"] + "-kb",
+                knowledge_base_configuration=CfnKnowledgeBase.KnowledgeBaseConfigurationProperty(
+                    type="VECTOR",
+                    vector_knowledge_base_configuration=CfnKnowledgeBase.VectorKnowledgeBaseConfigurationProperty(
+                        embedding_model_arn=self.props["embedding_model_arn"]
+                    ),
+                ),
+                name=self.props["stack_name_base"] + "-kb",
+                role_arn=kb_principal_role.role_arn,
+                description=self.props["stack_name_base"] + " RAG Knowledge base",
+                storage_configuration=storage_config,
+            )
+        elif self.props["vector_store_type"] == "S3":
+            # S3 vector storage requires escape hatch since CDK doesn't have the property yet
+            cfn_kb = CfnKnowledgeBase(
+                self,
+                self.props["stack_name_base"] + "-kb",
+                knowledge_base_configuration=CfnKnowledgeBase.KnowledgeBaseConfigurationProperty(
+                    type="VECTOR",
+                    vector_knowledge_base_configuration=CfnKnowledgeBase.VectorKnowledgeBaseConfigurationProperty(
+                        embedding_model_arn=self.props["embedding_model_arn"]
+                    ),
+                ),
+                name=self.props["stack_name_base"] + "-kb",
+                role_arn=kb_principal_role.role_arn,
+                description=self.props["stack_name_base"] + " RAG Knowledge base",
+                storage_configuration=CfnKnowledgeBase.StorageConfigurationProperty(
+                    type="S3_VECTORS",
+                ),
+            )
+            # Use escape hatch to add S3VectorsConfiguration with both bucket and index ARNs
+            cfn_kb.add_property_override(
+                "StorageConfiguration.S3VectorsConfiguration",
+                {
+                    "VectorBucketArn": vector_store_arn,
+                    "IndexArn": vector_index_arn,
+                },
+            )
+        else:
+            raise ValueError(
+                f"Unsupported vector_store_type: {self.props['vector_store_type']}"
+            )
+
+        cfn_kb.apply_removal_policy(RemovalPolicy.DESTROY)
         return cfn_kb
 
     def create_data_source(self, knowledge_base: CfnKnowledgeBase) -> CfnDataSource:
