@@ -1,5 +1,13 @@
 stack_name_base: "review-app"
 
+# Vector store configuration - choose between AOSS and S3
+vector_store:
+  type: "S3"  # Options: "OPENSEARCH_SERVERLESS" or "S3"
+
+# S3 Vector Bucket configuration (only used when type is "S3")
+s3_vector_bucket:
+  bucket_name_suffix: "vector-store"
+
 embedding:
   model_id: "amazon.titan-embed-text-v2:0"
   model_arn: "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0"
