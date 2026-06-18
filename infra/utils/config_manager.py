@@ -60,6 +60,21 @@ class ConfigManager:
         analysis_templates_table_name = f"{stack_name_base}-analysis-templates-table"
         oss_collection_name = f"{stack_name_base}-collection"
         oss_index_name = f"{stack_name_base}-idx"
+
+        # Vector store configuration
+        vector_store_type = self.config.get("vector_store", {}).get(
+            "type", "OPENSEARCH_SERVERLESS"
+        )
+        if vector_store_type not in ["OPENSEARCH_SERVERLESS", "S3"]:
+            raise ValueError(
+                f"Invalid vector_store.type: '{vector_store_type}'. "
+                "Must be 'OPENSEARCH_SERVERLESS' or 'S3'"
+            )
+
+        # S3 Vector Bucket configuration
+        s3_vector_config = self.config.get("s3_vector_bucket", {})
+        s3_vector_bucket_suffix = s3_vector_config.get("bucket_name_suffix", "vector-store")
+
         props = {
             "stack_name_base": stack_name_base,
             "s3_recordings_prefix": self.s3_recordings_prefix,
@@ -73,6 +88,8 @@ class ConfigManager:
             "analysis_templates_table_name": analysis_templates_table_name,
             "oss_collection_name": oss_collection_name,
             "oss_index_name": oss_index_name,
+            "vector_store_type": vector_store_type,
+            "s3_vector_bucket_suffix": s3_vector_bucket_suffix,
             "embedding_model_id": self.config["embedding"]["model_id"],
             "embedding_model_arn": self.config["embedding"]["model_arn"],
             "kb_chunking_strategy": self.config["kb"]["chunking_strategy"],

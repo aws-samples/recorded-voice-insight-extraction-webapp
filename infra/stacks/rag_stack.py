@@ -17,16 +17,16 @@
 from aws_cdk import NestedStack
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_lambda as _lambda
-from infra.constructs.kb_constructs import (
+from constructs.kb_constructs import (
     ReVIEWKnowledgeBaseConstruct,
     ReVIEWKnowledgeBaseRole,
     ReVIEWKnowledgeBaseSyncConstruct,
 )
-from infra.constructs.oss_constructs import ReVIEWOSSConstruct
+from constructs.vector_store_base import create_vector_store
 
 
 class ReVIEWRAGStack(NestedStack):
-    """Stack to deploy both knowledge base and opensearch serverless"""
+    """Stack to deploy Knowledge Base with configurable vector store backend"""
 
     def __init__(
         self,
@@ -36,39 +36,40 @@ class ReVIEWRAGStack(NestedStack):
         source_bucket: s3.Bucket,
         **kwargs,
     ):
-        """source_bucket is the s3 bucket from which KB will grab text files to index, already created in backend
-        ddb_lambda is provided because KB sync step functions invoke a lambda to store
-        job status in a dynamo table"""
         self.props = props
         construct_id = props["stack_name_base"] + "-rag"
         description = "ReVIEW Application - RAG stack"
         super().__init__(scope, construct_id, description=description, **kwargs)
 
-        # Setup KB role
-        # It is given the source bucket because KB has to have access to that bucket
+        # Setup KB role with conditional permissions
         self.kb_role_construct = ReVIEWKnowledgeBaseRole(
             self, props=props, source_bucket=source_bucket
         )
 
-        # Deploy OSS collection, with data access allowed to kb_role
-        self.oss_construct = ReVIEWOSSConstruct(
-            self,
+        # Use factory to create appropriate vector store
+        self.vector_store = create_vector_store(
+            scope=self,
             props=props,
-            data_access_principal_roles=[self.kb_role_construct.kb_role],
+            kb_role=self.kb_role_construct.kb_role,
         )
 
-        # Deploy KB on top of OSS collection, providing KB role and collection arn
+        # Get index ARN for S3 vector stores
+        vector_index_arn = None
+        if props["vector_store_type"] == "S3":
+            vector_index_arn = self.vector_store.vector_index_arn
+
+        # Deploy KB with vector store
         self.kb_construct = ReVIEWKnowledgeBaseConstruct(
             self,
             props=props,
             kb_principal_role=self.kb_role_construct.kb_role,
-            oss_collection_arn=self.oss_construct.collection.attr_arn,
+            vector_store_arn=self.vector_store.vector_store_arn,
+            vector_index_arn=vector_index_arn,
             source_bucket=source_bucket,
         )
 
-        # Don't deploy kb until oss is ready (including launching
-        # lambda functions to create indices)
-        self.kb_construct.node.add_dependency(self.oss_construct)
+        # Add dependency - KB needs vector store to exist first
+        self.kb_construct.node.add_dependency(self.vector_store)
 
         # Construct to handle syncing of knowledge base
         self.kb_sync_construct = ReVIEWKnowledgeBaseSyncConstruct(
